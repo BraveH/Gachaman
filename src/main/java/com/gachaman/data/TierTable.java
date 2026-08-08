@@ -32,6 +32,13 @@ public class TierTable
 		List<String> prefixes;
 		/** Family names this tier's prefixes must NOT claim ("Black mask" is not metal). */
 		List<String> excludeFamilies;
+		/**
+		 * Real OSRS requirements: the ladder's primary skill (Ranged/Magic/melee) and
+		 * Defence. Boxed on purpose — a tier authored without them must read null and
+		 * fail closed, not deserialize to 0 and become wieldable at level 1 by everyone.
+		 */
+		Integer reqLevel;
+		Integer reqDefence;
 	}
 
 	private static class Ladder
@@ -54,10 +61,21 @@ public class TierTable
 		List<HoloEntry> hologramTiers;
 	}
 
+	/** A tier with no authored requirement is out of reach until 99 — fail closed. */
+	private static final int UNKNOWN_REQ = 99;
+
 	/** prefix (with trailing space) -> entry; longest prefix wins. */
 	private final List<Map.Entry<String, Match>> prefixMatchers = new ArrayList<>();
 	private final Map<String, Integer> rankByTier = new HashMap<>();
 	private final Map<String, String> ladderByTier = new HashMap<>();
+	private final Map<String, Integer> reqLevelByTier = new HashMap<>();
+	private final Map<String, Integer> reqDefenceByTier = new HashMap<>();
+	/**
+	 * tierKey -> human label, harvested from the hologram names rather than authored a
+	 * second time, so a tier renamed in tiers.json cannot end up reading one way in the
+	 * collection and another way in the odds disclosure.
+	 */
+	private final Map<String, String> displayNameByTier = new HashMap<>();
 	/** tierKey -> lowercased families its prefixes must not classify. */
 	private final Map<String, java.util.Set<String>> excludedFamiliesByTier = new HashMap<>();
 	private final List<HologramDefinition> holograms = new ArrayList<>();
@@ -74,6 +92,18 @@ public class TierTable
 				{
 					table.rankByTier.put(tier.tierKey, tier.rank);
 					table.ladderByTier.put(tier.tierKey, ladder.ladderKey);
+					if (tier.reqLevel == null || tier.reqDefence == null)
+					{
+						// left absent, the tier falls back to UNKNOWN_REQ and drops out of
+						// every proximity-gated roll — loud, because ChestService's
+						// unfiltered fallback would otherwise mask it as "gate stopped working"
+						log.warn("tier {} has no reqLevel/reqDefence in tiers.json; failing closed", tier.tierKey);
+					}
+					else
+					{
+						table.reqLevelByTier.put(tier.tierKey, tier.reqLevel);
+						table.reqDefenceByTier.put(tier.tierKey, tier.reqDefence);
+					}
 					if (tier.excludeFamilies != null && !tier.excludeFamilies.isEmpty())
 					{
 						java.util.Set<String> excluded = new java.util.HashSet<>();
@@ -98,6 +128,12 @@ public class TierTable
 				{
 					table.holograms.add(new HologramDefinition(h.tierKey, h.name,
 						Rarity.valueOf(h.rarity), h.representativeItemName));
+					// "Dragon Hologram" is the collection's label for the set; the tier itself
+					// is just "Dragon", which is what a per-tier odds row wants to say
+					String display = h.name.endsWith(" Hologram")
+						? h.name.substring(0, h.name.length() - " Hologram".length())
+						: h.name;
+					table.displayNameByTier.put(h.tierKey, display);
 				}
 			}
 		}
@@ -145,6 +181,51 @@ public class TierTable
 	public String ladderOf(String tierKey)
 	{
 		return ladderByTier.get(tierKey);
+	}
+
+	/**
+	 * Level in the ladder's primary skill this tier really needs. Consulted for the
+	 * dhide and robes ladders, whose ranks are power ordinals rather than levels; the
+	 * metal ladder is still read rank-wise off Tuning.TIER_RANK_LEVELS, which happens
+	 * to transcribe it exactly. The metal values here are documentation.
+	 */
+	public int reqLevelOf(String tierKey)
+	{
+		return reqLevelByTier.getOrDefault(tierKey, UNKNOWN_REQ);
+	}
+
+	/** Defence this tier's body piece really needs. See reqLevelOf. */
+	public int reqDefenceOf(String tierKey)
+	{
+		return reqDefenceByTier.getOrDefault(tierKey, UNKNOWN_REQ);
+	}
+
+	/**
+	 * Human label for a tier row. Falls back to the tierKey read as words rather than
+	 * to the raw key, so a tier authored without a hologram still shows up as
+	 * "Frog Leather" in the odds panel instead of leaking "frog_leather" into the UI.
+	 */
+	public String displayNameOf(String tierKey)
+	{
+		String known = displayNameByTier.get(tierKey);
+		if (known != null)
+		{
+			return known;
+		}
+		StringBuilder out = new StringBuilder();
+		for (String word : tierKey.split("_"))
+		{
+			if (word.isEmpty())
+			{
+				continue;
+			}
+			if (out.length() > 0)
+			{
+				out.append(' ');
+			}
+			out.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
+		}
+		return out.length() == 0 ? tierKey : out.toString();
 	}
 
 	public List<HologramDefinition> getHolograms()

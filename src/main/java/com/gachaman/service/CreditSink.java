@@ -9,7 +9,7 @@ import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The single funnel every GC award flows through. Modifiers (set perks, duo
+ * The single funnel every GC award flows through. Modifiers (set perks, party
  * bonus, prestige, taint) register once and compose multiplicatively.
  */
 @Slf4j

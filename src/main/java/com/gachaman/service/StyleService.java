@@ -58,12 +58,21 @@ public class StyleService
 			? null : AttackStyle.valueOf(state.getAllowedStyle());
 		AttackStyle rolled = AttackStyle.values()[rng.nextInt(AttackStyle.values().length)];
 		int target = Tuning.CYCLE_TASKS;
+		// A fresh account is exactly the one with no previous style, and that same
+		// fact arms the free First Colours chest. Armed inside THIS mutate rather
+		// than a second one: a separate write would leave a window where the style
+		// is committed but the gift is not owed, and every mutate pays a full
+		// gzip + SHA-256 of the whole save.
+		final boolean firstEver = previous == null;
 
-		stateService.mutate(s -> s
-			.withAllowedStyle(rolled.name())
-			.withCycleProgress(0)
-			.withCycleTarget(target)
-			.withStyleRolledAtMs(System.currentTimeMillis()));
+		stateService.mutate(s -> {
+			GachaState next = s
+				.withAllowedStyle(rolled.name())
+				.withCycleProgress(0)
+				.withCycleTarget(target)
+				.withStyleRolledAtMs(System.currentTimeMillis());
+			return firstEver ? next.withFirstColoursChestOwed(true) : next;
+		});
 		complianceService.noteStyleChanged(currentTick);
 
 		StyleRollResult result = new StyleRollResult(previous, rolled, target);

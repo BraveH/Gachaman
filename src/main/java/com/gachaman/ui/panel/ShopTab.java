@@ -22,7 +22,9 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.Box;
@@ -110,6 +112,7 @@ public class ShopTab extends JPanel
 
 		addSection(buildBalanceSection(state));
 		addSection(buildChestSection(state));
+		addSection(buildOddsSection(state));
 		addSection(buildSlotChestSection(state));
 		addSection(buildChargeSection(state));
 		if (!state.getQueuedThemedChests().isEmpty())
@@ -273,6 +276,256 @@ public class ShopTab extends JPanel
 		}
 	}
 
+	// --- Odds disclosure ---
+
+	/**
+	 * Longest tier list any one band prints in full. Past this the tail is folded into
+	 * a single disclosed row rather than dropped — a hidden row would be exactly the
+	 * kind of quiet omission this panel exists to rule out.
+	 */
+	private static final int MAX_BAND_ROWS = 6;
+
+	/** EDT-only. Which chest the odds panel is describing. */
+	private Tuning.Chest oddsTier = Tuning.Chest.BATTERED;
+
+	/**
+	 * EDT-only. Last answer from the client thread. Null until the first one lands;
+	 * the odds read live skill levels and so cannot be computed on the EDT.
+	 */
+	@javax.annotation.Nullable
+	private ChestService.OddsDisclosure oddsSnapshot;
+
+	/** EDT-only. One request in flight at a time, so a rebuild storm cannot pile up. */
+	private boolean oddsRequested;
+
+	/**
+	 * EDT-only. The pity counter the live snapshot was asked for. Stamped from the EDT's
+	 * own view of the state rather than from the answer, so the staleness test below
+	 * compares like with like and cannot ping-pong with the client thread.
+	 */
+	private int oddsStamp = -1;
+
+	private JPanel buildOddsSection(GachaState state)
+	{
+		JPanel section = GachamanPanel.section("Chest Odds");
+		javax.swing.JComboBox<Tuning.Chest> picker =
+			new javax.swing.JComboBox<>(Tuning.Chest.values());
+		picker.setSelectedItem(oddsTier);
+		picker.setRenderer(new javax.swing.DefaultListCellRenderer()
+		{
+			@Override
+			public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> list,
+				Object value, int index, boolean isSelected, boolean cellHasFocus)
+			{
+				super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+				if (value instanceof Tuning.Chest)
+				{
+					setText(chestName((Tuning.Chest) value));
+				}
+				return this;
+			}
+		});
+		picker.addActionListener(e -> {
+			Tuning.Chest picked = (Tuning.Chest) picker.getSelectedItem();
+			if (picked == null || picked == oddsTier)
+			{
+				return;
+			}
+			oddsTier = picked;
+			oddsSnapshot = null;
+			// deferred: rebuild() disposes this very combo, and doing that from inside
+			// its own action listener runs while the popup is still closing
+			javax.swing.SwingUtilities.invokeLater(this::rebuild);
+		});
+		GachamanPanel.styleCombo(picker);
+		picker.setAlignmentX(Component.LEFT_ALIGNMENT);
+		picker.setMaximumSize(new Dimension(SECTION_INNER_WIDTH, 24));
+		section.add(picker);
+		section.add(Box.createVerticalStrut(6));
+
+		ChestService.OddsDisclosure odds = oddsSnapshot;
+		// the pity counter moves the whole rarity curve, so a snapshot taken before an
+		// open is stale by definition; levels move it too, hence the Refresh button
+		if (odds == null || odds.getTier() != oddsTier
+			|| oddsStamp != state.getOpensSinceEpic())
+		{
+			requestOdds();
+		}
+		if (odds == null)
+		{
+			section.add(wrappedText("Reading your levels…", ColorScheme.MEDIUM_GRAY_COLOR));
+			return section;
+		}
+
+		for (com.gachaman.model.Rarity rarity : com.gachaman.model.Rarity.values())
+		{
+			double fraction = odds.getRarityPercent()[rarity.ordinal()] / 100;
+			section.add(oddsRow(rarity.getDisplayName(), pct(fraction), rarity.getColor(),
+				rarity.getDisplayName() + " card: " + pct(fraction) + " per card"));
+		}
+
+		section.add(Box.createVerticalStrut(4));
+		if (odds.isPityBreakNext())
+		{
+			section.add(wrappedText("Your next open is a guaranteed Epic or better.",
+				new Color(150, 190, 240)));
+		}
+		else if (odds.getPityBonusPercent() > 0)
+		{
+			int remaining = Math.max(1, odds.getPityHardCap() - odds.getOpensSinceEpic());
+			section.add(wrappedText("Pity is already in those numbers: +"
+				+ String.format(Locale.ROOT, "%.1f", odds.getPityBonusPercent())
+				+ "% moved out of Common. A guaranteed Epic+ lands within "
+				+ remaining + " more opens.", new Color(150, 190, 240)));
+		}
+
+		List<ChestService.TierOdds> wieldable = new ArrayList<>();
+		List<ChestService.TierOdds> headroom = new ArrayList<>();
+		for (ChestService.TierOdds row : odds.getRows())
+		{
+			if (row.getTierKey().isEmpty())
+			{
+				continue; // the untiered band is one nameless row; it prints as a total
+			}
+			(row.isWieldableNow() ? wieldable : headroom).add(row);
+		}
+		addBand(section, "Wieldable now", wieldable, odds.getWieldableTotal(), GOLD);
+		addBand(section, "Headroom, just out of reach", headroom, odds.getHeadroomTotal(),
+			new Color(200, 140, 90));
+		if (odds.getUntieredTotal() > 0)
+		{
+			section.add(Box.createVerticalStrut(5));
+			section.add(oddsRow("No tier gate", pct(odds.getUntieredTotal()),
+				ColorScheme.LIGHT_GRAY_COLOR,
+				"Gear with no tier ladder — never held back by the lean, but still subject"
+					+ " to its own in-game requirements."));
+		}
+
+		section.add(Box.createVerticalStrut(6));
+		JButton refresh = fullWidthButton("Refresh");
+		refresh.setToolTipText("Re-read your levels. The odds move every time you level up.");
+		refresh.addActionListener(e -> {
+			oddsSnapshot = null;
+			rebuild();
+		});
+		section.add(refresh);
+		section.add(Box.createVerticalStrut(4));
+		section.add(wrappedText(
+			"Real numbers for one ordinary card, computed by the roll's own code."
+				+ " Gear you can wield today is drawn "
+				+ String.format(Locale.ROOT, "%.2f", 1 / Tuning.HOUSE_LEAN_HEADROOM_WEIGHT)
+				+ "x as often as gear still out of reach — the house leans, it never locks."
+				+ " Not counted here: the jackpot tier upgrade, the hologram that replaces a"
+				+ " card outright, and the pity guarantee on the first card. Slot Chests roll"
+				+ " Gilded odds.",
+			ColorScheme.MEDIUM_GRAY_COLOR));
+		return section;
+	}
+
+	/** One "Wieldable now / Headroom" group: a header total, its tiers, then the tail. */
+	private static void addBand(JPanel section, String title, List<ChestService.TierOdds> rows,
+		double total, Color color)
+	{
+		if (rows.isEmpty())
+		{
+			return;
+		}
+		section.add(Box.createVerticalStrut(5));
+		section.add(oddsRow(title, pct(total), color, title + ": " + pct(total) + " per card"));
+		int shown = Math.min(rows.size(), MAX_BAND_ROWS);
+		for (int i = 0; i < shown; i++)
+		{
+			ChestService.TierOdds row = rows.get(i);
+			section.add(oddsRow("   " + row.getDisplayName(), pct(row.getProbability()),
+				ColorScheme.LIGHT_GRAY_COLOR,
+				row.getDisplayName() + ": " + pct(row.getProbability()) + " per card"));
+		}
+		if (rows.size() <= shown)
+		{
+			return;
+		}
+		double tail = 0;
+		StringBuilder rest = new StringBuilder("<html>");
+		for (int i = shown; i < rows.size(); i++)
+		{
+			tail += rows.get(i).getProbability();
+			rest.append(rows.get(i).getDisplayName()).append(" - ")
+				.append(pct(rows.get(i).getProbability())).append("<br>");
+		}
+		rest.append("</html>");
+		section.add(oddsRow("   +" + (rows.size() - shown) + " more tiers", pct(tail),
+			ColorScheme.MEDIUM_GRAY_COLOR, rest.toString()));
+	}
+
+	/**
+	 * A label/value pair on one line, the value flush right. The label is ellipsized
+	 * against whatever the value leaves over, so a long tier name can never widen the
+	 * panel; the tooltip always carries the untruncated text.
+	 */
+	private static JPanel oddsRow(String label, String value, Color color, String tooltip)
+	{
+		JPanel row = new JPanel(new BorderLayout(ROW_GAP, 0));
+		row.setOpaque(false);
+		row.setAlignmentX(Component.LEFT_ALIGNMENT);
+		JLabel right = GachamanPanel.line(value, color, FontManager.getRunescapeSmallFont());
+		right.setToolTipText(tooltip);
+		int budget = SECTION_INNER_WIDTH - right.getPreferredSize().width - ROW_GAP;
+		JLabel left = truncatedLine(label, color, FontManager.getRunescapeSmallFont(),
+			budget, tooltip);
+		row.add(left, BorderLayout.CENTER);
+		row.add(right, BorderLayout.EAST);
+		int height = Math.max(left.getPreferredSize().height, right.getPreferredSize().height);
+		row.setMaximumSize(new Dimension(SECTION_INNER_WIDTH, height));
+		return row;
+	}
+
+	/**
+	 * A row that rounds to 0.0% would read as impossible, which is the one claim the
+	 * headroom band must never make, so anything non-zero floors at "&lt;0.1%".
+	 */
+	private static String pct(double fraction)
+	{
+		double percent = fraction * 100;
+		if (percent > 0 && percent < 0.05)
+		{
+			return "<0.1%";
+		}
+		return String.format(Locale.ROOT, "%.1f%%", percent);
+	}
+
+	/**
+	 * Odds read live skill levels, so they must be computed on the client thread and
+	 * handed back to the EDT. One flight at a time: rebuild() runs on every state
+	 * change and would otherwise queue a client-thread job per rebuild.
+	 */
+	private void requestOdds()
+	{
+		if (oddsRequested)
+		{
+			return;
+		}
+		oddsRequested = true;
+		final Tuning.Chest wanted = oddsTier;
+		GachaState current = stateService.get();
+		final int stamp = current == null ? -1 : current.getOpensSinceEpic();
+		clientThread.invokeLater(() -> {
+			final ChestService.OddsDisclosure snapshot = chestService.oddsFor(wanted);
+			javax.swing.SwingUtilities.invokeLater(() -> {
+				oddsRequested = false;
+				if (wanted != oddsTier)
+				{
+					// the player switched chests mid-flight: this answer describes the
+					// wrong one, so drop it and ask again rather than showing it
+					requestOdds();
+					return;
+				}
+				oddsSnapshot = snapshot;
+				oddsStamp = stamp;
+				rebuild();
+			});
+		});
+	}
+
 	// --- Slot-targeted chests ---
 
 	private com.gachaman.model.GearSlot selectedSlotChest = com.gachaman.model.GearSlot.WEAPON;
@@ -338,7 +591,7 @@ public class ShopTab extends JPanel
 		{
 			String banner = "Free vouchers: "
 				+ (freeComp > 0 ? freeComp + " Compactor" : "")
-				+ (freeComp > 0 && freeExt > 0 ? " • " : "")
+				+ (freeComp > 0 && freeExt > 0 ? " · " : "")
 				+ (freeExt > 0 ? freeExt + " Extender" : "");
 			section.add(truncatedLine(banner, GOLD,
 				FontManager.getRunescapeSmallFont(), SECTION_INNER_WIDTH, banner));
@@ -654,9 +907,9 @@ public class ShopTab extends JPanel
 			}
 			else
 			{
-				g2.drawString(QuantityFormatter.formatNumber(Tuning.CHEST_PRICE_GC.get(tier)) + " GC  •  "
+				g2.drawString(QuantityFormatter.formatNumber(Tuning.CHEST_PRICE_GC.get(tier)) + " GC  ·  "
 					+ Tuning.CHEST_CARDS.get(tier) + (Tuning.CHEST_CARDS.get(tier) == 1 ? " card" : " cards")
-					+ (remaining > 0 ? "  •  " + remaining + " left" : ""),
+					+ (remaining > 0 ? "  ·  " + remaining + " left" : ""),
 					tx, 38);
 			}
 

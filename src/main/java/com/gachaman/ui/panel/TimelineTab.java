@@ -133,7 +133,21 @@ public class TimelineTab extends JPanel
 				refreshList();
 			}
 		});
-		scrubber.addChangeListener(e -> refreshList());
+		// Rebuilding on every ChangeEvent re-parsed the whole HTML document — around 90ms
+		// at the 500-event cap, synchronously on the EDT — so dragging the thumb ran at
+		// about 10fps with the list trailing the cursor. Defer the rebuild to the release
+		// and keep the caption live, which is the part the player is actually reading
+		// while they drag.
+		scrubber.addChangeListener(e -> {
+			if (scrubber.getValueIsAdjusting())
+			{
+				updateScrubLabel();
+			}
+			else
+			{
+				refreshList();
+			}
+		});
 	}
 
 	private static JPanel spinnerRow(String label, JSpinner spinner)
@@ -185,14 +199,14 @@ public class TimelineTab extends JPanel
 		refreshList();
 	}
 
-	private void refreshList()
+	/**
+	 * {from, scrub} for the current spinner and scrubber positions.
+	 *
+	 * <p>Shared by the rebuild and the caption so a drag cannot show a timestamp
+	 * computed from one window and a count from another.
+	 */
+	private long[] scrubWindow()
 	{
-		GachaState state = stateService.get();
-		List<TimelineEvent> timeline = state == null ? List.of() : state.getTimeline();
-		if (timeline == null)
-		{
-			timeline = List.of();
-		}
 		long from = ((Date) fromSpinner.getValue()).getTime();
 		long to = ((Date) toSpinner.getValue()).getTime();
 		if (to < from)
@@ -201,7 +215,51 @@ public class TimelineTab extends JPanel
 			from = to;
 			to = swap;
 		}
-		long scrub = from + (long) ((to - from) * (scrubber.getValue() / (double) SLIDER_MAX));
+		return new long[]{from,
+			from + (long) ((to - from) * (scrubber.getValue() / (double) SLIDER_MAX))};
+	}
+
+	/**
+	 * The caption alone, for the live part of a drag.
+	 *
+	 * <p>Counts with the same predicate {@link #refreshList} filters on, which is a
+	 * bounded walk over at most TIMELINE_MAX_EVENTS and costs nothing next to
+	 * re-parsing the document. Deliberately does not touch {@code list}: leaving the
+	 * old rows standing for the length of a drag is the whole point.
+	 */
+	private void updateScrubLabel()
+	{
+		GachaState state = stateService.get();
+		List<TimelineEvent> timeline = state == null ? null : state.getTimeline();
+		long[] window = scrubWindow();
+		long from = window[0];
+		long scrub = window[1];
+
+		int shown = 0;
+		if (timeline != null)
+		{
+			for (TimelineEvent event : timeline)
+			{
+				if (event.getAt() >= from && event.getAt() <= scrub)
+				{
+					shown++;
+				}
+			}
+		}
+		scrubLabel.setText("Up to " + RANGE_FORMAT.format(new Date(scrub)) + "  (" + shown + " events)");
+	}
+
+	private void refreshList()
+	{
+		GachaState state = stateService.get();
+		List<TimelineEvent> timeline = state == null ? List.of() : state.getTimeline();
+		if (timeline == null)
+		{
+			timeline = List.of();
+		}
+		long[] window = scrubWindow();
+		long from = window[0];
+		long scrub = window[1];
 
 		StringBuilder html = new StringBuilder();
 		int shown = 0;
@@ -256,6 +314,11 @@ public class TimelineTab extends JPanel
 					return LUCK_GOLD;
 				case TimelineEvent.KIND_CHARGE:
 					return CHARGE_PURPLE;
+				case TimelineEvent.KIND_CHARTER:
+					// a chartered deed reads as the contract it becomes; a refund
+					// carries no difficulty and falls back to the neutral gold
+					return event.getMeta() != null
+						? TaskDifficulty.valueOf(event.getMeta()).getColor() : LUCK_GOLD;
 				case TimelineEvent.KIND_VIOLATION:
 				case TimelineEvent.KIND_TAINT:
 					return BAD_RED;

@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 700" width="820" height="700" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="box" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2B2620"/>
+      <stop offset="1" stop-color="#1B1813"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="820" height="700" rx="12" fill="#141414" stroke="#2C2822"/>
+
+  <text x="100" y="44" font-size="19" font-weight="bold" fill="#E6BE50" letter-spacing="2.5">THE GACHAMAN LOOP</text>
+  <text x="100" y="68" font-size="12" fill="#8A8A8A">one turn of the wheel, start to finish</text>
+
+  <!-- 1. the wheel -->
+  <rect x="100" y="96" width="640" height="90" rx="8" fill="url(#box)" stroke="#4E4436"/>
+  <circle cx="134" cy="141" r="19" fill="#221E18" stroke="#E6BE50" stroke-width="2"/>
+  <text x="134" y="147" font-size="15" font-weight="bold" fill="#E6BE50" text-anchor="middle">1</text>
+  <text x="172" y="132" font-size="14" font-weight="bold" fill="#E6BE50">The wheel spins.</text>
+  <text x="172" y="154" font-size="11.5" fill="#C0C0C0">Fate picks your attack style. That is what you may train — everything</text>
+  <text x="172" y="172" font-size="11.5" fill="#C0C0C0">else is off-limits until it spins again.</text>
+  <rect x="500" y="159" width="72" height="18" rx="9" fill="#D64838" fill-opacity="0.18" stroke="#D64838"/>
+  <text x="536" y="171.5" font-size="9.5" fill="#E2695B" text-anchor="middle" letter-spacing="0.8">MELEE</text>
+  <rect x="578" y="159" width="72" height="18" rx="9" fill="#50AF44" fill-opacity="0.18" stroke="#50AF44"/>
+  <text x="614" y="171.5" font-size="9.5" fill="#6FC763" text-anchor="middle" letter-spacing="0.8">RANGED</text>
+  <rect x="656" y="159" width="72" height="18" rx="9" fill="#4876D6" fill-opacity="0.18" stroke="#4876D6"/>
+  <text x="692" y="171.5" font-size="9.5" fill="#7396E4" text-anchor="middle" letter-spacing="0.8">MAGIC</text>
+
+  <path d="M 420 188 L 420 199" stroke="#6E6252" stroke-width="2"/>
+  <path d="M 414 198 L 426 198 L 420 206 Z" fill="#6E6252"/>
+
+  <!-- 2. the board -->
+  <rect x="100" y="208" width="640" height="90" rx="8" fill="url(#box)" stroke="#4E4436"/>
+  <circle cx="134" cy="253" r="19" fill="#221E18" stroke="#F0C850" stroke-width="2"/>
+  <text x="134" y="259" font-size="15" font-weight="bold" fill="#F0C850" text-anchor="middle">2</text>
+  <text x="172" y="244" font-size="14" font-weight="bold" fill="#F0C850">Take a contract.</text>
+  <text x="172" y="266" font-size="11.5" fill="#C0C0C0">Four kill contracts land on the board, scaled to your combat level so</text>
+  <text x="172" y="284" font-size="11.5" fill="#C0C0C0">none is impossible. Sign one — rolls cannot be undone.</text>
+  <rect x="500" y="271" width="54" height="18" rx="9" fill="#78C878" fill-opacity="0.18" stroke="#78C878"/>
+  <text x="527" y="283.5" font-size="9.5" fill="#8FD48F" text-anchor="middle">EASY</text>
+  <rect x="558" y="271" width="54" height="18" rx="9" fill="#F0C850" fill-opacity="0.18" stroke="#F0C850"/>
+  <text x="585" y="283.5" font-size="9.5" fill="#F0C850" text-anchor="middle">MEDIUM</text>
+  <rect x="616" y="271" width="54" height="18" rx="9" fill="#F0823C" fill-opacity="0.18" stroke="#F0823C"/>
+  <text x="643" y="283.5" font-size="9.5" fill="#F0823C" text-anchor="middle">HARD</text>
+  <rect x="674" y="271" width="54" height="18" rx="9" fill="#E63C3C" fill-opacity="0.18" stroke="#E63C3C"/>
+  <text x="701" y="283.5" font-size="9.5" fill="#EC6060" text-anchor="middle">INSANE</text>
+
+  <path d="M 420 300 L 420 311" stroke="#6E6252" stroke-width="2"/>
+  <path d="M 414 310 L 426 310 L 420 318 Z" fill="#6E6252"/>
+
+  <!-- 3. kills -->
+  <rect x="100" y="320" width="640" height="90" rx="8" fill="url(#box)" stroke="#4E4436"/>
+  <circle cx="134" cy="365" r="19" fill="#221E18" stroke="#6EC86E" stroke-width="2"/>
+  <text x="134" y="371" font-size="15" font-weight="bold" fill="#6EC86E" text-anchor="middle">3</text>
+  <text x="172" y="356" font-size="14" font-weight="bold" fill="#6EC86E">Kill for coin.</text>
+  <text x="172" y="378" font-size="11.5" fill="#C0C0C0">On-task kills pay Gacha Coins. Combo streaks, side bets and</text>
+  <text x="172" y="396" font-size="11.5" fill="#C0C0C0">first-of-a-species discoveries pay extra; the last kill pays a bonus.</text>
+
+  <path d="M 420 412 L 420 423" stroke="#6E6252" stroke-width="2"/>
+  <path d="M 414 422 L 426 422 L 420 430 Z" fill="#6E6252"/>
+
+  <!-- 4. the chest -->
+  <rect x="100" y="432" width="640" height="90" rx="8" fill="url(#box)" stroke="#4E4436"/>
+  <circle cx="134" cy="477" r="19" fill="#221E18" stroke="#E2943E" stroke-width="2"/>
+  <text x="134" y="483" font-size="15" font-weight="bold" fill="#E2943E" text-anchor="middle">4</text>
+  <text x="172" y="468" font-size="14" font-weight="bold" fill="#E2943E">Buy a chest.</text>
+  <text x="172" y="490" font-size="11.5" fill="#C0C0C0">150 – 1,000 GC. The lid strains, shudders, goes dead still — then it</text>
+  <text x="172" y="508" font-size="11.5" fill="#C0C0C0">loses. Roughly 1 in 100, the chest quietly upgrades itself mid-open.</text>
+
+  <path d="M 420 524 L 420 535" stroke="#6E6252" stroke-width="2"/>
+  <path d="M 414 534 L 426 534 L 420 542 Z" fill="#6E6252"/>
+
+  <!-- 5. cards -->
+  <rect x="100" y="544" width="640" height="90" rx="8" fill="url(#box)" stroke="#4E4436"/>
+  <circle cx="134" cy="589" r="19" fill="#221E18" stroke="#B25BE2" stroke-width="2"/>
+  <text x="134" y="595" font-size="15" font-weight="bold" fill="#B25BE2" text-anchor="middle">5</text>
+  <text x="172" y="580" font-size="14" font-weight="bold" fill="#B25BE2">Pull cards. Wear the gear.</text>
+  <text x="172" y="602" font-size="11.5" fill="#C0C0C0">Cards are the only key to equipment. Assign one to a loadout slot and</text>
+  <text x="172" y="620" font-size="11.5" fill="#C0C0C0">the item becomes wearable — until then the game will not let you.</text>
+
+  <!-- return arc: cards feed back into the board -->
+  <path d="M 100 589 L 64 589 Q 48 589 48 573 L 48 269 Q 48 253 64 253 L 92 253" fill="none" stroke="#7A6A50" stroke-width="1.8"/>
+  <path d="M 92 248 L 92 258 L 101 253 Z" fill="#7A6A50"/>
+  <text x="34" y="421" font-size="10" fill="#8A7A5E" text-anchor="middle" transform="rotate(-90 34 421)">better cards → harder contracts → more coin</text>
+
+  <!-- re-roll arc: completions feed back into the wheel -->
+  <path d="M 740 365 L 764 365 Q 780 365 780 349 L 780 157 Q 780 141 764 141 L 748 141" fill="none" stroke="#7A6A50" stroke-width="1.8"/>
+  <path d="M 748 136 L 748 146 L 739 141 Z" fill="#7A6A50"/>
+  <text x="798" y="253" font-size="10" fill="#8A7A5E" text-anchor="middle" transform="rotate(90 798 253)">every 5 completed contracts</text>
+
+  <text x="100" y="672" font-size="10.5" fill="#6E6252" font-style="italic">Slot Deeds, boss chests, card sets, prestige and party contracts all hang off this loop.</text>
+</svg>

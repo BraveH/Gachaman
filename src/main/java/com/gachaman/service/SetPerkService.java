@@ -5,6 +5,7 @@ import com.gachaman.data.CardDefinition;
 import com.gachaman.data.SetTable;
 import com.gachaman.model.GachaState;
 import com.gachaman.model.OwnedCard;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -69,6 +70,19 @@ public class SetPerkService implements GachaStateService.Listener
 			.map(OwnedCard::getTierKey)
 			.collect(Collectors.toSet());
 
+		// Everything found in ONE pass, banked in ONE mutate.
+		//
+		// Mutating inside the loop re-enters this method — mutate() notifies its
+		// listeners synchronously and this class is one of them — and the nested pass
+		// walks the WHOLE table again against the new state, banking any later set it
+		// finds. The outer loop then reaches that same set still holding its stale
+		// `state` snapshot, which does not know the set is done, and completes it a
+		// second time: a second LARGE modal, and a second save (withCompletedSets
+		// returns a new object even when the key is already in it, so mutate's
+		// identity check does not catch it). It takes two sets finishing on one card,
+		// which is precisely what a mega-set is built to do.
+		Set<String> newKeys = new HashSet<>();
+		List<CeremonyBus.Fanfare> fanfares = new ArrayList<>();
 		for (SetTable.CardSet set : setTable.getSets())
 		{
 			if (state.getCompletedSets().contains(set.getSetKey()))
@@ -85,16 +99,27 @@ public class SetPerkService implements GachaStateService.Listener
 					|| (m.getTierKey() != null && ownedHoloTiers.contains(m.getTierKey())));
 			if (complete)
 			{
-				stateService.mutate(s -> {
-					Set<String> done = new HashSet<>(s.getCompletedSets());
-					done.add(set.getSetKey());
-					return s.withCompletedSets(done);
-				});
-				ceremonyBus.submit(CeremonyBus.Type.FANFARE, new CeremonyBus.Fanfare(
+				newKeys.add(set.getSetKey());
+				fanfares.add(new CeremonyBus.Fanfare(
 					CeremonyBus.Fanfare.Size.LARGE, "Set complete: " + set.getName(),
 					perkDescription(set.getPerk()), members.get(0).getCardId()));
 				log.debug("Set completed: {}", set.getSetKey());
 			}
+		}
+		if (newKeys.isEmpty())
+		{
+			return;
+		}
+		// This one still re-enters, and is meant to: the nested pass sees every key
+		// already banked and finds nothing, which is the fixed point we want.
+		stateService.mutate(s -> {
+			Set<String> done = new HashSet<>(s.getCompletedSets());
+			done.addAll(newKeys);
+			return s.withCompletedSets(done);
+		});
+		for (CeremonyBus.Fanfare fanfare : fanfares)
+		{
+			ceremonyBus.submit(CeremonyBus.Type.FANFARE, fanfare);
 		}
 	}
 

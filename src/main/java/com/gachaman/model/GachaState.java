@@ -51,6 +51,20 @@ public class GachaState
 	int deedMilestonesClaimed;
 	/** Deeds granted but not yet spent on a slot choice. */
 	int pendingDeeds;
+	/**
+	 * The Charter Office's open escrow, or null when nothing is held. Deliberately
+	 * NOT backfilled by normalized(): a save written before this field existed
+	 * deserializes it as null, and null is exactly right — that account never
+	 * bought a deed, so it is owed nothing.
+	 */
+	CharterHold charterHold;
+	/**
+	 * The day key ("2026-D220") on which a deed was last chartered — one per UTC
+	 * day. Derived and compared, never counted: like the weekly shop's rotation
+	 * this needs no server and no clock sync, and a null (pre-field save, or a
+	 * player who has never chartered) simply means "not yet today".
+	 */
+	String charterDayKey;
 
 	// --- Pity / chests ---
 	int opensSinceEpic;
@@ -93,6 +107,15 @@ public class GachaState
 	/** One-shot onboarding voucher grant already applied. */
 	boolean starterVouchersGranted;
 	/**
+	 * The free First Colours chest that rides behind an account's very first
+	 * style roll has been earned but not yet dealt. Phrased as OWED, never as
+	 * DONE: a save written before this field existed deserializes it as false,
+	 * and false must mean "nothing owed". A "firstColoursDone" flag would
+	 * deserialize as "not done" and retro-gift a free chest to every
+	 * established account on its next login.
+	 */
+	boolean firstColoursChestOwed;
+	/**
 	 * The Tutorial Island clean-slate strip has been settled. Set on leaving the
 	 * island (after stripping), and set immediately for any save that first
 	 * loads already past the tutorial — installing the plugin later must never
@@ -108,6 +131,21 @@ public class GachaState
 	boolean tutorialStripPending;
 	/** Fortune timeline: chronological audit of rolls/pulls/equips (capped). */
 	List<TimelineEvent> timeline;
+	/**
+	 * The Patron's Mark: shared party contracts finished with each partner,
+	 * keyed by DISPLAY NAME. Not by member id — RuneLite draws a party
+	 * memberId from a fresh Random on every process start AND again inside
+	 * changeParty(), so an id-keyed tally would restart at zero every login
+	 * and could never reach the higher tiers. Cosmetic only; see PatronMark.
+	 */
+	Map<String, Integer> partnerContracts;
+	/**
+	 * The Contract Dossier: one compact record per completed contract, oldest
+	 * dropped past Tuning.DOSSIER_MAX_RECORDS. Capped separately from and far
+	 * below the timeline because a record is a struct, not a line, and every
+	 * mutate re-gzips and re-hashes the whole state.
+	 */
+	List<ContractRecord> contractLog;
 
 	public static GachaState fresh(int combatLevel)
 	{
@@ -137,6 +175,8 @@ public class GachaState
 			.totalTasksCompleted(0)
 			.deedMilestonesClaimed(0)
 			.pendingDeeds(0)
+			.charterHold(null)
+			.charterDayKey(null)
 			.opensSinceEpic(0)
 			.chestsOpenedByTier(new HashMap<>())
 			.pendingChestBlob(null)
@@ -157,9 +197,12 @@ public class GachaState
 			.freeCompactors(0)
 			.freeExtenders(0)
 			.starterVouchersGranted(false)
+			.firstColoursChestOwed(false)
 			.tutorialStripDone(false)
 			.tutorialStripPending(false)
 			.timeline(new ArrayList<>())
+			.partnerContracts(new HashMap<>())
+			.contractLog(new ArrayList<>())
 			.build();
 	}
 
@@ -234,6 +277,14 @@ public class GachaState
 		if (timeline == null)
 		{
 			b.timeline(new ArrayList<>());
+		}
+		if (partnerContracts == null)
+		{
+			b.partnerContracts(new HashMap<>());
+		}
+		if (contractLog == null)
+		{
+			b.contractLog(new ArrayList<>());
 		}
 		return b.build();
 	}

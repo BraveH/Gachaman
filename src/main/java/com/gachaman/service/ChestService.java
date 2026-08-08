@@ -4,13 +4,18 @@ import com.gachaman.Tuning;
 import com.gachaman.data.CardDatabase;
 import com.gachaman.data.CardDefinition;
 import com.gachaman.data.HologramDefinition;
+import com.gachaman.data.RangedMetal;
 import com.gachaman.model.GachaState;
 import com.gachaman.model.OwnedCard;
 import com.gachaman.model.Rarity;
 import com.gachaman.model.Variant;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -62,6 +67,49 @@ public class ChestService
 		long pricePaid;
 		/** Every card in this open rolled shiny twice (8 stardust consumed). */
 		boolean stardustBlessed;
+	}
+
+	/**
+	 * The exact candidate list a roll of this rarity would draw from, plus whether the
+	 * house lean applies to it. Shared by pickCardOfRarity and oddsFor so the
+	 * disclosure can never drift from the roll.
+	 */
+	@Value
+	public static class RollBucket
+	{
+		List<CardDefinition> cards;
+		/** True when the proximity gate ran, which is exactly when the lean applies. */
+		boolean leaned;
+	}
+
+	/** One disclosure row: a tier ladder in one reach band, with its real odds. */
+	@Value
+	public static class TierOdds
+	{
+		/** tierKey, or RollOdds.UNTIERED. */
+		String tierKey;
+		String displayName;
+		boolean wieldableNow;
+		/** Probability 0..1 for one ordinary card out of this chest. */
+		double probability;
+	}
+
+	/** Everything the Chest Odds panel prints, computed from the roll's own code. */
+	@Value
+	public static class OddsDisclosure
+	{
+		Tuning.Chest tier;
+		/** Post-pity rarity split, percent, order C/U/R/E/L. */
+		double[] rarityPercent;
+		/** All non-zero rows, probability-descending. */
+		List<TierOdds> rows;
+		double wieldableTotal;
+		double headroomTotal;
+		double untieredTotal;
+		double pityBonusPercent;
+		int opensSinceEpic;
+		int pityHardCap;
+		boolean pityBreakNext;
 	}
 
 	private final GachaStateService stateService;
@@ -251,8 +299,77 @@ public class ChestService
 		return result;
 	}
 
+	/**
+	 * Is the free First Colours chest due to be dealt right now?
+	 *
+	 * <p>Every term is a way the gift could go wrong. The owed flag on its own
+	 * would re-deal the chest on every login until a reveal happened to close; an
+	 * unfinished reveal — live in memory OR still serialized by a client that
+	 * died mid-ceremony — has to be committed first, because writing this chest's
+	 * blob over it would silently destroy one the player paid for; and rolling
+	 * before the card database is ready would draw from an empty pool.
+	 */
+	static boolean firstColoursDue(@Nullable GachaState state, boolean revealPending, boolean dbReady)
+	{
+		return state != null
+			&& state.isFirstColoursChestOwed()
+			&& !revealPending
+			&& state.getPendingChestBlob() == null
+			&& dbReady;
+	}
+
+	/**
+	 * The free chest that rides behind an account's very first style roll.
+	 * Deliberately NOT gated on rustyAvailable(): the lifetime cap limits what
+	 * the shop will sell, and withholding a gift because the player already
+	 * bought their three would punish exactly the wrong account.
+	 *
+	 * <p>{@code preferredCardIds} steers the first card only, and only when the
+	 * rarity band it lands in actually holds one of them — see constrained(). A
+	 * preference, never a guarantee, so a sparse card database still deals.
+	 *
+	 * <p>The owed flag clears in the SAME mutate that persists the blob rather
+	 * than via persistPending(): two writes leave a crash window that either
+	 * re-gifts the chest or eats it, and the blob alone is enough for
+	 * recoverPending() to finish the job.
+	 */
+	@Nullable
+	public synchronized ChestOpenResult openFirstColoursChest(@Nullable Set<Integer> preferredCardIds)
+	{
+		GachaState state = stateService.get();
+		if (!firstColoursDue(state, pending != null, cardDatabase.isReady()))
+		{
+			return null;
+		}
+		java.util.function.Predicate<CardDefinition> require =
+			preferredCardIds == null || preferredCardIds.isEmpty()
+				? null
+				: c -> preferredCardIds.contains(c.getCardId());
+		ChestOpenResult result = roll(Tuning.Chest.RUSTY, null, null, 0, require);
+		pending = result;
+		rerollUsedThisReveal = false;
+		final String blob = gson.toJson(result);
+		stateService.mutate(s -> s.withPendingChestBlob(blob).withFirstColoursChestOwed(false));
+		ceremonyBus.submit(CeremonyBus.Type.CHEST_OPEN, result);
+		log.debug("First Colours chest dealt ({} preferred cards)",
+			preferredCardIds == null ? 0 : preferredCardIds.size());
+		return result;
+	}
+
 	ChestOpenResult roll(Tuning.Chest tier, @Nullable String themedSetTag,
 		@Nullable com.gachaman.model.GearSlot targetSlot, long price)
+	{
+		return roll(tier, themedSetTag, targetSlot, price, null);
+	}
+
+	/**
+	 * {@code require} steers the FIRST card only, and only as a preference. A
+	 * chest that promised the player something usable must keep that promise in
+	 * the card they see first, while the rest of the box stays honest gacha.
+	 */
+	ChestOpenResult roll(Tuning.Chest tier, @Nullable String themedSetTag,
+		@Nullable com.gachaman.model.GearSlot targetSlot, long price,
+		@Nullable java.util.function.Predicate<CardDefinition> require)
 	{
 		GachaState state = stateService.get();
 		int prestige = state == null ? 0 : state.getPrestigeRank();
@@ -342,16 +459,17 @@ public class ChestService
 		List<RolledSlot> slots = new ArrayList<>(cardCount);
 		for (int i = 0; i < cardCount; i++)
 		{
+			final java.util.function.Predicate<CardDefinition> steer = i == 0 ? require : null;
 			if (i == 0 && pityBreak)
 			{
 				RolledSlot slot = rollSlot(pool, Rarity.LEGENDARY, hologramsAllowed,
-					shinyChance, shinyAttempts, ownedKeys);
+					shinyChance, shinyAttempts, ownedKeys, steer);
 				slots.add(slot.withPityLocked(true));
 				continue;
 			}
 			Rarity rarity = rollRarity(Tuning.CHEST_ODDS.get(effective), pityBonus);
 			slots.add(rollSlot(pool, rarity, hologramsAllowed,
-				shinyChance, shinyAttempts, ownedKeys));
+				shinyChance, shinyAttempts, ownedKeys, steer));
 		}
 
 		boolean deed = false;
@@ -366,15 +484,13 @@ public class ChestService
 
 	Rarity rollRarity(double[] odds, double pityBonusPercent)
 	{
-		// shift pity bonus into EPIC+LEGENDARY mass, taken from COMMON
-		double[] adjusted = odds.clone();
-		if (pityBonusPercent > 0)
-		{
-			double shift = Math.min(adjusted[0] - 1, pityBonusPercent);
-			adjusted[0] -= shift;
-			adjusted[3] += shift * 0.7;
-			adjusted[4] += shift * 0.3;
-		}
+		// shift pity bonus into EPIC+LEGENDARY mass, taken from COMMON. Shared with
+		// the odds disclosure so the panel cannot quote a different pity curve than
+		// the one the roll runs; the cumulative walk below stays here on purpose,
+		// because pickHologram's near-identical walk falls back to the LAST element
+		// while this one falls back to index 0 (EarlyGameMathTest.rustyRollsCommonOnly
+		// depends on exactly that).
+		double[] adjusted = RollOdds.adjustOdds(odds, pityBonusPercent);
 		double total = 0;
 		for (double odd : adjusted)
 		{
@@ -396,6 +512,13 @@ public class ChestService
 	RolledSlot rollSlot(List<CardDefinition> pool, Rarity rarity, boolean hologramsAllowed,
 		double shinyChance, int shinyAttempts, Set<String> ownedKeys)
 	{
+		return rollSlot(pool, rarity, hologramsAllowed, shinyChance, shinyAttempts, ownedKeys, null);
+	}
+
+	RolledSlot rollSlot(List<CardDefinition> pool, Rarity rarity, boolean hologramsAllowed,
+		double shinyChance, int shinyAttempts, Set<String> ownedKeys,
+		@Nullable java.util.function.Predicate<CardDefinition> require)
+	{
 		// hologram replaces the card entirely
 		if (hologramsAllowed && !cardDatabase.holograms().isEmpty() && rng.chance(Tuning.HOLOGRAM_CHANCE))
 		{
@@ -403,7 +526,7 @@ public class ChestService
 			boolean dupe = ownedKeys.contains("H:" + holo.getTierKey());
 			return new RolledSlot(holo.getRarity(), -1, holo.getTierKey(), Variant.HOLOGRAM, dupe, false, false);
 		}
-		CardDefinition card = pickCardOfRarity(pool, rarity);
+		CardDefinition card = pickCardOfRarity(pool, rarity, require);
 		Variant variant = Variant.NORMAL;
 		boolean nearMiss = false;
 		if (shinyChance > 0 && card.isShinyEligible())
@@ -432,19 +555,50 @@ public class ChestService
 
 	CardDefinition pickCardOfRarity(List<CardDefinition> pool, Rarity rarity)
 	{
+		return pickCardOfRarity(pool, rarity, null);
+	}
+
+	/**
+	 * {@code require} narrows the candidate list BEFORE the draw instead of
+	 * rejecting after it, so a constrained pick still costs exactly one
+	 * rng.pick. With require == null the candidate lists — and therefore every
+	 * nextInt bound — are identical to the unconstrained build, so no existing
+	 * seed moves.
+	 */
+	CardDefinition pickCardOfRarity(List<CardDefinition> pool, Rarity rarity,
+		@Nullable java.util.function.Predicate<CardDefinition> require)
+	{
+		RollBucket bucket = bucketFor(pool, rarity, require);
+		return bucket.isLeaned() ? pickLeaned(bucket.getCards()) : rng.pick(bucket.getCards());
+	}
+
+	RollBucket bucketFor(List<CardDefinition> pool, Rarity rarity)
+	{
+		return bucketFor(pool, rarity, null);
+	}
+
+	/**
+	 * The exact candidate list a roll of this rarity would draw from — everything
+	 * pickCardOfRarity used to do except the draw itself. Split out because it
+	 * consumes NO RNG, which is what lets oddsFor() quote the roll's own numbers
+	 * instead of a parallel transcription that would drift.
+	 */
+	RollBucket bucketFor(List<CardDefinition> pool, Rarity rarity,
+		@Nullable java.util.function.Predicate<CardDefinition> require)
+	{
 		// Epic+ rolls may land anywhere; below that, stay near what the
-		// player's levels can actually wield (rank headroom of 2).
+		// player's levels can actually wield (see isReachable for the headroom).
 		boolean proximityGated = !rarity.atLeast(Rarity.EPIC);
 		for (int r = rarity.ordinal(); r >= 0; r--)
 		{
 			final Rarity target = Rarity.values()[r];
-			List<CardDefinition> candidates = pool.stream()
+			List<CardDefinition> candidates = constrained(pool.stream()
 				.filter(c -> c.getRarity() == target)
 				.filter(c -> !proximityGated || isReachable(c))
-				.collect(Collectors.toList());
+				.collect(Collectors.toList()), require);
 			if (!candidates.isEmpty())
 			{
-				return rng.pick(candidates);
+				return new RollBucket(candidates, proximityGated);
 			}
 		}
 		// gate excluded everything of every rarity — fall back unfiltered
@@ -456,16 +610,74 @@ public class ChestService
 				.collect(Collectors.toList());
 			if (!candidates.isEmpty())
 			{
-				return rng.pick(candidates);
+				return new RollBucket(candidates, false);
 			}
 		}
-		return rng.pick(pool);
+		return new RollBucket(pool, false);
 	}
 
 	/**
-	 * The Rusty starter pool: only slots the player has unlocked, only gear
-	 * strictly wieldable today (no headroom). Shared by roll() and rerollSlot()
-	 * so the two can never drift.
+	 * The house lean: inside a proximity-gated bucket, gear the player can wield
+	 * today outweighs gear that only got in through the headroom. Weighted rather
+	 * than filtered so the headroom band stays reachable — it is deliberate
+	 * aspirational slack, not an accident, and leanWeight() is asserted never to
+	 * return zero.
+	 *
+	 * <p>When every candidate sits in the same band the weight vector is flat, and a
+	 * flat weight vector IS a uniform draw, so this takes rng.pick() instead: same
+	 * distribution, same single next() call. That branch is what keeps every
+	 * fixed-seed test byte-identical, because isReachable is uniformly true when
+	 * client is null — which is every headless test.
+	 */
+	private CardDefinition pickLeaned(List<CardDefinition> candidates)
+	{
+		double[] weights = new double[candidates.size()];
+		double total = 0;
+		int wieldable = 0;
+		for (int i = 0; i < candidates.size(); i++)
+		{
+			boolean now = isReachable(candidates.get(i), false);
+			if (now)
+			{
+				wieldable++;
+			}
+			// total is accumulated from the very values the walk below reads, so the
+			// two can never disagree in the last bit and drop off the end
+			weights[i] = RollOdds.leanWeight(now);
+			total += weights[i];
+		}
+		if (wieldable == 0 || wieldable == candidates.size())
+		{
+			return rng.pick(candidates);
+		}
+		return candidates.get(RollOdds.weightedIndex(rng.nextDouble() * total, weights));
+	}
+
+	/**
+	 * The constraint is a PREFERENCE, not a filter: narrowing to nothing hands
+	 * back the full list, so a chest can never fail to deal a card. Returning the
+	 * very same list instance on the null path is the point — every rng.pick
+	 * bound must stay bit-identical to the unconstrained build.
+	 */
+	static List<CardDefinition> constrained(List<CardDefinition> candidates,
+		@Nullable java.util.function.Predicate<CardDefinition> require)
+	{
+		if (require == null || candidates.isEmpty())
+		{
+			return candidates;
+		}
+		List<CardDefinition> narrowed = candidates.stream()
+			.filter(require)
+			.collect(Collectors.toList());
+		return narrowed.isEmpty() ? candidates : narrowed;
+	}
+
+	/**
+	 * The Rusty starter pool: only slots the player has unlocked, and tiered gear
+	 * only up to what is wieldable today (no headroom). Untiered gear is not
+	 * level-filtered at all — isReachable exempts it by design — so this is a
+	 * clamp on the tier ladders, not a hard wieldability guarantee. Shared by
+	 * roll() and rerollSlot() so the two can never drift.
 	 */
 	private List<CardDefinition> rustyPool(@Nullable GachaState state)
 	{
@@ -473,17 +685,21 @@ public class ChestService
 			? Set.of() : state.getDeededSlots();
 		return cardDatabase.all().values().stream()
 			.filter(c -> c.getSlot() != null && deeded.contains(c.getSlot().name()))
-			.filter(c -> isReachable(c, 0))
+			.filter(c -> isReachable(c, false))
 			.collect(Collectors.toList());
 	}
 
 	/** Is this card's tier within reach of the player's levels (+headroom)? */
 	boolean isReachable(CardDefinition card)
 	{
-		return isReachable(card, Tuning.ROLL_TIER_HEADROOM);
+		return isReachable(card, true);
 	}
 
-	boolean isReachable(CardDefinition card, int headroom)
+	/**
+	 * Headroom is a flag rather than a number because the two branches below measure
+	 * it in different units — metal in tier ranks, dhide/robes in skill levels.
+	 */
+	boolean isReachable(CardDefinition card, boolean allowHeadroom)
 	{
 		if (card.getTierKey() == null || client == null || tierTable == null)
 		{
@@ -494,23 +710,61 @@ public class ChestService
 		{
 			return true;
 		}
-		int level;
 		switch (ladder)
 		{
 			case "metal":
-				level = Math.max(client.getRealSkillLevel(net.runelite.api.Skill.ATTACK),
+				RangedMetal ranged = RangedMetal.of(card.getName());
+				if (ranged != null)
+				{
+					// Arrows, bolts, javelins, crossbows, darts, knives and thrownaxes wear a
+					// metal prefix but are Ranged gear, and mostly not on the ladder's numbers
+					// (a rune crossbow is 61, not 40). Measured in levels like dhide/robes, so
+					// the level headroom; no ranged weapon or ammunition carries a Defence gate.
+					return Tuning.withinReach(
+						client.getRealSkillLevel(net.runelite.api.Skill.RANGED),
+						client.getRealSkillLevel(net.runelite.api.Skill.DEFENCE),
+						ranged.reqRangedLevel(card.getTierKey(),
+							tierTable.reqLevelOf(card.getTierKey())),
+						1,
+						allowHeadroom ? Tuning.ROLL_LEVEL_HEADROOM : 0);
+				}
+				// Melee metal is left rank-wise on purpose: TIER_RANK_LEVELS transcribes the
+				// metal ladder exactly, so this is already correct. The max() is load-bearing
+				// too — metal weapons gate on Attack and metal armour on Defence, never both,
+				// so a second Defence term here would lock an Attack pure out of rune weapons
+				// it can wield today.
+				int metalLevel = Math.max(client.getRealSkillLevel(net.runelite.api.Skill.ATTACK),
 					client.getRealSkillLevel(net.runelite.api.Skill.DEFENCE));
-				break;
+				return card.getTierRank() <= Tuning.maxRankForLevel(metalLevel)
+					+ (allowHeadroom ? Tuning.ROLL_TIER_HEADROOM : 0);
 			case "dhide":
-				level = client.getRealSkillLevel(net.runelite.api.Skill.RANGED);
-				break;
+				return ladderWithinReach(card,
+					client.getRealSkillLevel(net.runelite.api.Skill.RANGED), allowHeadroom);
 			case "robes":
-				level = client.getRealSkillLevel(net.runelite.api.Skill.MAGIC);
-				break;
+				return ladderWithinReach(card,
+					client.getRealSkillLevel(net.runelite.api.Skill.MAGIC), allowHeadroom);
 			default:
 				return true;
 		}
-		return card.getTierRank() <= Tuning.maxRankForLevel(level) + headroom;
+	}
+
+	/**
+	 * Dhide/robes ranks are power ordinals on their own ladder, not levels, so these
+	 * two read explicit requirements out of tiers.json rather than borrowing metal's
+	 * rank table (which understated them by 15-40 levels). Defence is applied to BODY
+	 * only: the body is the piece that carries a Defence gate on every tier of both
+	 * ladders, while d'hide chaps and vambraces carry none and would otherwise be
+	 * over-gated for a low-Defence ranger.
+	 */
+	private boolean ladderWithinReach(CardDefinition card, int primaryLevel, boolean allowHeadroom)
+	{
+		int reqDefence = card.getSlot() == com.gachaman.model.GearSlot.BODY
+			? tierTable.reqDefenceOf(card.getTierKey())
+			: 1;
+		return Tuning.withinReach(primaryLevel,
+			client.getRealSkillLevel(net.runelite.api.Skill.DEFENCE),
+			tierTable.reqLevelOf(card.getTierKey()), reqDefence,
+			allowHeadroom ? Tuning.ROLL_LEVEL_HEADROOM : 0);
 	}
 
 	HologramDefinition pickHologram()
@@ -545,6 +799,119 @@ public class ChestService
 	private int rankOf(HologramDefinition holo)
 	{
 		return holo.getRarity().ordinal() * 2 + 1; // proxy: rarity encodes rank band
+	}
+
+	// --- Odds disclosure ---
+
+	/**
+	 * The true post-lean odds for ONE ORDINARY card out of this chest, derived from
+	 * the same bucketFor()/adjustOdds()/leanWeight() the roll uses, so the panel
+	 * cannot drift from reality.
+	 *
+	 * <p>Scoped to one ordinary card on purpose: the jackpot tier upgrade, the
+	 * hologram that replaces a card outright and the pity hard-cap Legendary are
+	 * NAMED in the panel rather than blended in, so every number shown is one a
+	 * player can actually check against their own opens.
+	 *
+	 * <p>Reads live skill levels through isReachable — CLIENT THREAD ONLY.
+	 * Deliberately NOT synchronized, unlike openChest/rerollSlot: both they and this
+	 * run on the client thread and so cannot interleave, and this touches neither
+	 * `pending` nor state, so the lock would buy nothing but contention with a reveal
+	 * in flight.
+	 */
+	public OddsDisclosure oddsFor(Tuning.Chest tier)
+	{
+		GachaState state = stateService.get();
+		// these five mirror roll() exactly — keep them adjacent so a reviewer can
+		// diff the two blocks by eye
+		boolean rusty = tier == Tuning.Chest.RUSTY;
+		int prestige = state == null ? 0 : state.getPrestigeRank();
+		int opensSinceEpic = state == null ? 0 : state.getOpensSinceEpic();
+		int hardCap = prestige >= 2 ? Tuning.PITY_HARD_CAP_PRESTIGE2 : Tuning.PITY_HARD_CAP;
+		double pityBonus = rusty
+			? 0
+			: Math.max(0, opensSinceEpic - Tuning.PITY_SOFT_START) * Tuning.PITY_BONUS_PER_OPEN;
+		boolean pityBreakNext = !rusty && opensSinceEpic + 1 >= hardCap;
+
+		List<CardDefinition> pool = rusty
+			? rustyPool(state)
+			: new ArrayList<>(cardDatabase.all().values());
+		if (pool.isEmpty())
+		{
+			pool = new ArrayList<>(cardDatabase.all().values());
+		}
+
+		// one pass, not five: the rarity buckets walk down and revisit cards, and
+		// cardId is the key of cardDatabase.all() so it is unique per definition
+		Map<Integer, Boolean> wieldableByCardId = new HashMap<>();
+		for (CardDefinition card : pool)
+		{
+			wieldableByCardId.put(card.getCardId(), isReachable(card, false));
+		}
+
+		double[] adjusted = RollOdds.adjustOdds(Tuning.CHEST_ODDS.get(tier), pityBonus);
+		double[] rarityShare = RollOdds.normalize(adjusted);
+		Map<RollOdds.TierBand, Double> totals = new LinkedHashMap<>();
+		for (Rarity rarity : Rarity.values())
+		{
+			double share = rarityShare[rarity.ordinal()];
+			if (share <= 0)
+			{
+				continue;
+			}
+			RollBucket bucket = bucketFor(pool, rarity);
+			List<CardDefinition> cards = bucket.getCards();
+			boolean[] flags = new boolean[cards.size()];
+			for (int i = 0; i < cards.size(); i++)
+			{
+				flags[i] = wieldableByCardId.getOrDefault(cards.get(i).getCardId(), true);
+			}
+			for (Map.Entry<RollOdds.TierBand, Double> entry
+				: RollOdds.tierShares(cards, flags, bucket.isLeaned()).entrySet())
+			{
+				totals.merge(entry.getKey(), entry.getValue() * share, Double::sum);
+			}
+		}
+
+		List<TierOdds> rows = new ArrayList<>(totals.size());
+		double wieldableTotal = 0;
+		double headroomTotal = 0;
+		double untieredTotal = 0;
+		for (Map.Entry<RollOdds.TierBand, Double> entry : totals.entrySet())
+		{
+			double probability = entry.getValue();
+			if (probability <= 0)
+			{
+				continue;
+			}
+			RollOdds.TierBand band = entry.getKey();
+			boolean untiered = RollOdds.UNTIERED.equals(band.getTierKey());
+			if (untiered)
+			{
+				untieredTotal += probability;
+			}
+			else if (band.isWieldableNow())
+			{
+				wieldableTotal += probability;
+			}
+			else
+			{
+				headroomTotal += probability;
+			}
+			String display = untiered || tierTable == null
+				? band.getTierKey()
+				: tierTable.displayNameOf(band.getTierKey());
+			rows.add(new TierOdds(band.getTierKey(), display, band.isWieldableNow(), probability));
+		}
+		rows.sort(Comparator.comparingDouble(TierOdds::getProbability).reversed());
+
+		double[] rarityPercent = new double[rarityShare.length];
+		for (int i = 0; i < rarityShare.length; i++)
+		{
+			rarityPercent[i] = rarityShare[i] * 100;
+		}
+		return new OddsDisclosure(tier, rarityPercent, rows, wieldableTotal, headroomTotal,
+			untieredTotal, pityBonus, opensSinceEpic, hardCap, pityBreakNext);
 	}
 
 	// --- In-reveal reroll ---
@@ -655,7 +1022,7 @@ public class ChestService
 				+ result.getEffectiveTier();
 			newCards.add(new OwnedCard(UUID.randomUUID().toString(),
 				slot.getCardId(), slot.getHologramTier(), slot.getVariant(),
-				System.currentTimeMillis(), provenance));
+				System.currentTimeMillis(), provenance, 0));
 		}
 
 		final long dupeGcFinal = dupeGc;

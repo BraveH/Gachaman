@@ -3,6 +3,7 @@ package com.gachaman.service;
 import com.gachaman.data.CardDatabase;
 import com.gachaman.data.CardDefinition;
 import com.gachaman.data.HologramDefinition;
+import com.gachaman.data.RangedMetal;
 import com.gachaman.model.GachaState;
 import com.gachaman.model.GearSlot;
 import com.gachaman.model.OwnedCard;
@@ -209,6 +210,7 @@ public class LoadoutService
 	public com.gachaman.model.AttackStyle styleOf(OwnedCard owned)
 	{
 		String tierKey = null;
+		String name = null;
 		if (owned.isHologram())
 		{
 			tierKey = owned.getTierKey();
@@ -219,6 +221,7 @@ public class LoadoutService
 			if (def != null)
 			{
 				tierKey = def.getTierKey();
+				name = def.getName();
 			}
 		}
 		if (tierKey == null)
@@ -233,7 +236,12 @@ public class LoadoutService
 		switch (ladder)
 		{
 			case "metal":
-				return com.gachaman.model.AttackStyle.MELEE;
+				// Rune arrows and adamant darts sit on the metal ladder but are Ranged gear.
+				// Calling them melee sorted them into the non-matching half of a ranger's own
+				// loadout picker. Holograms carry no item name, so they keep the melee default.
+				return RangedMetal.of(name) != null
+					? com.gachaman.model.AttackStyle.RANGED
+					: com.gachaman.model.AttackStyle.MELEE;
 			case "dhide":
 				return com.gachaman.model.AttackStyle.RANGED;
 			case "robes":

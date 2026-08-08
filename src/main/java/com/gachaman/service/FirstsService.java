@@ -151,7 +151,7 @@ public class FirstsService implements TaskService.Listener, ComplianceService.Li
 	}
 
 	@Override
-	public void onDuoProgress(ActiveTask task)
+	public void onPartyProgress(ActiveTask task)
 	{
 	}
 

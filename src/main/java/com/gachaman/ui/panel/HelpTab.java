@@ -90,6 +90,7 @@ public class HelpTab extends JPanel
 		addSection(buildGamemodeSection(width), width);
 		addSection(buildStyleSection(width), width);
 		addSection(buildContractsSection(width), width);
+		addSection(buildPartySection(width), width);
 		addSection(buildCardsSection(width), width);
 		addSection(buildSlotDeedsSection(width), width);
 		addSection(buildChestsSection(width), width);
@@ -198,11 +199,21 @@ public class HelpTab extends JPanel
 			+ "answers, after ~60s with whoever agreed (minimum 2), or the moment the HOST "
 			+ "(the proposer) presses Start Roll Now. Participants then see "
 			+ "IDENTICAL offers — all clients roll with the seed of the lowest member id, "
-			+ "restricted to free-to-play monsters if any participant is free and scaled to the "
-			+ "lowest combat level. Clicking a contract VOTES; a unanimous vote accepts it for "
-			+ "the participants as a SHARED contract — everyone's kills fill one pooled quota, "
-			+ "and completion pays the 1.6x co-op bonus. Use \"View Rolled Tasks\" to change "
-			+ "your vote.");
+			+ "restricted to free-to-play monsters if any participant is free and sized to the "
+			+ "party's FIGHTING WEIGHT: the AVERAGE combat level of everyone taking part, each "
+			+ "level clamped to 3-126 and the mean rounded down. Slayer requirements still gate "
+			+ "on the party's LOWEST slayer level, so nobody is offered something a member "
+			+ "cannot legally kill. If any participant is on an older build the whole party "
+			+ "falls back to the old rule and sizes to the lowest combat level instead — it is "
+			+ "all-or-nothing, because two clients disagreeing about the target level would deal "
+			+ "two different boards. Clicking a contract VOTES, and a MAJORITY (2 of 2 or 3, 3 of "
+			+ "4 or 5) signs it for the whole party as a SHARED contract — everyone's kills fill "
+			+ "one pooled quota. If no contract has a majority once every vote is in, or when the "
+			+ "~2 minute clock runs out, the most-voted contract is taken instead — drawn at "
+			+ "random between them if the lead is tied — and it binds only the members who "
+			+ "actually voted; anyone who abstained keeps the rolled contracts as personal ones. "
+			+ "Completion pays the 1.6x co-op bonus, plus a flat 0.25x if the party covers more "
+			+ "than one attack style. Use \"View Rolled Tasks\" to change your vote.");
 		paragraph(section, w, "You may only attack your contract's monster — everything else is "
 			+ "blocked (quest targets excepted, see Tutorial & Quests).");
 		paragraph(section, w, "Per-kill GC scales three ways: the difficulty base (8/16/32/64), a "
@@ -212,6 +223,29 @@ public class HelpTab extends JPanel
 		paragraph(section, w, "Side bets are optional bonus objectives paying extra GC. A wiki "
 			+ "button next to the task opens the monster's wiki page, and a config toggle "
 			+ "highlights task NPCs in-game.");
+		paragraph(section, w, "Double Docket: kill your real Slayer assignment while on contract "
+			+ "and completion pays x1.2. It is checked when you accept AND on every kill, so "
+			+ "picking the matching Slayer task up mid-contract still counts, and once it locks "
+			+ "in it stays even if you finish the Slayer task first. Contracts are NEVER rolled "
+			+ "to match your assignment — that would add RNG inside the seeded party roll and "
+			+ "desync the party — so this is a happy accident the game pays for. Grouped "
+			+ "assignments like Metal dragons name no single monster and cannot be detected. "
+			+ "Every contract shows its docket state, earned or not.");
+		paragraph(section, w, "The Charter Office (Overview tab): buy ONE contract a day instead "
+			+ "of waiting for the board to offer it. The target must be familiar — 25 banked "
+			+ "kills — and must pass every gate a normal roll applies, so a deed can never buy "
+			+ "past a rule. It costs 800-2,500 GC depending on how far you are punching up, and "
+			+ "the GC is HELD, not spent: the deed joins your board as an extra offer for 500 "
+			+ "ticks and the money returns in full if you never sign it. The daily lock lifts at "
+			+ "UTC midnight. The counter is closed while a party roll is live.");
+		paragraph(section, w, "The Ante (off by default — turn it on in the config): before you "
+			+ "accept an INSANE contract you may stake 10-50% of your purse, capped at 5,000 GC "
+			+ "and never offered under a 250 GC purse. Finish the contract and the stake returns "
+			+ "DOUBLED; die and it is gone. Arming takes two confirmations, disarming takes "
+			+ "none, and GC only leaves your purse when a contract is actually signed. In a "
+			+ "party it takes EVERY member: each stakes from their own purse and loses only "
+			+ "their own, and one refusal means no Ante for anyone — the contract goes ahead "
+			+ "either way. Contracts cannot be abandoned, so stake accordingly.");
 		paragraph(section, w, "Rhythm Combo: consecutive on-task kills within ~25 seconds stack a "
 			+ "kill-GC bonus — up to +30% at low combat, fading to a permanent +10% floor by "
 			+ "combat 45. The chain cancels only after ~60 seconds with NO attacks at all "
@@ -227,6 +261,27 @@ public class HelpTab extends JPanel
 			+ "received PROVES full credit and clears any suspicion, while no loot from a "
 			+ "monster with a guaranteed drop convicts even when the damage happened before "
 			+ "you arrived. Kill credit lands a moment after the death animation.");
+		return section;
+	}
+
+	private static JPanel buildPartySection(int w)
+	{
+		JPanel section = GachamanPanel.section("The Party Page");
+		paragraph(section, w, "A tab showing who is with you: each member's rolled style as a "
+			+ "colour swatch, their combat level, their contract progress, and badges for "
+			+ "taint and for your Patron's Mark with them. Turn the Party contracts setting "
+			+ "off and the tab stays, but it broadcasts nothing and shows nothing — it says "
+			+ "so rather than looking empty.");
+		paragraph(section, w, "It is DISPLAY ONLY — no roll, payout or gate reads a line of it. "
+			+ "Every value is self-reported by that member's own client and taken on trust; "
+			+ "anything arriving over the party relay is clamped to a sane range before it is "
+			+ "drawn. A row that stops reporting goes quiet after about a minute and comes back "
+			+ "on the next heartbeat.");
+		paragraph(section, w, "The Patron's Mark: a private tally of how many shared contracts "
+			+ "you have finished alongside each partner, kept by display name so it survives "
+			+ "logins. Marks land at 10, 25 and 100 — Patron I, II and III. Strictly cosmetic: "
+			+ "it pays no GC and multiplies nothing, because a mark worth something would make "
+			+ "farming a friend the correct play.");
 		return section;
 	}
 
@@ -276,6 +331,17 @@ public class HelpTab extends JPanel
 		section.add(cards);
 		section.add(Box.createVerticalStrut(2));
 		section.add(GachamanPanel.smallLine("Normal · Shiny · Hologram", MUTED));
+		section.add(Box.createVerticalStrut(5));
+		paragraph(section, w, "Service Record: every card counts the kills it was PRESENT for — "
+			+ "assigned to a loadout slot when the kill landed — and the number is permanent. "
+			+ "It counts real kills, not contract credit: a Compactor's doubled progress buys "
+			+ "no extra service, and an ironman's half-credit kill still bought the card a "
+			+ "whole kill of wear. The Album shows it as \"present for N kills\".");
+		paragraph(section, w, "Past 100, 400 and 1,000 kills of service a card wears Hairline, "
+			+ "then Cracked, then Shattered, still holding — drawn as gold-filled kintsugi "
+			+ "repair, not damage. NOTHING reads it. A worn card rolls, equips, completes sets, "
+			+ "burns at prestige and prices in the shop exactly like a pristine one. It is a "
+			+ "veteran's stripe, not a durability system.");
 		return section;
 	}
 
@@ -290,9 +356,12 @@ public class HelpTab extends JPanel
 		section.add(iconRow(w, padlockIcon(), textBlock(
 			"The other 8 slots each need a Slot Deed: a rare chest roll (1/25 Battered, "
 				+ "1/18 Gilded, 1/12 Ornate — you choose the slot; the Rusty starter chest "
-				+ "never rolls deeds) or guaranteed at 10/25/45/70/100/140/190/250 lifetime "
-				+ "contracts.", BODY, w - SECTION_PADDING - ICON_COLUMN)));
+				+ "never rolls deeds) or guaranteed at 10/25/45/70/100/140/190/250/320 "
+				+ "lifetime contracts — nine milestones for eight slots, so there is a "
+				+ "spare.", BODY, w - SECTION_PADDING - ICON_COLUMN)));
 		section.add(Box.createVerticalStrut(4));
+		paragraph(section, w, "Once every slot is deeded the milestones stop, and a chest that "
+			+ "rolls a deed after that pays 2,000 GC instead.");
 		paragraph(section, w, "Deed Fragments: during your first 5 contracts, Medium/Hard/Insane "
 			+ "completions pay 1/2/3 fragments. Ten fragments forge ONE bonus deed, ever — "
 			+ "all-hard exactly forges it; anything easier misses. Difficulty is an "
@@ -307,12 +376,33 @@ public class HelpTab extends JPanel
 			+ "pull. Cards come only from slots you have unlocked and gear you can already "
 			+ "wield — but shinies are 4x more likely (1 in 16). No jackpot, no deed rolls, "
 			+ "and it never moves the pity meter.");
+		paragraph(section, w, "First Colours: the very first style roll on an account is followed "
+			+ "by a FREE chest, steered toward a weapon your new style can actually swing. It "
+			+ "is a Rusty chest and it counts as one of the three, so two are left to buy. If "
+			+ "the client dies before it is dealt, it is still owed and arrives next login.");
 		paragraph(section, w, "Then Battered 500 GC (1 card), Gilded 800 (2), Ornate 1,000 (3): "
 			+ "better value AND better odds the higher you go. Slot Chests cost the Gilded "
 			+ "price for exactly 1 card, guaranteed from a gear slot you choose. In roughly "
-			+ "1 in 100 opens, the chest upgrades itself mid-animation to the next tier.");
+			+ "1 in 100 opens, the chest upgrades itself mid-animation to the next tier — the "
+			+ "lid keeps the face of the tier you PAID for right up to the deal, so an upgrade "
+			+ "is a reveal rather than a spoiler.");
+		paragraph(section, w, "Strain: the chest fights before it opens, and how hard it fights "
+			+ "is the tell. A shudder starts it, the shaking climbs toward the give, then "
+			+ "everything goes dead still for a beat and the lid loses. Groans scale with what "
+			+ "you paid — Rusty gets none at all, Battered two, Gilded three, Ornate four. It "
+			+ "reports only the tier you BOUGHT and can never leak what is inside, and the "
+			+ "intro is exactly as long as it always was.");
+		paragraph(section, w, "The House Lean, stated plainly: when a chest picks WHICH item of a "
+			+ "rarity you get, gear one tier above what you can wield today is weighted 0.35x "
+			+ "against gear you can already use — so a card you can equip now is about 2.86x "
+			+ "likelier than the equivalent tease. It touches item choice only. Rarity odds, "
+			+ "the jackpot upgrade, hologram replacement and the first-card pity guarantee are "
+			+ "all untouched, and Slot Chests roll Gilded odds. The Shop tab's Chest Odds panel "
+			+ "prints the real percentages for every tier from the same numbers the roller "
+			+ "uses, so you can check this rather than take it.");
 		paragraph(section, w, "The pity meter counts CARDS revealed without an Epic+: past 12 your "
-			+ "odds climb, and at 30 the next chest guarantees a Legendary.");
+			+ "odds climb, and at 30 the next chest guarantees a Legendary (26 from prestige 2). "
+			+ "Rusty chests never move it.");
 		section.add(new GachamanPanel.MeterBar(12 / 30.0, ColorScheme.BRAND_ORANGE, "12 / 30"));
 		section.add(Box.createVerticalStrut(5));
 		paragraph(section, w, "Every 10 combat levels gained grants a reroll token — during any "
@@ -353,6 +443,15 @@ public class HelpTab extends JPanel
 		paragraph(section, w, "Prestige (250 contracts or 90% Common/Uncommon collection + 25,000 "
 			+ "GC) burns your Common/Uncommon cards for a permanent rank: +5% GC per rank and "
 			+ "better luck at rank 2-3.");
+		paragraph(section, w, "The Dossier tab is the ledger: every contract you have finished or "
+			+ "failed, newest first, with what it paid. It keeps the last 200 contracts, and "
+			+ "the totals pinned at the top — count, clean rate, shared — are a fold over "
+			+ "exactly that window, labelled \"(last 200 contracts)\" once it is full so they "
+			+ "never read as lifetime figures. \"Lifetime earned\" is the one true unbounded "
+			+ "number.");
+		paragraph(section, w, "The Timeline tab audits everything else in order — style rolls, "
+			+ "contract rolls and completions, chest opens with every card pulled, rerolls, "
+			+ "charges and violations. Pick a from/to window and scrub it. Last 500 events.");
 		return section;
 	}
 

@@ -3,42 +3,42 @@
     {
       "ladderKey": "metal",
       "tiers": [
-        { "tierKey": "bronze", "rank": 1, "prefixes": ["Bronze"] },
-        { "tierKey": "iron", "rank": 2, "prefixes": ["Iron"] },
-        { "tierKey": "steel", "rank": 3, "prefixes": ["Steel"] },
-        { "tierKey": "black", "rank": 4, "prefixes": ["Black"], "excludeFamilies": ["mask", "wizard hat", "cavalier", "cane", "dragon mask", "santa hat", "h'ween mask", "headband", "boater", "beret", "partyhat", "unicorn mask"] },
-        { "tierKey": "white", "rank": 4, "prefixes": ["White"], "excludeFamilies": ["apron", "boater", "headband", "beret", "unicorn mask", "partyhat"] },
-        { "tierKey": "mithril", "rank": 5, "prefixes": ["Mithril"] },
-        { "tierKey": "adamant", "rank": 6, "prefixes": ["Adamant"] },
-        { "tierKey": "rune", "rank": 7, "prefixes": ["Rune"] },
-        { "tierKey": "granite", "rank": 7, "prefixes": ["Granite"] },
-        { "tierKey": "dragon", "rank": 8, "prefixes": ["Dragon"] }
+        { "tierKey": "bronze", "rank": 1, "reqLevel": 1, "reqDefence": 1, "prefixes": ["Bronze"] },
+        { "tierKey": "iron", "rank": 2, "reqLevel": 1, "reqDefence": 1, "prefixes": ["Iron"] },
+        { "tierKey": "steel", "rank": 3, "reqLevel": 5, "reqDefence": 5, "prefixes": ["Steel"] },
+        { "tierKey": "black", "rank": 4, "reqLevel": 10, "reqDefence": 10, "prefixes": ["Black"], "excludeFamilies": ["mask", "wizard hat", "cavalier", "cane", "dragon mask", "santa hat", "h'ween mask", "headband", "boater", "beret", "partyhat", "unicorn mask"] },
+        { "tierKey": "white", "rank": 4, "reqLevel": 10, "reqDefence": 10, "prefixes": ["White"], "excludeFamilies": ["apron", "boater", "headband", "beret", "unicorn mask", "partyhat"] },
+        { "tierKey": "mithril", "rank": 5, "reqLevel": 20, "reqDefence": 20, "prefixes": ["Mithril"] },
+        { "tierKey": "adamant", "rank": 6, "reqLevel": 30, "reqDefence": 30, "prefixes": ["Adamant"] },
+        { "tierKey": "rune", "rank": 7, "reqLevel": 40, "reqDefence": 40, "prefixes": ["Rune", "Runite"] },
+        { "tierKey": "granite", "rank": 7, "reqLevel": 50, "reqDefence": 50, "prefixes": ["Granite"] },
+        { "tierKey": "dragon", "rank": 8, "reqLevel": 60, "reqDefence": 60, "prefixes": ["Dragon"] }
       ]
     },
     {
       "ladderKey": "dhide",
       "tiers": [
-        { "tierKey": "leather", "rank": 1, "prefixes": ["Leather"] },
-        { "tierKey": "hardleather", "rank": 2, "prefixes": ["Hardleather"] },
-        { "tierKey": "studded", "rank": 3, "prefixes": ["Studded"] },
-        { "tierKey": "snakeskin", "rank": 4, "prefixes": ["Snakeskin"] },
-        { "tierKey": "frog_leather", "rank": 4, "prefixes": ["Frog-leather"] },
-        { "tierKey": "green_dhide", "rank": 5, "prefixes": ["Green d'hide"] },
-        { "tierKey": "blue_dhide", "rank": 6, "prefixes": ["Blue d'hide"] },
-        { "tierKey": "red_dhide", "rank": 7, "prefixes": ["Red d'hide"] },
-        { "tierKey": "black_dhide", "rank": 8, "prefixes": ["Black d'hide"] }
+        { "tierKey": "leather", "rank": 1, "reqLevel": 1, "reqDefence": 1, "prefixes": ["Leather"] },
+        { "tierKey": "hardleather", "rank": 2, "reqLevel": 1, "reqDefence": 10, "prefixes": ["Hardleather"] },
+        { "tierKey": "studded", "rank": 3, "reqLevel": 20, "reqDefence": 20, "prefixes": ["Studded"] },
+        { "tierKey": "snakeskin", "rank": 4, "reqLevel": 30, "reqDefence": 30, "prefixes": ["Snakeskin"] },
+        { "tierKey": "frog_leather", "rank": 4, "reqLevel": 25, "reqDefence": 25, "prefixes": ["Frog-leather"] },
+        { "tierKey": "green_dhide", "rank": 5, "reqLevel": 40, "reqDefence": 40, "prefixes": ["Green d'hide"] },
+        { "tierKey": "blue_dhide", "rank": 6, "reqLevel": 50, "reqDefence": 40, "prefixes": ["Blue d'hide"] },
+        { "tierKey": "red_dhide", "rank": 7, "reqLevel": 60, "reqDefence": 40, "prefixes": ["Red d'hide"] },
+        { "tierKey": "black_dhide", "rank": 8, "reqLevel": 70, "reqDefence": 40, "prefixes": ["Black d'hide"] }
       ]
     },
     {
       "ladderKey": "robes",
       "tiers": [
-        { "tierKey": "wizard", "rank": 1, "prefixes": ["Wizard"] },
-        { "tierKey": "xerician", "rank": 2, "prefixes": ["Xerician"] },
-        { "tierKey": "mystic", "rank": 4, "prefixes": ["Mystic"] },
-        { "tierKey": "enchanted", "rank": 4, "prefixes": ["Enchanted"] },
-        { "tierKey": "splitbark", "rank": 4, "prefixes": ["Splitbark"] },
-        { "tierKey": "infinity", "rank": 6, "prefixes": ["Infinity"] },
-        { "tierKey": "ancestral", "rank": 8, "prefixes": ["Ancestral"] }
+        { "tierKey": "wizard", "rank": 1, "reqLevel": 1, "reqDefence": 1, "prefixes": ["Wizard"] },
+        { "tierKey": "xerician", "rank": 2, "reqLevel": 20, "reqDefence": 10, "prefixes": ["Xerician"] },
+        { "tierKey": "mystic", "rank": 4, "reqLevel": 40, "reqDefence": 20, "prefixes": ["Mystic"] },
+        { "tierKey": "enchanted", "rank": 4, "reqLevel": 40, "reqDefence": 20, "prefixes": ["Enchanted"] },
+        { "tierKey": "splitbark", "rank": 4, "reqLevel": 40, "reqDefence": 40, "prefixes": ["Splitbark"] },
+        { "tierKey": "infinity", "rank": 6, "reqLevel": 50, "reqDefence": 25, "prefixes": ["Infinity"] },
+        { "tierKey": "ancestral", "rank": 8, "reqLevel": 75, "reqDefence": 65, "prefixes": ["Ancestral"] }
       ]
     }
   ],

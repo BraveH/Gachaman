@@ -14,6 +14,7 @@ import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.NPC;
+import net.runelite.api.Player;
 import net.runelite.api.Skill;
 import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.GameTick;
@@ -76,6 +77,20 @@ public class KillTracker
 	public interface KillListener
 	{
 		void onKill(Kill kill);
+
+		/**
+		 * The LOCAL player died. Default no-op so the many listeners that only
+		 * care about kills are untouched.
+		 *
+		 * This rides on the death subscription rather than the "Oh dear, you are
+		 * dead" chat line because a safe death (Castle Wars, Barbarian Assault,
+		 * a minigame) prints no such line — an observer that watched for the
+		 * message would silently miss exactly the deaths that cost nothing to
+		 * arrange.
+		 */
+		default void onLocalPlayerDeath()
+		{
+		}
 	}
 
 	private static class Engagement
@@ -262,6 +277,23 @@ public class KillTracker
 	{
 		if (!(event.getActor() instanceof NPC))
 		{
+			// The one non-NPC death worth reporting: this player's own. Same
+			// event, one branch, so death is observed exactly where kills are.
+			if (client != null && event.getActor() instanceof Player
+				&& event.getActor() == client.getLocalPlayer())
+			{
+				for (KillListener listener : new ArrayList<>(listeners))
+				{
+					try
+					{
+						listener.onLocalPlayerDeath();
+					}
+					catch (Exception e)
+					{
+						log.warn("death listener failed", e);
+					}
+				}
+			}
 			return;
 		}
 		NPC npc = (NPC) event.getActor();
@@ -323,14 +355,34 @@ public class KillTracker
 			return;
 		}
 		int npcId = event.getComposition().getId();
-		// oldest unmatched pending of this composition (FIFO handles multi-kills)
+		// Composition, not index — this event carries no index, so several pendings of
+		// the same monster are indistinguishable and one of them has to be chosen.
+		// FIFO chose the OLDEST, which is the wrong end: loot lands with the death, so
+		// the newest unmatched pending is the one it belongs to, while the oldest is
+		// typically a delayed-despawn corpse still waiting out PENDING_TIMEOUT_TICKS.
+		// Backwards costs TWO verdicts at once — kill an assisted monster, then a clean
+		// one of the same type, and the clean kill's loot exonerates the assisted
+		// pending while the clean kill is left unproven and convicted on absence. That
+		// inversion is precisely what the loot oracle exists to prevent.
+		//
+		// Ties keep list (death) order, and there is no time window layered on top.
+		// Two monsters that die on one tick send two loot events, so taking them
+		// first-listed marks both, where refusing to choose would convict a clean kill
+		// on the strength of our own ambiguity. And preferring the newest can never
+		// refuse a match FIFO would have made — it only changes WHICH pending is
+		// credited — so nothing proven today becomes unproven.
+		PendingKill best = null;
 		for (PendingKill pending : pendingKills)
 		{
-			if (!pending.lootSeen && pending.npcId == npcId)
+			if (!pending.lootSeen && pending.npcId == npcId
+				&& (best == null || pending.deathTick > best.deathTick))
 			{
-				pending.lootSeen = true;
-				return;
+				best = pending;
 			}
+		}
+		if (best != null)
+		{
+			best.lootSeen = true;
 		}
 	}
 

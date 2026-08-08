@@ -1,5 +1,6 @@
 package com.gachaman;
 
+import com.gachaman.model.CardWear;
 import com.gachaman.model.FirstStamp;
 import com.gachaman.model.Rarity;
 import com.gachaman.model.TaskDifficulty;
@@ -182,10 +183,29 @@ public final class Tuning
 	public static final double HOLOGRAM_CHANCE = 1.0 / 256;
 
 	// --- Roll proximity (rolls stay near what the player can actually wield) ---
-	/** Skill level needed for tier rank index+1 (bronze..dragon-band). */
+	/**
+	 * Skill level needed for tier rank index+1 (bronze..dragon-band). METAL ONLY:
+	 * this transcribes the melee ladder rank-for-rank, so it models metal exactly and
+	 * nothing else. Dhide and robes rank by power on their own ladder (robes has no
+	 * rank 3/5/7 at all), so they read real requirements out of tiers.json instead.
+	 */
 	public static final int[] TIER_RANK_LEVELS = {1, 1, 5, 10, 20, 30, 40, 60};
-	/** Rolled tiers may exceed the player's wieldable rank by this much. */
+	/** Rolled metal tiers may exceed the player's wieldable rank by this much. */
 	public static final int ROLL_TIER_HEADROOM = 2;
+	/**
+	 * The same aspirational slack for dhide/robes, denominated in skill levels because
+	 * a rank step on those ladders is worth anywhere from 0 to 30 levels.
+	 */
+	public static final int ROLL_LEVEL_HEADROOM = 10;
+	/**
+	 * The house lean: inside a proximity-gated roll, gear that only got in through the
+	 * headroom is drawn at this fraction of the weight of gear the player can wield
+	 * today. Strictly between 0 and 1 on purpose — at 0 the headroom band would be dead
+	 * (it is deliberate aspirational slack, see ROLL_TIER_HEADROOM), and at 1 there is
+	 * no lean at all. Safe to retune with immediate feedback: the Shop tab's Chest Odds
+	 * panel prints the real resulting percentages, derived from this same constant.
+	 */
+	public static final double HOUSE_LEAN_HEADROOM_WEIGHT = 0.35;
 
 	public static int maxRankForLevel(int level)
 	{
@@ -198,6 +218,18 @@ public final class Tuning
 			}
 		}
 		return rank;
+	}
+
+	/**
+	 * Can a tier needing reqPrimary/reqDefence be rolled at these levels? Pure and
+	 * static because its only caller, ChestService.isReachable, short-circuits to true
+	 * whenever Client is null — which is every headless test, so testing it there
+	 * would be vacuously green.
+	 */
+	public static boolean withinReach(int primaryLevel, int defenceLevel,
+		int reqPrimary, int reqDefence, int headroom)
+	{
+		return primaryLevel + headroom >= reqPrimary && defenceLevel + headroom >= reqDefence;
 	}
 
 	// --- Pity ---
@@ -259,6 +291,47 @@ public final class Tuning
 		Rarity.EPIC, 9000,
 		Rarity.LEGENDARY, 20000));
 
+	// --- The Charter Office ---
+	/**
+	 * Kills banked on a species before its contract may be chartered. Read off
+	 * the journal's existing per-monster tally, so nothing new is counted.
+	 */
+	public static final int CHARTER_KILLS_REQUIRED = 25;
+	public static final int CHARTER_PRICE_MIN_GC = 800;
+	public static final int CHARTER_PRICE_MAX_GC = 2500;
+	/** A deed is quoted in round numbers — never 1637 GC. */
+	public static final int CHARTER_PRICE_STEP_GC = 10;
+	/** How long an unaccepted deed sits on the board before the GC comes back. */
+	public static final int CHARTER_HOLD_TICKS = 500;
+	/**
+	 * The hold deadline is stored as WALL CLOCK, not as a tick countdown: a
+	 * persisted counter would need a mutate every single tick, and every mutate
+	 * re-gzips and re-hashes the entire state. 500 ticks at 600ms each.
+	 */
+	public static final long CHARTER_HOLD_MS = CHARTER_HOLD_TICKS * 600L;
+
+	/**
+	 * A deed costs what the target is worth relative to the buyer: the target's
+	 * combat level as a fraction of the player's, clamped to the same band the
+	 * contract board already uses (EASY's cap fraction at the bottom, INSANE's at
+	 * the top), interpolated across the price range and rounded off.
+	 *
+	 * Scaling by RATIO rather than by absolute level is what keeps the price
+	 * honest at both ends of the game: a level-3 chicken is never worth INSANE
+	 * money to anyone, and a target the player can only just legally be offered
+	 * costs full price whether they are combat 40 or combat 126.
+	 */
+	public static int charterPriceGc(int playerCb, int npcCb)
+	{
+		double lo = TaskDifficulty.EASY.getCbCapFraction();
+		double hi = TaskDifficulty.INSANE.getCbCapFraction();
+		double ratio = Math.max(0, npcCb) / (double) Math.max(1, playerCb);
+		double t = (Math.max(lo, Math.min(hi, ratio)) - lo) / (hi - lo);
+		double raw = CHARTER_PRICE_MIN_GC + t * (CHARTER_PRICE_MAX_GC - CHARTER_PRICE_MIN_GC);
+		long stepped = Math.round(raw / CHARTER_PRICE_STEP_GC) * (long) CHARTER_PRICE_STEP_GC;
+		return (int) Math.max(CHARTER_PRICE_MIN_GC, Math.min(CHARTER_PRICE_MAX_GC, stepped));
+	}
+
 	// --- Reroll tokens ---
 	public static final int TOKEN_CB_INTERVAL = 10;
 
@@ -267,17 +340,136 @@ public final class Tuning
 	public static final double SIDEBET_MIN_PAYOUT_FRAC = 0.15;
 	public static final double SIDEBET_MAX_PAYOUT_FRAC = 0.40;
 
-	// --- Duo ---
-	public static final double DUO_REWARD_MULT = 1.6;
-	public static final double DUO_STYLE_CLASH_BONUS = 0.25;
-	public static final double DUO_CARRY_MULT = 0.8;
-	public static final int DUO_IDLE_TICKS = 1000;
+	// --- Shared party contracts ---
+	public static final double PARTY_REWARD_MULT = 1.6;
+	/**
+	 * Paid ONCE when the party covers 2+ distinct rolled styles — flat, never
+	 * scaled by how many distinct styles there are. A party of five all running
+	 * ranged pays 1.60x; any party covering two OR three styles pays 1.85x.
+	 */
+	public static final double PARTY_STYLE_CLASH_BONUS = 0.25;
+	public static final double PARTY_CARRY_MULT = 0.8;
+	public static final int PARTY_IDLE_TICKS = 1000;
+	/**
+	 * Grace given to a shared contract resurrected from disk before the watchdog
+	 * will believe a one-member party. ~1 minute: RuneLite rejoins the previous
+	 * party asynchronously at startup, so the roster is very often still empty at
+	 * the moment the state loads, and reading that as "the party is gone" would
+	 * convert a live contract before anyone had a chance to appear.
+	 *
+	 * Only the EMPTY-party branch waits on this. A resurrected contract that is in
+	 * a populated party but never hears from anyone is still settled by
+	 * PARTY_IDLE_TICKS on the usual terms — this is the narrower case where
+	 * waiting ten minutes for a party of one would be theatre, and where a relog
+	 * would otherwise hand a dead contract a fresh window every time.
+	 */
+	public static final int PARTY_RESYNC_TICKS = 100;
+	/**
+	 * Grace given to a partner who has DROPPED OUT of the party roster before the
+	 * carry clause writes them off. ~3 minutes, which is a RuneLite relaunch plus a
+	 * login plus the asynchronous party rejoin, with room to spare.
+	 *
+	 * Zero here — the old behaviour — makes the resume feature inert for a party of
+	 * two, which is the common case: closing your client removes you from the roster
+	 * at once, so your partner's very next sweep would convert the shared contract to
+	 * solo about fifteen seconds into your restart, and you would come back to
+	 * resurrect a contract nobody is on any more. The grace exists so the two sides
+	 * of a restart can still find each other.
+	 *
+	 * Strictly a DELAY: it never causes a conversion that would not otherwise have
+	 * happened, and never changes what one pays. The cost of being wrong is a few
+	 * minutes of party-rate pay for a party that had genuinely left, which is far
+	 * cheaper than silently voiding a live contract every time somebody crashes.
+	 */
+	public static final int PARTY_DEPART_GRACE_TICKS = 300;
+	/**
+	 * Sanity bounds on a TRANSMITTED combat level, applied per level before the
+	 * party's fighting weight is averaged. Under the old lowest-level rule a
+	 * broken or hostile value could only ever make contracts EASIER, so it was
+	 * self-limiting; an average lets one inflated number drag the whole party
+	 * onto a monster nobody can kill, and a party contract cannot be abandoned.
+	 * 3 and 126 are the real floor and ceiling of the combat-level formula.
+	 */
+	public static final int COMBAT_LEVEL_MIN = 3;
+	public static final int COMBAT_LEVEL_MAX = 126;
+	/**
+	 * Presence heartbeat, ~12s. Presence is re-sent whenever any field of it
+	 * changes; the heartbeat exists only so a client that joined late, or that
+	 * missed a message, converges without anyone doing anything.
+	 */
+	public static final int PARTY_PRESENCE_HEARTBEAT_TICKS = 20;
+	/**
+	 * Five missed heartbeats (~60s) before a member's line is treated as no
+	 * signal. Deliberately forgiving: a row flickering between "on contract"
+	 * and "no signal" reads as a bug, and presence is only ever cosmetic.
+	 */
+	public static final int PARTY_PRESENCE_STALE_TICKS = 100;
+	/**
+	 * The Patron's Mark tier thresholds: shared contracts finished with one
+	 * partner. STRICTLY COSMETIC and deliberately so — the mark pays no GC,
+	 * feeds no CreditSink modifier, multiplies nothing and gates nothing,
+	 * because the moment a patron count is worth something the correct play
+	 * becomes farming a friend for it. Do not hang an economic hook here.
+	 * Ascending; PatronMark's label array stays exactly one longer than this.
+	 */
+	public static final int[] PATRON_TIERS = {10, 25, 100};
+	/**
+	 * Distinct partners the mark will remember. The key space is supplied by
+	 * OTHER players' clients and every mutate re-encodes the whole save, so it
+	 * is bounded. At the cap a newcomer only displaces another one-contract
+	 * stranger — a real history is never dropped.
+	 */
+	public static final int PATRON_MAX_PARTNERS = 100;
+
+	// --- Double Docket ---
+	/**
+	 * Completion bonus when the contract target is also the player's live Slayer
+	 * assignment. Deliberately small and MULTIPLICATIVE: it stacks onto the
+	 * party/clash/carry chain rather than replacing any of it, and it lands
+	 * before the taint halving like every other completion modifier, so a
+	 * tainted player still only gets 1.2x of their reduced payout.
+	 *
+	 * Offer generation is NOT weighted toward the Slayer assignment. Biasing the
+	 * roll would add RNG draws inside the seeded party path and desync every
+	 * client in the party, so alignment stays a happy accident the game pays for.
+	 */
+	public static final double DOUBLE_DOCKET_MULT = 1.2;
+
+	// --- The Ante ---
+	/**
+	 * A voluntary side wager on the hardest contracts only: stake a slice of the
+	 * purse BEFORE signing, finish and it comes back doubled, die and it is gone.
+	 *
+	 * The percent band is the player's choice inside these bounds; the absolute
+	 * cap keeps one contract from becoming an economy-sized swing for a rich
+	 * account. The purse floor is the other half of that guard — under it the
+	 * minimum stake is not a meaningful risk, only a tax on being broke, so the
+	 * wager is not offered at all.
+	 */
+	public static final int ANTE_MIN_PERCENT = 10;
+	public static final int ANTE_MAX_PERCENT = 50;
+	public static final int ANTE_MAX_GC = 5000;
+	public static final int ANTE_MIN_PURSE_GC = 250;
+	/**
+	 * A won Ante puts this multiple of the stake back in hand: the principal
+	 * returns raw out of escrow and the remaining (MULT - 1) is paid as income,
+	 * so only the PROFIT is exposed to perks and to the taint halving.
+	 */
+	public static final int ANTE_PAYOUT_MULT = 2;
 
 	// --- Journal ---
 	public static final int PB_RECORD_GC = 250;
 
 	/** Fortune-timeline audit cap: oldest entries drop past this. */
 	public static final int TIMELINE_MAX_EVENTS = 500;
+
+	/**
+	 * Contract dossier cap: the oldest record drops past this. Deliberately well
+	 * under TIMELINE_MAX_EVENTS — a record is a fat struct rather than a short
+	 * line, and StateCodec gzips plus SHA-256s the ENTIRE state synchronously on
+	 * every mutate, so the encoded size is a cost paid on every kill.
+	 */
+	public static final int DOSSIER_MAX_RECORDS = 200;
 
 	// --- Firsts Journal ---
 	/**
@@ -323,4 +515,41 @@ public final class Tuning
 	public static final double PRESTIGE_COLLECTION_FRACTION = 0.90;
 	public static final int PRESTIGE_GC_COST = 25000;
 	public static final double PRESTIGE_GC_BONUS_PER_RANK = 0.05;
+
+	// --- Card wear (cosmetic) ---
+	/**
+	 * Service Record kills a card must have carried to earn each wear stage.
+	 * Purely a badge: nothing in the plugin branches on the returned CardWear,
+	 * so moving these numbers can never change a roll, a payout, a set, a
+	 * prestige burn or a requirement — only how the face is painted.
+	 *
+	 * <p>The lowest threshold must stay at or above 1. Wear implies a visible
+	 * service count, and CardRenderer measures the wear-free top band from the
+	 * service pill it has already drawn; a zero threshold would ask it to
+	 * protect a pill that was never painted.
+	 */
+	public static final int WEAR_HAIRLINE_KILLS = 100;
+	public static final int WEAR_CRACKED_KILLS = 400;
+	public static final int WEAR_SHATTERED_KILLS = 1000;
+
+	/**
+	 * The whole rule. Saturates at the top stage and floors at NONE, so a
+	 * corrupt or absent record paints nothing rather than inventing history.
+	 */
+	public static CardWear cardWear(int killsServed)
+	{
+		if (killsServed >= WEAR_SHATTERED_KILLS)
+		{
+			return CardWear.SHATTERED;
+		}
+		if (killsServed >= WEAR_CRACKED_KILLS)
+		{
+			return CardWear.CRACKED;
+		}
+		if (killsServed >= WEAR_HAIRLINE_KILLS)
+		{
+			return CardWear.HAIRLINE;
+		}
+		return CardWear.NONE;
+	}
 }

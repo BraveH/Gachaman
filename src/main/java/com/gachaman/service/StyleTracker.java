@@ -1,7 +1,9 @@
 package com.gachaman.service;
 
 import com.gachaman.model.AttackStyle;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.Set;
 import javax.annotation.Nullable;
@@ -155,6 +157,21 @@ public class StyleTracker
 		AnimationID.HUMAN_CASTING_TELE_BLOCK,
 		AnimationID.HUMAN_CASTING_TELE_BLOCK_STAFF,
 		AnimationID.HUMAN_CASTING_TELE_BLOCK_STAFF_WALKMERGE,
+		// Arceuus and Lunar self-buffs. Every one of them is a spell the player
+		// casts ON THEMSELVES in the middle of a fight, mid-combat and while
+		// interacting with the target — which is exactly the shape the animation
+		// path judges. Missing from this list they were judged from the STANCE
+		// varps, so resurrecting a thrall or re-veiling between kills scored a
+		// melee attack against a magic contract.
+		AnimationID.HUMAN_SPELLCAST_RESURRECT,
+		AnimationID.HUMAN_SPELLCAST_SHADOWVEIL,
+		AnimationID.HUMAN_CAST_VILEVIGOUR,
+		AnimationID.HUMAN_CAST_OFFERING,
+		AnimationID.HUMAN_PREPARE_OFFERING,
+		AnimationID.HUMAN_PREPARE_OFFERING_LOOP,
+		AnimationID.HUMAN_CAST_SELFIMBUE,
+		AnimationID.HUMAN_CASTHEAL,
+		AnimationID.HUMAN_CASTCHARGEORB,
 		AnimationID.HUMAN_EAT_BANANA,
 		AnimationID.HUMAN_DRINK_RUM,
 		AnimationID.HUMAN_EAT,
@@ -186,7 +203,17 @@ public class StyleTracker
 		AnimationID.HUMAN_CAST_ENCHANTRING,
 		AnimationID.HUMAN_CASTING_TELE_BLOCK,
 		AnimationID.HUMAN_CASTING_TELE_BLOCK_STAFF,
-		AnimationID.HUMAN_CASTING_TELE_BLOCK_STAFF_WALKMERGE);
+		AnimationID.HUMAN_CASTING_TELE_BLOCK_STAFF_WALKMERGE,
+		// the self-buffs pay Magic XP too, so they belong here as well: without
+		// it, resurrecting a thrall one tick after a genuine forbidden sword
+		// swing would hand out a pardon the swing never earned
+		AnimationID.HUMAN_SPELLCAST_RESURRECT,
+		AnimationID.HUMAN_SPELLCAST_SHADOWVEIL,
+		AnimationID.HUMAN_CAST_VILEVIGOUR,
+		AnimationID.HUMAN_CAST_OFFERING,
+		AnimationID.HUMAN_CAST_SELFIMBUE,
+		AnimationID.HUMAN_CASTHEAL,
+		AnimationID.HUMAN_CASTCHARGEORB);
 
 	public interface AttackListener
 	{
@@ -207,10 +234,51 @@ public class StyleTracker
 
 	private int tick;
 	private int settleUntilTick;
+	/**
+	 * Tick of the most recent judgement, for the two places that only need
+	 * "was anything judged just now": the one-verdict-per-tick guard and the
+	 * XP fallback's quiet period. Pardons read {@link #recentVerdicts} instead.
+	 */
 	private int lastJudgedTick = -1;
-	private AttackStyle lastJudgedStyle;
-	private JudgementSource lastJudgedSource;
-	private boolean lastJudgedPardoned;
+
+	/** One judged attack, kept until it falls out of the pardon window. */
+	static final class Verdict
+	{
+		final int tick;
+		final AttackStyle style;
+		final JudgementSource source;
+		boolean pardoned;
+
+		Verdict(int tick, AttackStyle style, JudgementSource source)
+		{
+			this.tick = tick;
+			this.style = style;
+			this.source = source;
+		}
+	}
+
+	/**
+	 * Recent verdicts, oldest first.
+	 *
+	 * <p>This was a single slot, and a single slot cannot survive its own pardon
+	 * window. Spell XP lands 2-5 ticks after the cast, and across a gap that wide
+	 * the player has attacked again — every attack overwrote the slot. So the
+	 * verdict the Magic XP was coming to retract had already been replaced, and the
+	 * pardon either found a MAGIC verdict and declined (source is not STANCE) or
+	 * retracted a later, innocent stance verdict in its place.
+	 *
+	 * <p>The first case is the "cast a spell and still get a tainted kill" report:
+	 * COMBAT_WEAPON_CATEGORY updates a tick behind the equip, so the first cast
+	 * after swapping to a staff is judged MELEE from the weapon just put away, and
+	 * the Magic XP that would have cleared it arrives to find the SECOND cast — a
+	 * clean ANIM MAGIC verdict — sitting in the slot. Nothing is pardoned, the
+	 * melee verdict stands, and the kill is tainted by a spell.
+	 *
+	 * <p>Bounded twice: pruned past PARDON_WINDOW_TICKS on every push, and
+	 * hard-capped, so a long fight cannot grow it.
+	 */
+	private final Deque<Verdict> recentVerdicts = new ArrayDeque<>();
+	private static final int MAX_RECENT_VERDICTS = 8;
 	/** Cast-click mark: when it was set and the actor it was aimed at. */
 	private int castMarkTick = -1;
 	private Actor castMarkTarget;
@@ -267,6 +335,9 @@ public class StyleTracker
 			lastRangedXp = -1;
 			lastMagicXp = -1;
 			clearCastMark();
+			// a verdict from before the hop belongs to a fight that is over; the
+			// login XP flood must not be able to pardon it
+			recentVerdicts.clear();
 		}
 	}
 
@@ -470,26 +541,54 @@ public class StyleTracker
 	 */
 	private void maybePardonStanceVerdict()
 	{
-		if (!shouldPardon(lastJudgedSource, lastJudgedStyle, lastJudgedPardoned, lastJudgedTick,
-			tick, lastMeleeRangedXpTick, lastUtilityMagicTick))
+		Verdict verdict = pardonTarget(recentVerdicts, tick, lastMeleeRangedXpTick,
+			lastUtilityMagicTick);
+		if (verdict == null)
 		{
 			return;
 		}
-		lastJudgedPardoned = true;
-		int judgedTick = lastJudgedTick;
+		verdict.pardoned = true;
 		log.debug("style pardon: retracting {} verdict from tick {} (magic xp at tick {})",
-			lastJudgedStyle, judgedTick, tick);
+			verdict.style, verdict.tick, tick);
 		for (AttackListener listener : new ArrayList<>(listeners))
 		{
 			try
 			{
-				listener.onAttackPardoned(judgedTick);
+				listener.onAttackPardoned(verdict.tick);
 			}
 			catch (Exception e)
 			{
 				log.warn("attack listener failed", e);
 			}
 		}
+	}
+
+	/**
+	 * Which of the recent verdicts a Magic XP drop retracts, or null for none.
+	 *
+	 * <p>Oldest candidate first, {@code recent} being in judgement order. Magic XP
+	 * is the DELAYED signal, so among the verdicts still inside the window the
+	 * earliest is the one the cast produced; taking them in order also means two
+	 * casts in quick succession pardon two verdicts in the order they were judged
+	 * rather than both reaching for the newest. One XP drop retracts at most one.
+	 *
+	 * <p>Pure and static for the same reason {@link #shouldPardon} is: the tracker
+	 * around it needs a live Client, so choosing ACROSS verdicts could not otherwise
+	 * be tested — and choosing across verdicts is the whole of the fix.
+	 */
+	@Nullable
+	static Verdict pardonTarget(Iterable<Verdict> recent, int tick, int lastMeleeRangedXpTick,
+		int lastUtilityMagicTick)
+	{
+		for (Verdict verdict : recent)
+		{
+			if (shouldPardon(verdict.source, verdict.style, verdict.pardoned, verdict.tick,
+				tick, lastMeleeRangedXpTick, lastUtilityMagicTick))
+			{
+				return verdict;
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -515,9 +614,19 @@ public class StyleTracker
 	private void judge(AttackStyle style, JudgementSource source)
 	{
 		lastJudgedTick = tick;
-		lastJudgedStyle = style;
-		lastJudgedSource = source;
-		lastJudgedPardoned = false;
+		// prune first, so the cap can only ever discard verdicts that are still
+		// young enough to matter — and at one judgement per tick over a 5-tick
+		// window it never reaches the cap in the first place
+		while (!recentVerdicts.isEmpty()
+			&& tick - recentVerdicts.peekFirst().tick > PARDON_WINDOW_TICKS)
+		{
+			recentVerdicts.pollFirst();
+		}
+		recentVerdicts.addLast(new Verdict(tick, style, source));
+		while (recentVerdicts.size() > MAX_RECENT_VERDICTS)
+		{
+			recentVerdicts.pollFirst();
+		}
 		fire(style, tick);
 	}
 

@@ -139,4 +139,83 @@ public final class TaskGenerator
 		}
 		return bets;
 	}
+
+	// --- The Charter Office ---------------------------------------------------
+	// A chartered contract is a BOUGHT board offer, so it must be indistinguishable
+	// from a rolled one once it lands: same difficulty bands, same gates, same
+	// reward tables. Everything below is appended rather than woven into the roll
+	// path on purpose — party rolls replay generateOffers() from a shared seed, and
+	// Random.nextInt() burns a variable number of draws for non-power-of-two
+	// bounds, so a single extra call anywhere above would desync every client.
+	// The charter always runs on its OWN GachaRng instance.
+
+	/**
+	 * The combat-level ceiling a difficulty will offer at this combat level —
+	 * the same expression eligibleMonsters() bands by, exposed so the Charter
+	 * Office can price and gate a target without rolling a board.
+	 */
+	public static int cbCap(int playerCb, TaskDifficulty difficulty)
+	{
+		return (int) Math.max(2, Math.floor(playerCb * difficulty.getCbCapFraction()));
+	}
+
+	/**
+	 * The difficulty a chartered target lands at: the FIRST band whose ceiling
+	 * covers it, so a target is always sold at the cheapest honest difficulty it
+	 * qualifies for. Null means the target is above even INSANE's ceiling — the
+	 * board would never offer it, so the Charter Office must not sell it either.
+	 *
+	 * Relies on cbCapFraction ascending across TaskDifficulty.values(); the test
+	 * suite pins that ordering so a future band insert cannot quietly invert it.
+	 */
+	@javax.annotation.Nullable
+	public static TaskDifficulty charterDifficulty(int playerCb, int npcCb)
+	{
+		for (TaskDifficulty difficulty : TaskDifficulty.values())
+		{
+			if (npcCb <= cbCap(playerCb, difficulty))
+			{
+				return difficulty;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Exactly the gates the board applies, and no others: slayer-task-only
+	 * monsters are unfulfillable, slayer-level-gated ones need the level, members
+	 * monsters need a members world, and nothing above INSANE's ceiling is
+	 * offerable. Paying GC must never buy past a rule the roll enforces.
+	 */
+	public static boolean charterEligible(MonsterTable.Monster monster, int playerCb,
+		int playerSlayerLevel, boolean membersWorld)
+	{
+		return monster != null
+			&& !monster.isSlayerTaskOnly()
+			&& monster.getSlayerLevel() <= playerSlayerLevel
+			&& (membersWorld || !monster.isMembers())
+			&& charterDifficulty(playerCb, monster.getCombatLevel()) != null;
+	}
+
+	/**
+	 * Build the chartered contract. Draw order matches generate()'s (kills, then
+	 * side bets) so a chartered offer is priced off the same tables a rolled one
+	 * would be. Never a redemption, never a party roll: a deed is bought by one
+	 * player, out of one purse, and binds only them.
+	 */
+	@javax.annotation.Nullable
+	public static TaskOffer charterOffer(MonsterTable.Monster monster, int playerCb, GachaRng rng)
+	{
+		TaskDifficulty difficulty = monster == null
+			? null : charterDifficulty(playerCb, monster.getCombatLevel());
+		if (difficulty == null)
+		{
+			return null;
+		}
+		int kills = rng.between(difficulty.getMinKills(), difficulty.getMaxKills());
+		int completion = Tuning.COMPLETION_GC.get(difficulty);
+		List<SideBet> sideBets = rollSideBets(playerCb, completion, rng);
+		return new TaskOffer(difficulty, monster.getName(), monster.getCombatLevel(), kills,
+			Tuning.PER_KILL_GC.get(difficulty), completion, sideBets, false, false);
+	}
 }

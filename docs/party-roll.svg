@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 660" width="820" height="660" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="band" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2B2620"/>
+      <stop offset="1" stop-color="#1B1813"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="820" height="660" rx="12" fill="#141414" stroke="#2C2822"/>
+
+  <text x="40" y="44" font-size="19" font-weight="bold" fill="#E6BE50" letter-spacing="2.5">A PARTY ROLL, STEP BY STEP</text>
+  <text x="40" y="68" font-size="12" fill="#8A8A8A">one board, one seed, one contract — dealt identically to everyone taking part</text>
+
+  <path d="M 56 117 L 56 539" stroke="#4E4436" stroke-width="2"/>
+
+  <!-- 1 propose -->
+  <circle cx="56" cy="117" r="7" fill="#141414" stroke="#E6BE50" stroke-width="2.5"/>
+  <rect x="90" y="96" width="690" height="64" rx="8" fill="url(#band)" stroke="#4E4436"/>
+  <text x="116" y="122" font-size="13.5" font-weight="bold" fill="#E6BE50">1 · Propose</text>
+  <text x="116" y="144" font-size="11.5" fill="#C0C0C0">Any member with a clean slate — no active contract, no undecided rolls — types <tspan font-family="Consolas, monospace" fill="#E6BE50">::gachaparty</tspan>.</text>
+
+  <!-- 2 answer -->
+  <circle cx="56" cy="197" r="7" fill="#141414" stroke="#F0C850" stroke-width="2.5"/>
+  <rect x="90" y="176" width="690" height="100" rx="8" fill="url(#band)" stroke="#4E4436"/>
+  <text x="116" y="202" font-size="13.5" font-weight="bold" fill="#F0C850">2 · Answer</text>
+  <text x="116" y="224" font-size="11.5" fill="#C0C0C0">Everyone else agrees with <tspan font-family="Consolas, monospace" fill="#F0C850">::gachaparty</tspan> or sits out with <tspan font-family="Consolas, monospace" fill="#F0C850">::gachaparty no</tspan>. Busy members, members</text>
+  <text x="116" y="242" font-size="11.5" fill="#C0C0C0">without the plugin, and anyone with Party contracts switched off are all excused automatically.</text>
+  <text x="116" y="260" font-size="11.5" fill="#C0C0C0">Closes when everyone has answered, at ~60 seconds, or when the host presses Start Roll Now.</text>
+
+  <!-- 3 roll -->
+  <circle cx="56" cy="311" r="7" fill="#141414" stroke="#96BEF0" stroke-width="2.5"/>
+  <rect x="90" y="290" width="690" height="100" rx="8" fill="url(#band)" stroke="#4E4436"/>
+  <text x="116" y="316" font-size="13.5" font-weight="bold" fill="#96BEF0">3 · The roll</text>
+  <text x="116" y="338" font-size="11.5" fill="#C0C0C0">Every client rolls from the same seed, so the same four contracts appear on every screen. They are</text>
+  <text x="116" y="356" font-size="11.5" fill="#C0C0C0">sized to the party's Fighting Weight — the average combat level — kept F2P-safe if any member is</text>
+  <text x="116" y="374" font-size="11.5" fill="#C0C0C0">free, and gated on the party's lowest Slayer level so nobody is offered an illegal kill.</text>
+
+  <!-- 4 vote -->
+  <circle cx="56" cy="425" r="7" fill="#141414" stroke="#B28CEB" stroke-width="2.5"/>
+  <rect x="90" y="404" width="690" height="100" rx="8" fill="url(#band)" stroke="#4E4436"/>
+  <text x="116" y="430" font-size="13.5" font-weight="bold" fill="#B28CEB">4 · The vote</text>
+  <text x="116" y="452" font-size="11.5" fill="#C0C0C0">Clicking a contract is a vote, and a majority binds the whole party. If nothing holds a majority once</text>
+  <text x="116" y="470" font-size="11.5" fill="#C0C0C0">every vote is in — or the ~2 minute deadline expires — the most-voted contract is taken instead,</text>
+  <text x="116" y="488" font-size="11.5" fill="#C0C0C0">drawn at random if the lead is tied, and it binds only the members who actually voted.</text>
+
+  <!-- 5 shared -->
+  <circle cx="56" cy="539" r="7" fill="#141414" stroke="#6EC86E" stroke-width="2.5"/>
+  <rect x="90" y="518" width="690" height="100" rx="8" fill="url(#band)" stroke="#4E4436"/>
+  <text x="116" y="544" font-size="13.5" font-weight="bold" fill="#6EC86E">5 · One shared contract</text>
+  <text x="116" y="566" font-size="11.5" fill="#C0C0C0">A single pooled quota that everybody's kills fill. Completion pays 1.6× on every screen, plus a flat</text>
+  <text x="116" y="584" font-size="11.5" fill="#C0C0C0">+0.25× if the party covers more than one attack style. The ironman half-credit rule stands down.</text>
+  <text x="116" y="602" font-size="11.5" fill="#C0C0C0">If the party leaves or goes quiet, a carry clause hands you the remainder as a solo contract.</text>
+</svg>

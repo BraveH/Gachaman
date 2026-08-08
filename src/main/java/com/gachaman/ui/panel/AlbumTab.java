@@ -9,6 +9,7 @@ import com.gachaman.model.OwnedCard;
 import com.gachaman.model.Rarity;
 import com.gachaman.model.Variant;
 import com.gachaman.service.GachaStateService;
+import com.gachaman.service.ServiceRecordService;
 import com.gachaman.ui.CardImageService;
 import com.gachaman.ui.CardRenderer;
 import java.awt.BasicStroke;
@@ -62,6 +63,7 @@ import javax.swing.event.DocumentListener;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
+import net.runelite.client.util.QuantityFormatter;
 
 /**
  * The card album: every card in the database as a lazily rasterized thumbnail
@@ -130,6 +132,8 @@ public class AlbumTab extends JPanel
 	/** Direction {@link #sorted} was built with, to detect toggle flips. */
 	private boolean sortedDescending;
 	private Map<Integer, Variant> ownedVariantByCardId = Collections.emptyMap();
+	/** Card id -> best Service Record among the owned copies of that card. */
+	private Map<Integer, Integer> serviceByCardId = Collections.emptyMap();
 
 	@Inject
 	public AlbumTab(GachaStateService stateService, CardDatabase cardDatabase,
@@ -284,6 +288,8 @@ public class AlbumTab extends JPanel
 			}
 		}
 		ownedVariantByCardId = ownedVariants;
+		serviceByCardId = ServiceRecordService.bestByCardId(
+			state == null ? null : state.getOwnedCards());
 
 		updateHeader();
 		rebuildHoloSection(state);
@@ -397,8 +403,14 @@ public class AlbumTab extends JPanel
 			HologramDefinition def = cardDatabase.holograms().get(owned.getTierKey());
 			String name = def != null ? def.getName() : "Hologram (" + owned.getTierKey() + ")";
 			GearSlot assigned = assignedSlotOf(state, owned);
+			// holograms never enter the grid, so this label list is their only
+			// album surface for the Service Record
 			String text = name + " — tier " + owned.getTierKey()
-				+ (assigned != null ? " — " + assigned.getDisplayName() : "");
+				+ (assigned != null ? " — " + assigned.getDisplayName() : "")
+				+ (owned.getKillsServed() > 0
+					? " — present for " + QuantityFormatter.formatNumber(owned.getKillsServed())
+						+ " kills"
+					: "");
 			JLabel label = new JLabel(text);
 			label.setFont(FontManager.getRunescapeSmallFont());
 			label.setForeground(def != null ? def.getRarity().getColor() : ColorScheme.LIGHT_GRAY_COLOR);
@@ -464,7 +476,8 @@ public class AlbumTab extends JPanel
 			{
 				continue;
 			}
-			entries.add(new Entry(card, owned, owned ? ownedVariant : Variant.NORMAL));
+			entries.add(new Entry(card, owned, owned ? ownedVariant : Variant.NORMAL,
+				owned ? serviceByCardId.getOrDefault(card.getCardId(), 0) : 0));
 		}
 		grid.setEntries(entries);
 		revalidate();
@@ -510,18 +523,23 @@ public class AlbumTab extends JPanel
 		private final CardDefinition card;
 		private final boolean owned;
 		private final Variant variant;
+		private final int serviceKills;
 
-		Entry(CardDefinition card, boolean owned, Variant variant)
+		Entry(CardDefinition card, boolean owned, Variant variant, int serviceKills)
 		{
 			this.card = card;
 			this.owned = owned;
 			this.variant = variant;
+			this.serviceKills = serviceKills;
 		}
 	}
 
 	private static String keyOf(Entry entry)
 	{
-		return entry.card.getCardId() + (entry.owned ? ":o:" : ":u:") + entry.variant;
+		// the Service Record is baked into the raster and the LRU is never
+		// cleared on rebuild, so it must key the cache or thumbnails go stale
+		return entry.card.getCardId() + (entry.owned ? ":o:" : ":u:") + entry.variant
+			+ ":" + entry.serviceKills;
 	}
 
 	/** True for cells the live (non-rasterized) effect pass animates. */
@@ -1071,6 +1089,7 @@ public class AlbumTab extends JPanel
 					.variant(Variant.NORMAL)
 					.art(art)
 					.subtitle(entry.owned ? entry.card.getSlot().getDisplayName() : null)
+					.killsServed(entry.serviceKills)
 					.build();
 				CardRenderer.drawFace(g2, 0, 0, THUMB_W, THUMB_H, view, STATIC_TIME_MS);
 			}
@@ -1110,8 +1129,13 @@ public class AlbumTab extends JPanel
 				return "Undiscovered card";
 			}
 			String variantText = entry.variant == Variant.SHINY ? " — Shiny" : "";
+			// "present for", never "killed": the record counts kills the card was
+			// ASSIGNED TO THE LOADOUT for, on-task or not, tainted or not
+			String service = entry.serviceKills > 0
+				? " — present for " + QuantityFormatter.formatNumber(entry.serviceKills) + " kills"
+				: "";
 			return entry.card.getName() + " — " + entry.card.getRarity().getDisplayName()
-				+ variantText + " — " + entry.card.getSlot().getDisplayName();
+				+ variantText + " — " + entry.card.getSlot().getDisplayName() + service;
 		}
 
 		// --- Scrollable ---

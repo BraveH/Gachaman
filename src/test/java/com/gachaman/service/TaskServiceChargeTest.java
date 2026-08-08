@@ -104,12 +104,12 @@ public class TaskServiceChargeTest
 			.completionGc(250)
 			.acceptedAtMs(1L)
 			.build();
-		ActiveTask party = solo.toBuilder().duoPartnerName("Party of 3").build();
+		ActiveTask party = solo.toBuilder().partyLabel("Party of 3").build();
 		Assert.assertTrue(TaskService.assistedPenaltyApplies(true, true, solo));
 		Assert.assertFalse(TaskService.assistedPenaltyApplies(true, true, party));
 		// carry clause converts the contract back to solo — the rule re-arms
 		Assert.assertTrue(TaskService.assistedPenaltyApplies(true, true,
-			party.withDuoConvertedToSolo(true)));
+			party.withPartyConvertedToSolo(true)));
 		Assert.assertFalse(TaskService.assistedPenaltyApplies(false, true, solo));
 		Assert.assertFalse(TaskService.assistedPenaltyApplies(true, false, solo));
 	}

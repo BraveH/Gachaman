@@ -1,6 +1,9 @@
 package com.gachaman.service;
 
 import com.gachaman.model.AttackStyle;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -112,5 +115,78 @@ public class StyleTrackerTest
 		// melee xp from BEFORE the verdict does not confirm it
 		Assert.assertTrue(StyleTracker.shouldPardon(StyleTracker.JudgementSource.STANCE,
 			AttackStyle.MELEE, false, 100, 103, 99, -100));
+	}
+
+	// --- pardoning ACROSS verdicts, not just the newest one ---
+
+	private static StyleTracker.Verdict verdict(int tick, AttackStyle style,
+		StyleTracker.JudgementSource source)
+	{
+		return new StyleTracker.Verdict(tick, style, source);
+	}
+
+	@Test
+	public void aLaterCastNoLongerShieldsTheStaleMeleeVerdict()
+	{
+		// The reported symptom, exactly: swap to a staff, cast twice. The first
+		// cast is judged MELEE because COMBAT_WEAPON_CATEGORY still describes the
+		// weapon just put away; the second animates a spell and is judged MAGIC.
+		// The first cast's Magic XP lands at tick 104 — and when only the NEWEST
+		// verdict could be pardoned it found the ANIM MAGIC one, declined, and
+		// left the melee verdict standing to taint the kill.
+		StyleTracker.Verdict stale = verdict(100, AttackStyle.MELEE,
+			StyleTracker.JudgementSource.STANCE);
+		List<StyleTracker.Verdict> recent = Arrays.asList(stale,
+			verdict(102, AttackStyle.MAGIC, StyleTracker.JudgementSource.ANIM));
+		Assert.assertSame(stale, StyleTracker.pardonTarget(recent, 104, -1, -100));
+	}
+
+	@Test
+	public void theOldestPardonableVerdictGoesFirst()
+	{
+		// magic xp is the DELAYED signal, so the earliest candidate is the cast
+		// that produced it; two drops then clear two verdicts in order
+		StyleTracker.Verdict first = verdict(100, AttackStyle.MELEE,
+			StyleTracker.JudgementSource.STANCE);
+		StyleTracker.Verdict second = verdict(102, AttackStyle.MELEE,
+			StyleTracker.JudgementSource.STANCE);
+		List<StyleTracker.Verdict> recent = Arrays.asList(first, second);
+		Assert.assertSame(first, StyleTracker.pardonTarget(recent, 104, -1, -100));
+		first.pardoned = true;
+		Assert.assertSame(second, StyleTracker.pardonTarget(recent, 104, -1, -100));
+		second.pardoned = true;
+		// and one XP drop is never worth a third pardon
+		Assert.assertNull(StyleTracker.pardonTarget(recent, 104, -1, -100));
+	}
+
+	@Test
+	public void scanningManyVerdictsNeverRelaxesTheRules()
+	{
+		// every entry here is unpardonable for a DIFFERENT reason, and having
+		// several to choose from must not let any of them through
+		List<StyleTracker.Verdict> recent = Arrays.asList(
+			verdict(90, AttackStyle.MELEE, StyleTracker.JudgementSource.STANCE),  // stale
+			verdict(101, AttackStyle.MAGIC, StyleTracker.JudgementSource.STANCE), // already magic
+			verdict(102, AttackStyle.MELEE, StyleTracker.JudgementSource.MARK),   // not stance
+			verdict(103, AttackStyle.RANGED, StyleTracker.JudgementSource.XP));   // ground truth
+		Assert.assertNull(StyleTracker.pardonTarget(recent, 104, -1, -100));
+		// an empty history is not a special case
+		Assert.assertNull(StyleTracker.pardonTarget(
+			Collections.emptyList(), 104, -1, -100));
+	}
+
+	@Test
+	public void aConfirmedMeleeSwingIsStillConvictedWithACastBesideIt()
+	{
+		// auto-retaliate lands a real sword hit at 100 (same-tick Attack XP), then
+		// the player casts at 102. The delayed magic xp must clear the CAST, not
+		// buy the swing an alibi it did not earn.
+		StyleTracker.Verdict swing = verdict(100, AttackStyle.MELEE,
+			StyleTracker.JudgementSource.STANCE);
+		StyleTracker.Verdict cast = verdict(102, AttackStyle.MELEE,
+			StyleTracker.JudgementSource.STANCE);
+		List<StyleTracker.Verdict> recent = Arrays.asList(swing, cast);
+		Assert.assertSame(cast, StyleTracker.pardonTarget(recent, 105, 100, -100));
+		Assert.assertFalse(swing.pardoned);
 	}
 }

@@ -45,6 +45,20 @@ public class SoundService
 	/** The scroll-unroll whoosh was singled out as far too loud — extra trim. */
 	private static final float WHOOSH_TRIM_DB = -6f;
 
+	/** Groans are thick and close; they need less headroom than a chime. */
+	private static final float STRAIN_TRIM_DB = -3f;
+	private static final int STRAIN_STEPS = 4;
+	private static final double STRAIN_BASE_HZ = 128;
+	/** A whole tone per step: audibly tightening without leaving the low register. */
+	private static final double STRAIN_STEP_RATIO = 1.122462;
+
+	private final byte[][] strainCache = new byte[STRAIN_STEPS][];
+	/**
+	 * Deliberately NOT an entry in {@link #failed}: a strain that the mixer
+	 * refuses must not be able to mute the tick that shares this service.
+	 */
+	private volatile boolean strainFailed;
+
 	@Inject
 	public SoundService(AudioPlayer audioPlayer)
 	{
@@ -101,6 +115,44 @@ public class SoundService
 	public void playFanfare()
 	{
 		play(Sfx.FANFARE, 0f);
+	}
+
+	/**
+	 * Metal under load, one whole tone higher per step, for the chest strain.
+	 * Steps out of range are clamped rather than rejected so a mistuned
+	 * schedule can only repeat a pitch, never throw inside a render pass.
+	 * <p>
+	 * This bypasses {@link Sfx} on purpose: {@link #synthesize} ends
+	 * {@code case FANFARE: default:}, so a new enum constant whose case someone
+	 * forgets would not fail to compile — it would silently blare a fanfare
+	 * mid-ceremony. A parallel cache costs a few lines and removes that.
+	 */
+	public void playStrain(int step)
+	{
+		if (!enabled || volumePercent <= 0 || strainFailed)
+		{
+			return;
+		}
+		int k = Math.max(0, Math.min(STRAIN_STEPS - 1, step));
+		try
+		{
+			byte[] wav;
+			synchronized (strainCache)
+			{
+				if (strainCache[k] == null)
+				{
+					strainCache[k] = toWav(synthStrain(k));
+				}
+				wav = strainCache[k];
+			}
+			float gainDb = linearToDb(volumePercent / 100f) + STRAIN_TRIM_DB + MASTER_TRIM_DB;
+			audioPlayer.play(new ByteArrayInputStream(wav), Math.max(MIN_GAIN_DB, gainDb));
+		}
+		catch (Exception e)
+		{
+			strainFailed = true;
+			log.warn("Gachaman strain sound failed to play; muting it", e);
+		}
 	}
 
 	/**
@@ -281,6 +333,30 @@ public class SoundService
 		addTone(buf, 0, 0.95, 70, 0.50, 0.20, 2.6);
 		addTone(buf, 0, 0.95, 105, 0.28, 0.20, 3.0);
 		addTone(buf, 0, 0.95, 140, 0.12, 0.25, 3.4);
+		return buf;
+	}
+
+	/**
+	 * A groan: low fundamental plus two partials, over a filtered-noise bed.
+	 * The slow 50 ms attack and the noise are what make it read as metal taking
+	 * strain rather than as a synth pad — a hard attack here just sounds like a
+	 * second tick.
+	 */
+	static double[] synthStrain(int step)
+	{
+		double f = STRAIN_BASE_HZ * Math.pow(STRAIN_STEP_RATIO, step);
+		double[] buf = newBuffer(0.42);
+		addTone(buf, 0.00, 0.42, f, 0.34, 0.05, 5.0);
+		addTone(buf, 0.00, 0.42, f * 2, 0.16, 0.06, 6.5);
+		addTone(buf, 0.00, 0.34, f * 3, 0.09, 0.07, 8.0);
+		Random noise = new Random(0x10CC + step);
+		double smooth = 0;
+		for (int i = 0; i < buf.length; i++)
+		{
+			double t = i / (double) SAMPLE_RATE;
+			smooth += (noise.nextDouble() * 2 - 1 - smooth) * 0.05;
+			buf[i] += smooth * 0.22 * Math.exp(-t * 4.0) * Math.min(1.0, t / 0.05);
+		}
 		return buf;
 	}
 

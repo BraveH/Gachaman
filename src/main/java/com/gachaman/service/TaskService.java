@@ -4,6 +4,7 @@ import com.gachaman.Tuning;
 import com.gachaman.data.MonsterTable;
 import com.gachaman.model.ActiveTask;
 import com.gachaman.model.AttackStyle;
+import com.gachaman.model.ContractRecord;
 import com.gachaman.model.GachaState;
 import com.gachaman.model.MonsterStats;
 import com.gachaman.model.PersonalBest;
@@ -13,6 +14,7 @@ import com.gachaman.model.TaskOffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -104,7 +106,39 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	 */
 	static boolean assistedPenaltyApplies(boolean ironman, boolean assistedByOther, ActiveTask task)
 	{
-		return ironman && assistedByOther && (task == null || !task.isDuo());
+		return ironman && assistedByOther && (task == null || !task.isParty());
+	}
+
+	/**
+	 * The Ante's stake: a percent of the purse, clamped to the legal band and to
+	 * the absolute cap, floored to whole GC.
+	 *
+	 * Returns 0 — meaning "no wager is offered" — for a purse under the floor.
+	 * That is not a rounding accident: at 200 GC the minimum stake is 20, which
+	 * is not a risk worth a confirmation dialog, and a player who is that broke
+	 * is the one least able to absorb it.
+	 */
+	public static int anteStakeFor(long gc, int percent)
+	{
+		if (gc < Tuning.ANTE_MIN_PURSE_GC || percent <= 0)
+		{
+			return 0;
+		}
+		int pct = Math.max(Tuning.ANTE_MIN_PERCENT, Math.min(Tuning.ANTE_MAX_PERCENT, percent));
+		long stake = Math.min(gc * pct / 100, Tuning.ANTE_MAX_GC);
+		// can only ever bind by the cap, never by the purse (pct <= 50), but the
+		// clamp is kept so a future band change cannot overdraw the account
+		return (int) Math.max(0, Math.min(stake, gc));
+	}
+
+	/**
+	 * The Ante rides on the hardest contracts ONLY. A wager the player can take
+	 * on an easy contract is a wager with no downside worth speaking of, and the
+	 * point of this one is that INSANE contracts are where dying is plausible.
+	 */
+	public static boolean anteEligible(@Nullable TaskOffer offer)
+	{
+		return offer != null && offer.getDifficulty() == TaskDifficulty.INSANE;
 	}
 
 	public interface Listener
@@ -117,8 +151,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 
 		void onOffersRolled(List<TaskOffer> offers);
 
-		/** Duo hook: local player progressed a duo task. */
-		void onDuoProgress(ActiveTask task);
+		/** Party hook: local player progressed a shared party contract. */
+		void onPartyProgress(ActiveTask task);
 	}
 
 	private final Client client;
@@ -135,6 +169,14 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	private java.util.function.Consumer<TaskOffer> offerAcceptedHook;
 	/** Party layer: clicking a party-roll offer casts a VOTE instead of accepting. */
 	private java.util.function.IntConsumer partyVoteHook;
+	/**
+	 * Double Docket: supplies the live Slayer assignment name, or null. A hook
+	 * rather than an injected dependency so the whole payout path stays testable
+	 * without a Client — every unit test leaves it unwired and gets no bonus.
+	 */
+	private java.util.function.Supplier<String> slayerTargetHook;
+	/** Double Docket: fired once, the moment a contract latches on to the bonus. */
+	private Runnable slayerLatchHook;
 	/** Recent credited kill ticks for SPEED_KILLS side bets. */
 	private final Deque<Integer> recentKillTicks = new ArrayDeque<>();
 	/** Tick of the most recent kill; completeTask runs inside onKill so this is "now". */
@@ -150,6 +192,18 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	private int comboLastKillTick = -1;
 	/** Last activity (kill OR attack) keeping the chain alive. */
 	private int comboIdleAnchorTick = -1;
+
+	/**
+	 * The Ante: the percent the player armed for the contract in front of them,
+	 * or 0 for "no wager". Deliberately TRANSIENT and deliberately cleared the
+	 * moment a contract is signed or a fresh set of offers arrives — arming is a
+	 * decision about one specific board, and a stake that survived a logout or a
+	 * re-roll would be a wager the player does not remember making.
+	 *
+	 * volatile: the panel arms it on the Swing thread, the accept path reads it
+	 * on the client thread.
+	 */
+	private volatile int antePercentArmed;
 
 	@Inject
 	public TaskService(Client client, GachaStateService stateService, CreditSink creditSink,
@@ -189,6 +243,112 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		this.partyVoteHook = hook;
 	}
 
+	public void setSlayerTargetHook(java.util.function.Supplier<String> hook)
+	{
+		this.slayerTargetHook = hook;
+	}
+
+	public void setSlayerLatchHook(Runnable hook)
+	{
+		this.slayerLatchHook = hook;
+	}
+
+	/**
+	 * The live Slayer assignment, or null. Swallows hook failures: a broken
+	 * Slayer read must cost the player a bonus, never a kill credit.
+	 */
+	@Nullable
+	private String liveSlayerTarget()
+	{
+		if (slayerTargetHook == null)
+		{
+			return null;
+		}
+		try
+		{
+			return slayerTargetHook.get();
+		}
+		catch (Exception e)
+		{
+			log.warn("slayer target hook failed", e);
+			return null;
+		}
+	}
+
+	// --- The Ante ---
+
+	/**
+	 * Arm (or, with 0, disarm) the wager for the offers currently on the board.
+	 * Arming alone stakes nothing: the GC only leaves the purse when a contract
+	 * is actually signed, and only if the contract turns out to be eligible.
+	 */
+	public void armAnte(int percent)
+	{
+		antePercentArmed = percent <= 0 ? 0
+			: Math.max(Tuning.ANTE_MIN_PERCENT, Math.min(Tuning.ANTE_MAX_PERCENT, percent));
+	}
+
+	public int getArmedAntePercent()
+	{
+		return antePercentArmed;
+	}
+
+	public boolean anteArmed()
+	{
+		return antePercentArmed > 0;
+	}
+
+	/** What the armed percent would stake against the purse right now, or 0. */
+	public int previewAnteStake()
+	{
+		return previewAnteStake(antePercentArmed);
+	}
+
+	/** What a percent WOULD stake right now. Arms nothing — a preview only. */
+	public int previewAnteStake(int percent)
+	{
+		GachaState state = stateService.get();
+		return state == null ? 0 : anteStakeFor(state.getGc(), percent);
+	}
+
+	/** GC currently escrowed on the active contract, or 0. */
+	public int getActiveAnteStake()
+	{
+		GachaState state = stateService.get();
+		ActiveTask task = state == null ? null : state.getActiveTask();
+		return task == null ? 0 : task.getAnteStake();
+	}
+
+	/**
+	 * The local player died. The stake is already out of the purse (escrowed at
+	 * accept), so losing it is simply never giving it back: zero the escrow and
+	 * the completion path has nothing to return.
+	 *
+	 * Guarded inside the mutate rather than around it, so a contract completing
+	 * on the same tick cannot be charged twice — and a death with nothing staked
+	 * returns the identical state instance, which costs no re-encode.
+	 */
+	@Override
+	public void onLocalPlayerDeath()
+	{
+		final int[] lost = {0};
+		stateService.mutate(s -> {
+			ActiveTask task = s.getActiveTask();
+			if (task == null || task.getAnteStake() <= 0)
+			{
+				return s;
+			}
+			lost[0] = task.getAnteStake();
+			return s.withActiveTask(task.withAnteStake(0));
+		});
+		if (lost[0] > 0)
+		{
+			ceremonyBus.submit(CeremonyBus.Type.FANFARE, new CeremonyBus.Fanfare(
+				CeremonyBus.Fanfare.Size.MEDIUM, "The Ante is lost",
+				lost[0] + " GC staked on this contract is gone. The contract stands.", null));
+		}
+	}
+
 	// --- Offers ---
 
 	public boolean canRollOffers()
@@ -203,6 +363,18 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	{
 		GachaState state = stateService.get();
 		return state != null && state.getPendingOffers() != null && !state.getPendingOffers().isEmpty();
+	}
+
+	/**
+	 * Are the waiting offers party-flagged (clicking VOTES rather than accepts)?
+	 * Deliberately the SAME first-element convention demotePartyOffers uses, so
+	 * the predicate and the demotion can never disagree about a given offer set.
+	 */
+	public boolean hasPendingPartyOffers()
+	{
+		GachaState state = stateService.get();
+		return state != null && state.getPendingOffers() != null && !state.getPendingOffers().isEmpty()
+			&& state.getPendingOffers().get(0).isPartyRoll();
 	}
 
 	/** Re-present the already-rolled offers (Esc'd earlier) — never re-rolls. */
@@ -231,6 +403,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		List<TaskOffer> offers = TaskGenerator.generateOffers(
 			monsterTable.getMonsters(), cb, client.getRealSkillLevel(Skill.SLAYER),
 			localIsMembers(), state.getTaint() > 0, rng);
+		antePercentArmed = 0; // a new board is a new decision
 		stateService.mutate(s -> s.withPendingOffers(offers));
 		ceremonyBus.submit(CeremonyBus.Type.TASK_OFFERS, offers);
 		for (Listener listener : listeners)
@@ -263,6 +436,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		{
 			return false;
 		}
+		antePercentArmed = 0; // a new board is a new decision
 		stateService.mutate(s -> s.withPendingOffers(offers));
 		ceremonyBus.submit(CeremonyBus.Type.TASK_OFFERS, offers);
 		for (Listener listener : listeners)
@@ -273,9 +447,10 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	}
 
 	/**
-	 * Party layer: the party dissolved before a unanimous vote, but rolls
-	 * cannot be undone — the SAME offers remain, demoted to personal ones
-	 * (clicking now accepts for this player alone instead of voting).
+	 * Party layer: the vote died before it bound this player (the party
+	 * dissolved, the host went quiet, or a minority settled it without their
+	 * vote), but rolls cannot be undone — the SAME offers remain, demoted to
+	 * personal ones (clicking now accepts for this player alone).
 	 */
 	public void demotePartyOffers()
 	{
@@ -307,8 +482,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		TaskOffer offer = state.getPendingOffers().get(index);
 		if (offer.isPartyRoll())
 		{
-			// a party offer is not accepted — it is VOTED for; unanimity
-			// accepts it on every participant's client via acceptPartyOffer
+			// a party offer is not accepted — it is VOTED for; the host's
+			// settlement accepts it on every member's client via acceptPartyOffer
 			if (partyVoteHook != null)
 			{
 				try
@@ -322,15 +497,41 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			}
 			return true;
 		}
-		acceptInternal(offer, null, 0);
+		// solo: the arming IS the consent, taken through the panel's confirmation
+		acceptInternal(offer, null, 0, null, true);
 		return true;
 	}
 
 	/**
-	 * Party layer: unanimity reached — every participant's client accepts the
-	 * same offer as a SHARED contract (kills from all participants count).
+	 * Party layer: the vote is settled — every bound member's client accepts
+	 * the same offer as a SHARED contract (kills from all of them count).
 	 */
-	public boolean acceptPartyOffer(int index, String partyLabel)
+	public boolean acceptPartyOffer(int index, String partyLabel,
+		@Nullable List<AttackStyle> partyStyles)
+	{
+		return acceptPartyOffer(index, partyLabel, partyStyles, false, null);
+	}
+
+	/**
+	 * Party layer with the Ante verdict. The wager is a SEPARATE decision from
+	 * the contract: {@code anteRequested} false signs exactly the same contract,
+	 * so a party that could not agree on the wager still hunts together.
+	 */
+	public boolean acceptPartyOffer(int index, String partyLabel,
+		@Nullable List<AttackStyle> partyStyles, boolean anteRequested)
+	{
+		return acceptPartyOffer(index, partyLabel, partyStyles, anteRequested, null);
+	}
+
+	/**
+	 * As above, recording the roll's proposal id on the contract. That id is what
+	 * lets a client that restarts mid-contract be recognised by the rest of the
+	 * party again — see ActiveTask.partyProposalId. Null signs a contract that can
+	 * never be rejoined, which is right for the solo path and for tests.
+	 */
+	public boolean acceptPartyOffer(int index, String partyLabel,
+		@Nullable List<AttackStyle> partyStyles, boolean anteRequested,
+		@Nullable Long proposalId)
 	{
 		GachaState state = stateService.get();
 		if (state == null || state.getActiveTask() != null
@@ -339,11 +540,19 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			return false;
 		}
 		TaskOffer offer = state.getPendingOffers().get(index);
-		acceptInternal(offer, partyLabel, 0);
+		acceptInternal(offer, partyLabel, 0, partyStyles, anteRequested, proposalId);
 		return true;
 	}
 
-	private void acceptInternal(TaskOffer offer, @Nullable String partyLabel, long partyAnchorId)
+	private void acceptInternal(TaskOffer offer, @Nullable String partyLabel, long partyAnchorId,
+		@Nullable List<AttackStyle> partyStyles, boolean anteRequested)
+	{
+		acceptInternal(offer, partyLabel, partyAnchorId, partyStyles, anteRequested, null);
+	}
+
+	private void acceptInternal(TaskOffer offer, @Nullable String partyLabel, long partyAnchorId,
+		@Nullable List<AttackStyle> partyStyles, boolean anteRequested,
+		@Nullable Long partyProposalId)
 	{
 		ActiveTask task = ActiveTask.builder()
 			.difficulty(offer.getDifficulty())
@@ -357,12 +566,38 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			.redemption(offer.isRedemption())
 			.acceptedAtMs(System.currentTimeMillis())
 			.appliedCharge(null) // charges are bought DURING a task, slayer-bracelet style
-			.duoPartnerName(partyLabel) // non-null = shared contract (party)
-			.duoPartnerMemberId(partyAnchorId)
+			.partyLabel(partyLabel) // non-null = shared contract (party)
+			.partyAnchorId(partyAnchorId)
+			.partyProposalId(partyProposalId) // the only handle that survives a restart
+			.partyStyles(partyStyles) // snapshot: the clash bonus is priced at signing
+			.slayerAligned(SlayerAlignment.matches(offer.getMonsterName(), liveSlayerTarget()))
 			.build();
-		stateService.mutate(s -> s
-			.withActiveTask(task)
-			.withPendingOffers(new ArrayList<>()));
+		// The Ante is priced and escrowed INSIDE the mutate that signs the
+		// contract, off the balance read there rather than the one read here: a
+		// purchase landing in between would otherwise let the stake exceed the
+		// purse, and the deduction would silently clamp to less than the contract
+		// says is at risk. An ineligible offer, an unarmed player or a purse
+		// under the floor all price to 0 and sign the identical contract — the
+		// wager can never block or alter the contract itself.
+		final int percent = anteRequested && anteEligible(offer) ? antePercentArmed : 0;
+		final int[] staked = {0};
+		stateService.mutate(s -> {
+			int stake = anteStakeFor(s.getGc(), percent);
+			staked[0] = stake;
+			return s
+				.withActiveTask(stake > 0 ? task.withAnteStake(stake) : task)
+				.withGc(s.getGc() - stake)
+				.withPendingOffers(new ArrayList<>());
+		});
+		antePercentArmed = 0; // one arming, one contract
+		if (staked[0] > 0)
+		{
+			ceremonyBus.submit(CeremonyBus.Type.FANFARE, new CeremonyBus.Fanfare(
+				CeremonyBus.Fanfare.Size.MEDIUM, "The Ante is staked",
+				staked[0] + " GC is held against this contract — finish it for "
+					+ (long) staked[0] * Tuning.ANTE_PAYOUT_MULT + " GC back, die and it is gone.",
+				null));
+		}
 		recentKillTicks.clear();
 		resetCombo(); // each contract starts its own rhythm
 		if (offerAcceptedHook != null)
@@ -426,12 +661,12 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	{
 		GachaState state = stateService.get();
 		ActiveTask task = state == null ? null : state.getActiveTask();
-		if (task == null || !task.isDuo() || othersTotal <= task.getDuoPartnerKills())
+		if (task == null || !task.isParty() || othersTotal <= task.getPartyOtherKills())
 		{
 			return;
 		}
 		stateService.mutate(s -> s.getActiveTask() == null ? s
-			: s.withActiveTask(s.getActiveTask().withDuoPartnerKills(othersTotal)));
+			: s.withActiveTask(s.getActiveTask().withPartyOtherKills(othersTotal)));
 		completeSharedIfReached();
 	}
 
@@ -440,8 +675,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	{
 		GachaState state = stateService.get();
 		ActiveTask task = state == null ? null : state.getActiveTask();
-		if (task != null && task.isDuo()
-			&& task.getKillsDone() + task.getDuoPartnerKills() >= task.getKillsRequired())
+		if (task != null && task.isParty()
+			&& task.getKillsDone() + task.getPartyOtherKills() >= task.getKillsRequired())
 		{
 			completeTask();
 		}
@@ -452,13 +687,13 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	{
 		GachaState state = stateService.get();
 		ActiveTask task = state == null ? null : state.getActiveTask();
-		if (task == null || !task.isDuo())
+		if (task == null || !task.isParty())
 		{
 			return;
 		}
 		stateService.mutate(s -> s.getActiveTask() == null ? s
 			: s.withActiveTask(s.getActiveTask()
-				.withDuoPartnerKills(Math.max(s.getActiveTask().getDuoPartnerKills(),
+				.withPartyOtherKills(Math.max(s.getActiveTask().getPartyOtherKills(),
 					s.getActiveTask().getKillsRequired() - s.getActiveTask().getKillsDone()))));
 		completeSharedIfReached();
 	}
@@ -602,12 +837,15 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		// bounded by the DEATH tick: kills are emitted a few ticks late (loot
 		// oracle), and a forbidden attack on the NEXT target inside that gap
 		// must never taint this finished kill
-		boolean tainted = complianceService.forbiddenAttackBetween(
+		int convictingTick = complianceService.convictingAttackTick(
 			kill.getEngagementStartTick(), kill.getTick());
+		boolean tainted = convictingTick >= 0;
 		long awarded = 0;
 		if (tainted)
 		{
-			complianceService.addTaint();
+			// name the conviction: the pardon that retracts that verdict a few
+			// ticks later must be able to reverse this exact point
+			complianceService.addTaint(convictingTick);
 			resetCombo(); // a forbidden-style kill has no rhythm
 		}
 		else
@@ -646,22 +884,48 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			assistedPenalty, task.isHalfKillPending());
 		int newKills = Math.min(task.getKillsRequired(), task.getKillsDone() + advance.getIncrement());
 		// shared (party) contracts pool everyone's kills toward the quota
-		boolean finalKill = newKills + (task.isDuo() ? task.getDuoPartnerKills() : 0)
+		boolean finalKill = newKills + (task.isParty() ? task.getPartyOtherKills() : 0)
 			>= task.getKillsRequired();
+		// Double Docket re-checks per kill, so a contract signed before the
+		// player picked up the matching assignment still latches on. Skipped
+		// once latched: the flag is sticky, so there is nothing further to learn
+		// and no reason to keep reading the Slayer config. It rides the kill-count
+		// mutate rather than taking one of its own — a second mutate here would
+		// re-encode and re-hash the entire save on every kill.
+		boolean docketNow = !task.isSlayerAligned()
+			&& SlayerAlignment.matches(task.getMonsterName(), liveSlayerTarget());
+		// The Dossier's clean flag rides this same mutate for the same reason the
+		// docket latch does: a mutate of its own would re-gzip and re-hash the
+		// entire save on every out-of-style kill, on the very path that is
+		// already the hottest in the plugin.
 		stateService.mutate(s -> s.getActiveTask() == null ? s
 			: s.withActiveTask(s.getActiveTask()
 				.withKillsDone(newKills)
-				.withHalfKillPending(advance.isHalfPending())));
+				.withHalfKillPending(advance.isHalfPending())
+				.withSlayerAligned(s.getActiveTask().isSlayerAligned() || docketNow)
+				.withTaintedKills(s.getActiveTask().getTaintedKills() + (tainted ? 1 : 0))));
 
 		fireKillFeedback(new KillFeedback(kill.getNpcName(), awarded, true, tainted, finalKill,
 			newKills, task.getKillsRequired(), assistedPenalty, kill.getDeathLocation()));
 
+		if (docketNow && slayerLatchHook != null)
+		{
+			try
+			{
+				slayerLatchHook.run();
+			}
+			catch (Exception e)
+			{
+				log.warn("slayer latch hook failed", e);
+			}
+		}
+
 		for (Listener listener : listeners)
 		{
 			if (stateService.get() != null && stateService.get().getActiveTask() != null
-				&& stateService.get().getActiveTask().isDuo())
+				&& stateService.get().getActiveTask().isParty())
 			{
-				listener.onDuoProgress(stateService.get().getActiveTask());
+				listener.onPartyProgress(stateService.get().getActiveTask());
 			}
 		}
 
@@ -828,6 +1092,30 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 
 	// --- Completion ---
 
+	/**
+	 * How many DISTINCT styles a shared contract was signed with. Null is the
+	 * legacy case (a save written before the snapshot existed, or a solo task)
+	 * and null ENTRIES are real too — a participant on an older client sends
+	 * no style, and Gson keeps null array elements across a save/load — so
+	 * both must count as no contribution rather than throw.
+	 */
+	static int distinctStyles(@Nullable List<AttackStyle> styles)
+	{
+		if (styles == null || styles.isEmpty())
+		{
+			return 0;
+		}
+		EnumSet<AttackStyle> seen = EnumSet.noneOf(AttackStyle.class);
+		for (AttackStyle style : styles)
+		{
+			if (style != null)
+			{
+				seen.add(style);
+			}
+		}
+		return seen.size();
+	}
+
 	private void completeTask()
 	{
 		GachaState state = stateService.get();
@@ -836,23 +1124,38 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			return;
 		}
 		ActiveTask task = state.getActiveTask();
-		long duration = System.currentTimeMillis() - task.getAcceptedAtMs();
+		// one clock read shared by the personal best and by the Dossier record, so
+		// the filed timestamp and the filed duration cannot disagree
+		long completedAtMs = System.currentTimeMillis();
+		long duration = completedAtMs - task.getAcceptedAtMs();
 
 		double completionMult = 1.0;
-		if (task.isDuo())
+		if (task.isParty())
 		{
-			// shared contract: the co-op bonus applies party-wide; the style
-			// clash bonus needs a known partner style (2-player parties)
-			completionMult = Tuning.DUO_REWARD_MULT;
-			AttackStyle mine = state.getAllowedStyle() == null ? null : AttackStyle.valueOf(state.getAllowedStyle());
-			if (mine != null && task.getDuoPartnerStyle() != null && mine != task.getDuoPartnerStyle())
+			// Shared contract: the co-op bonus applies party-wide, plus a FLAT
+			// clash bonus if the party covers 2+ distinct styles. Flat, not per
+			// extra style — a trio running all three styles pays exactly what a
+			// pair running two pays. Computed over the accept-time snapshot
+			// (self included), so every client pays the same and a mid-contract
+			// style re-roll cannot reprice a signed contract.
+			completionMult = Tuning.PARTY_REWARD_MULT;
+			if (distinctStyles(task.getPartyStyles()) > 1)
 			{
-				completionMult += Tuning.DUO_STYLE_CLASH_BONUS;
+				completionMult += Tuning.PARTY_STYLE_CLASH_BONUS;
 			}
 		}
-		else if (task.isDuoConvertedToSolo())
+		else if (task.isPartyConvertedToSolo())
 		{
-			completionMult = Tuning.DUO_CARRY_MULT;
+			completionMult = Tuning.PARTY_CARRY_MULT;
+		}
+
+		// Double Docket stacks MULTIPLICATIVELY on whatever the party chain came
+		// to, so it is worth the same proportion of a shared contract as of a
+		// solo one. The taint halving still lands after all of this, inside the
+		// sink, exactly as it does for every other completion modifier.
+		if (task.isSlayerAligned())
+		{
+			completionMult *= Tuning.DOUBLE_DOCKET_MULT;
 		}
 
 		// Redemption clears taint BEFORE the award so its own completion
@@ -936,10 +1239,19 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		// the applied charge is read INSIDE the clearing mutate so a purchase
 		// landing after this method's task snapshot still reaches advanceCycle
 		final String[] chargeApplied = {task.getAppliedCharge()};
+		// ...and so is the stake, for the same reason in reverse: a death landing
+		// after the snapshot has already zeroed the escrow, and returning the
+		// stale figure would refund a wager that was lost.
+		final int[] anteStake = {task.getAnteStake()};
+		// ...and the violation count, so a final kill convicted between this
+		// method's snapshot and the mutate still files the contract as dirty
+		final int[] taintedKills = {task.getTaintedKills()};
 		GachaState afterMutate = stateService.mutate(s -> {
 			if (s.getActiveTask() != null)
 			{
 				chargeApplied[0] = s.getActiveTask().getAppliedCharge();
+				anteStake[0] = s.getActiveTask().getAnteStake();
+				taintedKills[0] = s.getActiveTask().getTaintedKills();
 			}
 			Map<String, PersonalBest> pbs = new HashMap<>(s.getPersonalBests());
 			pbs.put(pbKey, pbFinal);
@@ -954,6 +1266,15 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 				.withTasksCompletedByDifficulty(byDiff)
 				.withMonsterStats(stats)
 				.withTotalTasksCompleted(newTotal);
+			if (anteStake[0] > 0)
+			{
+				// The principal comes back RAW, in the same mutate that retires
+				// the contract, because it was never income — it is the player's
+				// own GC coming out of escrow. Through the sink it would be
+				// halved by taint and would inflate lifetime earnings by money
+				// the player merely got back. Only the PROFIT is awarded, below.
+				next = next.withGc(next.getGc() + anteStake[0]);
+			}
 			if (milestoneFinal > 0)
 			{
 				next = next.withDeedMilestonesClaimed(s.getDeedMilestonesClaimed() + 1)
@@ -973,8 +1294,34 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 					next = next.withDeedFragments(frags);
 				}
 			}
+			// File the contract. This rides the completion mutate rather than
+			// taking one of its own, and the style is read off s HERE — before
+			// styleService.advanceCycle() runs below — so the Dossier files the
+			// style the contract was RUN under, not the one rolled as its reward.
+			// getKillsRequired() is the quota the pay was computed against; on a
+			// shared contract those kills were pooled, which the row's party tag
+			// makes plain.
+			next = next.withContractLog(ContractRecord.appendCapped(s.getContractLog(),
+				new ContractRecord(completedAtMs, monsterName, task.getDifficulty().name(),
+					task.getKillsRequired(), haul, duration, s.getAllowedStyle(), taintedKills[0],
+					task.getPartyLabel(), task.isPartyConvertedToSolo(), task.isRedemption()),
+				Tuning.DOSSIER_MAX_RECORDS));
 			return next;
 		});
+
+		if (anteStake[0] > 0)
+		{
+			// Only the winnings are income. SIDE_BET is the honest source: the
+			// Ante is the same kind of thing as the contract's own side bets,
+			// and taint halving the PROFIT (never the principal) is exactly the
+			// treatment every other bet on this contract gets.
+			long profit = creditSink.award((long) anteStake[0] * (Tuning.ANTE_PAYOUT_MULT - 1),
+				new CreditSink.GcContext(CreditSink.Source.SIDE_BET, task.getMonsterName(),
+					tagsFor(task.getMonsterName())));
+			ceremonyBus.submit(CeremonyBus.Type.FANFARE, new CeremonyBus.Fanfare(
+				CeremonyBus.Fanfare.Size.MEDIUM, "The Ante pays",
+				anteStake[0] + " GC staked returns with " + profit + " GC won.", null));
+		}
 
 		boolean forgedNow = fragmentsEarned > 0 && !state.isFragmentDeedForged()
 			&& afterMutate != null && afterMutate.isFragmentDeedForged();
@@ -1010,12 +1357,19 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		resetCombo(); // rhythm does not carry across contracts
 	}
 
-	// --- Duo carry clause ---
+	// --- Party carry clause ---
 
-	public void convertDuoToSolo()
+	/**
+	 * The Ante deliberately survives this. A stake is personal and the contract
+	 * is binding, so a partner leaving does not release this player's wager: the
+	 * carry clause already prices the extra difficulty (PARTY_CARRY_MULT), and
+	 * refunding here would make "partner logs out" the cheap way out of a losing
+	 * bet. Finish it alone and it still pays double.
+	 */
+	public void convertPartyToSolo()
 	{
-		stateService.mutate(s -> s.getActiveTask() == null || !s.getActiveTask().isDuo() ? s
-			: s.withActiveTask(s.getActiveTask().withDuoConvertedToSolo(true)));
+		stateService.mutate(s -> s.getActiveTask() == null || !s.getActiveTask().isParty() ? s
+			: s.withActiveTask(s.getActiveTask().withPartyConvertedToSolo(true)));
 	}
 
 	// --- Helpers ---

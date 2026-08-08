@@ -102,6 +102,21 @@ public interface GachamanConfig extends Config
 		return true;
 	}
 
+	@ConfigItem(
+		keyName = "anteEnabled",
+		name = "The Ante",
+		description = "Offer a voluntary stake on INSANE contracts before you accept them:"
+			+ " finish the contract and the stake returns doubled, die and it is gone."
+			+ " Off by default — nothing is ever staked without an explicit confirmation,"
+			+ " and turning this off simply hides the offer.",
+		section = generalSection,
+		position = 5
+	)
+	default boolean anteEnabled()
+	{
+		return false;
+	}
+
 	@Range(min = 10, max = 300)
 	@ConfigItem(
 		keyName = "styleWarningSeconds",
@@ -119,8 +134,9 @@ public interface GachamanConfig extends Config
 		keyName = "partyRollsEnabled",
 		name = "Party contracts",
 		description = "Take part in shared party contract rolls while in a RuneLite Party."
-			+ " When off, you count as busy: proposals excuse you automatically and you"
-			+ " cannot propose or join.",
+			+ " When off, you count as busy: proposals excuse you automatically, you"
+			+ " cannot propose or join, and your client broadcasts no presence — the"
+			+ " Party tab shows nothing and tells you why.",
 		section = partySection,
 		position = 0
 	)

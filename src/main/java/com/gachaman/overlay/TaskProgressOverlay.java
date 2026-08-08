@@ -1,5 +1,6 @@
 package com.gachaman.overlay;
 
+import com.gachaman.Tuning;
 import com.gachaman.model.ActiveTask;
 import com.gachaman.model.GachaState;
 import com.gachaman.model.SideBet;
@@ -38,6 +39,9 @@ public class TaskProgressOverlay extends OverlayPanel
 	private static final String OFFERS_WAITING = "Contracts rolled — view and pick one";
 	private static final String NO_TASK = "No task — roll one in the Gachaman panel";
 	private static final String SIDE_BETS_LABEL = "Side bets";
+	private static final String DOCKET_LABEL = "Double Docket";
+	/** Constant expression, so the steady-state frame still allocates nothing. */
+	private static final String DOCKET_VALUE = "x" + Tuning.DOUBLE_DOCKET_MULT;
 
 	private final GachaStateService stateService;
 	private final net.runelite.api.Client client;
@@ -60,6 +64,17 @@ public class TaskProgressOverlay extends OverlayPanel
 	private String sideBetTaskName;
 	private int sideBetDone = -1;
 	private int sideBetTotal = -1;
+	/**
+	 * Which CONTRACT the cached lines were built for.
+	 *
+	 * <p>The other three fields do not identify one: finish a Goblin contract with both
+	 * side bets unclaimed and take a second Goblin contract that also carries two, and
+	 * (done, total, monsterName) is identical across the boundary — so the HUD went on
+	 * listing the first contract's objectives and payouts under the second one, and kept
+	 * doing so until a real bet completed. The null gap between contracts does not clear
+	 * it either; the {@code task == null} early return leaves every field standing.
+	 */
+	private long sideBetAcceptedAt = -1;
 	private Color barColor;
 	private TaskDifficulty barColorDifficulty;
 
@@ -123,7 +138,7 @@ public class TaskProgressOverlay extends OverlayPanel
 			.build());
 
 		// shared (party) contracts pool everyone's kills into the quota
-		int pooledKills = task.getKillsDone() + (task.isDuo() ? task.getDuoPartnerKills() : 0);
+		int pooledKills = task.getKillsDone() + (task.isParty() ? task.getPartyOtherKills() : 0);
 		if (pooledKills != progressKills || task.getKillsRequired() != progressRequired
 			|| task.isHalfKillPending() != progressHalf)
 		{
@@ -156,6 +171,19 @@ public class TaskProgressOverlay extends OverlayPanel
 			panelComponent.getChildren().add(comboMeter);
 		}
 
+		// Latched-only here: the HUD is the terse view, so it states the bonus a
+		// player HAS. The sidebar carries the always-visible "not your Slayer
+		// task" case and the rule behind it.
+		if (task.isSlayerAligned())
+		{
+			panelComponent.getChildren().add(LineComponent.builder()
+				.left(DOCKET_LABEL)
+				.leftColor(DONE_GREEN)
+				.right(DOCKET_VALUE)
+				.rightColor(GOLD)
+				.build());
+		}
+
 		List<SideBet> sideBets = task.getSideBets();
 		int total = sideBets == null ? 0 : sideBets.size();
 		if (total > 0)
@@ -170,11 +198,13 @@ public class TaskProgressOverlay extends OverlayPanel
 			}
 			// rebuild the per-bet lines only when the task or a completion changes
 			if (sideBetLines == null || done != sideBetDone || total != sideBetTotal
-				|| !task.getMonsterName().equals(sideBetTaskName))
+				|| !task.getMonsterName().equals(sideBetTaskName)
+				|| task.getAcceptedAtMs() != sideBetAcceptedAt)
 			{
 				sideBetDone = done;
 				sideBetTotal = total;
 				sideBetTaskName = task.getMonsterName();
+				sideBetAcceptedAt = task.getAcceptedAtMs();
 				sideBetLines = new String[total];
 				sideBetStatus = new String[total];
 				sideBetDoneFlags = new boolean[total];
@@ -183,8 +213,12 @@ public class TaskProgressOverlay extends OverlayPanel
 					SideBet bet = sideBets.get(i);
 					sideBetLines[i] = com.gachaman.service.TaskService.describeSideBet(bet);
 					sideBetDoneFlags[i] = bet.isCompleted();
+					// "*" not a check mark: the RuneScape faces have no U+2713. It only
+					// looked right in testing because ComboMeterComponent leaves logical
+					// SANS_SERIF on the shared Graphics2D while a combo is live — at rest
+					// this line paints a tofu box.
 					sideBetStatus[i] = bet.isCompleted()
-						? "✓ +" + bet.getPayoutGc()
+						? "* +" + bet.getPayoutGc()
 						: "+" + bet.getPayoutGc();
 				}
 			}

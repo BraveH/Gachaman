@@ -5,6 +5,7 @@ import com.gachaman.data.CardDatabase;
 import com.gachaman.data.CardDefinition;
 import com.gachaman.data.HologramDefinition;
 import com.gachaman.model.AttackStyle;
+import com.gachaman.model.GachaState;
 import com.gachaman.model.GearSlot;
 import com.gachaman.model.Rarity;
 import com.gachaman.model.SideBet;
@@ -13,6 +14,7 @@ import com.gachaman.model.Variant;
 import com.gachaman.service.CeremonyBus;
 import com.gachaman.service.ChestService;
 import com.gachaman.service.GachaStateService;
+import com.gachaman.service.ServiceRecordService;
 import com.gachaman.service.SoundService;
 import com.gachaman.service.StyleService;
 import com.gachaman.service.TaskService;
@@ -33,7 +35,10 @@ import java.awt.geom.AffineTransform;
 import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
@@ -96,12 +101,25 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 	private static final long SHOCKWAVE_MS = 1600;
 	private static final long PITY_GLOW_MS = 2600;
 	private static final long SPIN_MS = 4500;
+	/**
+	 * The very first roulette an account ever sees runs long. It is the moment
+	 * the whole gamemode is decided and it happens exactly once, so it gets to
+	 * breathe; every roll after it is a re-roll and would only be padding.
+	 */
+	private static final long FIRST_SPIN_MS = 7500;
 	private static final long OFFER_UNROLL_MS = 450;
 	private static final long OFFER_UNROLL_STAGGER_MS = 120;
 	private static final long OFFER_BURN_MS = 900;
 	private static final long COMPLETE_MS = 2500;
 	private static final long DEED_BURST_MS = 1150;
 	private static final float HOVER_CHARGE_SEC = 0.8f;
+
+	/**
+	 * Base fireOnce bit for the strain groans, one per beat. Bits 0-4 and 9 are
+	 * already spoken for by the other intro cues, so the strain is parked well
+	 * clear of them; four beats occupy 16-19 and firedSounds is an int.
+	 */
+	private static final int SOUND_BIT_STRAIN = 16;
 
 	/**
 	 * How long after the last painted frame the modal still counts as on screen.
@@ -129,6 +147,8 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 	private static final Color PARCH_INK_SOFT = new Color(104, 86, 58);
 	private static final Color PARCH_REWARD = new Color(128, 94, 20);
 	private static final Color PARCH_EDGE_SOFT = new Color(146, 120, 80, 153);
+	/** The Ante's ink: dark red on parchment, the colour of a debt, not a prize. */
+	private static final Color PARCH_ANTE = new Color(132, 44, 34);
 	private static final Color BANNER_UNDERLINE = new Color(0, 0, 0, 77);
 	private static final Color EMBER_HOT = new Color(255, 176, 60);
 	private static final Color EMBER_RED = new Color(220, 80, 30);
@@ -190,6 +210,13 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 	private long[] rerollAtMs = new long[0];
 	private float[] hoverCharge = new float[0];
 	private CardRenderer.CardView[] cardViews = new CardRenderer.CardView[0];
+	/**
+	 * Service Records frozen at chest-open time, card id -> best owned copy.
+	 * Snapshotted the way snapshotCanReroll() is, so cardViewFor() never reaches
+	 * into a service from inside the render lock, and so a rerolled slot reads
+	 * the same records the rest of the ceremony did.
+	 */
+	private Map<Integer, Integer> serviceSnapshot = Collections.emptyMap();
 	private long lastHoverMs;
 	private long pityFlipMs;
 	private long shockwaveStartMs;
@@ -365,6 +392,12 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		rerollAtMs = new long[n];
 		hoverCharge = new float[n];
 		cardViews = new CardRenderer.CardView[n];
+		// taken BEFORE the cards are committed, so a card the player has never
+		// held reads 0 and shows neither a service count nor wear — the reveal
+		// can only ever report history that already existed
+		GachaState wearState = stateService.get();
+		serviceSnapshot = ServiceRecordService.bestByCardId(
+			wearState == null ? null : wearState.getOwnedCards());
 		phase = PH_CHEST_INTRO;
 		phaseStartMs = now;
 		ceremonyStartMs = now;
@@ -741,10 +774,22 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 	 */
 	public void abortActiveCeremony()
 	{
+		abortActiveCeremony(null);
+	}
+
+	/**
+	 * Force-close the active modal ceremony only when it is of the given type
+	 * (null aborts whatever is up). The party layer aborts the offer scrolls
+	 * when a vote dies under them, and it must not take an unrelated chest
+	 * reveal down with them — that ceremony's meaning did not change, and the
+	 * player did not ask to skip it.
+	 */
+	public void abortActiveCeremony(@Nullable CeremonyBus.Type only)
+	{
 		int action;
 		synchronized (lock)
 		{
-			if (activeType == null)
+			if (activeType == null || (only != null && activeType != only))
 			{
 				return;
 			}
@@ -979,7 +1024,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 				{
 					case PH_CHEST_INTRO:
 						fireIntroSounds(el);
-						if (el >= introMs(chestResult.getPurchasedTier()))
+						if (el >= ChestStrain.totalMs(chestResult.getPurchasedTier()))
 						{
 							phase = chestResult.isJackpotUpgraded() ? PH_CHEST_UPGRADE : PH_CHEST_DEAL;
 							phaseStartMs = now;
@@ -1062,7 +1107,8 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 			case STYLE_ROLL:
 				if (phase == PH_SPIN)
 				{
-					double t = clamp01(el / (double) SPIN_MS);
+					long spin = spinMs();
+					double t = clamp01(el / (double) spin);
 					double theta = wheelThetaEnd * (1 - Math.pow(1 - t, 3));
 					long count = (long) (theta / 120.0);
 					if (count > wheelTickCount)
@@ -1070,7 +1116,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 						wheelTickCount = count;
 						soundService.playTick();
 					}
-					if (el >= SPIN_MS)
+					if (el >= spin)
 					{
 						phase = PH_SPIN_RESULT;
 						phaseStartMs = now;
@@ -1128,43 +1174,41 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 	private void fireIntroSounds(long el)
 	{
 		Tuning.Chest tier = chestResult.getPurchasedTier();
+
+		// The groan pitch climbs by BEAT INDEX, not by tier, so a tier gets both
+		// more groans and a higher last one from a single four-entry cache: the
+		// ceiling it reaches is itself part of the tell.
+		long[] beats = ChestStrain.beats(tier);
+		for (int k = 0; k < beats.length; k++)
+		{
+			if (el >= beats[k] && fireOnce(SOUND_BIT_STRAIN + k))
+			{
+				soundService.playStrain(k);
+			}
+		}
+
+		long give = ChestStrain.giveMs(tier);
 		if (tier == Tuning.Chest.RUSTY)
 		{
 			if (el >= 300 && fireOnce(0))
 			{
 				soundService.playTick();
 			}
-			if (el >= 900 && fireOnce(1))
+			if (el >= give && fireOnce(1))
 			{
 				soundService.playWhoosh();
 			}
 		}
 		else if (tier == Tuning.Chest.BATTERED)
 		{
-			if (el >= 300 && fireOnce(0))
-			{
-				soundService.playTick();
-			}
-			if (el >= 1400 && fireOnce(1))
+			if (el >= give && fireOnce(1))
 			{
 				soundService.playWhoosh();
 			}
 		}
 		else if (tier == Tuning.Chest.GILDED)
 		{
-			if (el >= 600 && fireOnce(0))
-			{
-				soundService.playTick();
-			}
-			if (el >= 1400 && fireOnce(1))
-			{
-				soundService.playTick();
-			}
-			if (el >= 2200 && fireOnce(2))
-			{
-				soundService.playTick();
-			}
-			if (el >= 2800 && fireOnce(3))
+			if (el >= give && fireOnce(3))
 			{
 				soundService.playShatter();
 			}
@@ -1175,6 +1219,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		}
 		else
 		{
+			// the two whooshes are the chains whipping off, not strain
 			if (el >= 1200 && fireOnce(0))
 			{
 				soundService.playWhoosh();
@@ -1183,15 +1228,11 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 			{
 				soundService.playWhoosh();
 			}
-			if (el >= 4000 && fireOnce(2))
-			{
-				soundService.playWhoosh();
-			}
 			if (el >= 4200 && fireOnce(3))
 			{
 				soundService.playDeepHum();
 			}
-			if (el >= 6400 && fireOnce(4))
+			if (el >= give && fireOnce(4))
 			{
 				soundService.playShatter();
 				soundService.playChime();
@@ -1281,21 +1322,6 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 	// CHEST CEREMONY
 	// =====================================================================
 
-	private static long introMs(Tuning.Chest tier)
-	{
-		switch (tier)
-		{
-			case RUSTY:
-				return 1400;
-			case BATTERED:
-				return 2000;
-			case GILDED:
-				return 4000;
-			default:
-				return 7000;
-		}
-	}
-
 	private static long dealTotalMs(int n)
 	{
 		return DEAL_CHEST_DROP_MS + (n - 1) * DEAL_STAGGER_MS + DEAL_FLIGHT_MS + DEAL_SETTLE_MS + 150;
@@ -1319,15 +1345,21 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 	private void drawChestCeremony(Graphics2D g, int cw, int ch, long now)
 	{
 		long el = now - phaseStartMs;
+		// Before the deal the header may only name the tier that was PAID for:
+		// announcing the upgraded tier over an un-upgraded chest spoils the very
+		// ceremony that exists to reveal it. This is the same guard the
+		// (JACKPOT!) suffix below already uses.
+		Tuning.Chest shownTier = phase >= PH_CHEST_DEAL
+			? chestResult.getEffectiveTier() : chestResult.getPurchasedTier();
 		String title = chestThemed
 			? "THEMED CHEST" + (chestResult.getThemedSetTag() == null
 				? "" : " - " + chestResult.getThemedSetTag().toUpperCase())
-			: chestResult.getEffectiveTier().name() + " CHEST";
+			: shownTier.name() + " CHEST";
 		if (chestResult.isJackpotUpgraded() && (phase >= PH_CHEST_DEAL))
 		{
 			title = title + "  (JACKPOT!)";
 		}
-		Color titleColor = !chestThemed && chestResult.getEffectiveTier() == Tuning.Chest.RUSTY
+		Color titleColor = !chestThemed && shownTier == Tuning.Chest.RUSTY
 			? new Color(176, 156, 128) : GOLD;
 		drawCenteredText(g, title, cw / 2, 46, FONT_TITLE, titleColor, true);
 
@@ -1380,10 +1412,10 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		}
 		else if (tier == Tuning.Chest.BATTERED)
 		{
-			if (el >= 300 && el < 1300)
+			if (ChestStrain.straining(el, tier))
 			{
-				double amp = 2 + 5 * clamp01((el - 300) / 900.0);
-				shakeX = Math.sin(el * 0.09) * amp;
+				shakeX = Math.sin(el * 0.09)
+					* (2 + 5 * ChestStrain.load(el, tier) + 3 * ChestStrain.kick(el, tier));
 			}
 			if (el >= 1400)
 			{
@@ -1393,10 +1425,9 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		}
 		else if (tier == Tuning.Chest.GILDED)
 		{
-			boolean rattle = (el >= 600 && el < 950) || (el >= 1400 && el < 1850) || (el >= 2200 && el < 2750);
-			if (rattle)
+			if (ChestStrain.straining(el, tier))
 			{
-				double amp = 3 + 5 * clamp01(el / 2700.0);
+				double amp = 3 + 5 * ChestStrain.load(el, tier) + 4 * ChestStrain.kick(el, tier);
 				shakeX = Math.sin(el * 0.12) * amp;
 				shakeY = Math.cos(el * 0.10) * amp * 0.4;
 			}
@@ -1414,14 +1445,17 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 			// ornate: two chains whip off (1200 / 2600), the lid seam leaks
 			// light with mounting intensity, then the lid blasts open with a
 			// decaying 2-3px camera shake
-			if (el > 900 && el < 4000)
+			if (ChestStrain.straining(el, tier))
 			{
-				shakeX = Math.sin(el * 0.05) * (1.5 + (el >= 1800 ? 1 : 0) + (el >= 3200 ? 1 : 0));
+				double load = ChestStrain.load(el, tier);
+				double amp = 1.5 + 6.5 * load + 4 * ChestStrain.kick(el, tier);
+				shakeX = Math.sin(el * (0.05 + 0.06 * load)) * amp;
 			}
+			// the upper bound is load-bearing: without it the seam keeps
+			// glowing through the lid-blast frames and swallows the payoff
 			if (el >= 4000 && el < 6400)
 			{
 				leak = (float) clamp01((el - 4000) / 2400.0);
-				shakeX = Math.sin(el * 0.11) * (2 + 6 * leak);
 			}
 			if (el >= 6400)
 			{
@@ -1442,7 +1476,8 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 
 		if (tier == Tuning.Chest.GILDED)
 		{
-			ChestPainter.drawPadlock(gc, dx, dy + chestH / 8, chestW, el, 2800);
+			// the padlock must shatter ON the give, never near it
+			ChestPainter.drawPadlock(gc, dx, dy + chestH / 8, chestW, el, ChestStrain.giveMs(tier));
 		}
 		else if (tier == Tuning.Chest.ORNATE)
 		{
@@ -1754,12 +1789,21 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 				art = cardImageService.cardImage(card, null);
 			}
 		}
+		// The record of the copies already owned, which is what the wear badge
+		// and the service pill both report: "this card of yours has carried N
+		// kills", not a claim about the copy being revealed (it has carried
+		// none). A first-ever pull reads 0 and stays pristine. Holograms are
+		// filed per tier rather than per card id, so they sit outside
+		// bestByCardId and simply read 0 here.
+		int served = slot.getHologramTier() != null
+			? 0 : serviceSnapshot.getOrDefault(slot.getCardId(), 0);
 		view = CardRenderer.CardView.builder()
 			.name(name)
 			.rarity(slot.getRarity())
 			.variant(slot.getVariant())
 			.art(art)
 			.subtitle(subtitle)
+			.killsServed(served)
 			.build();
 		cardViews[i] = view;
 		return view;
@@ -1938,12 +1982,24 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 	// STYLE ROLL ROULETTE
 	// =====================================================================
 
+	/**
+	 * Null-guarded because finishModalLocked clears styleResult while a repaint
+	 * may still be in flight, and a spin length of zero would divide the eased
+	 * curve by nothing. The wheel's landing angle is solved backwards from the
+	 * result, so stretching the duration changes only how long it takes to get
+	 * there — never where it stops.
+	 */
+	private long spinMs()
+	{
+		return styleResult != null && styleResult.getPrevious() == null ? FIRST_SPIN_MS : SPIN_MS;
+	}
+
 	private void drawStyleRoll(Graphics2D g, int cw, int ch, long now)
 	{
 		long el = now - phaseStartMs;
 		boolean result = phase == PH_SPIN_RESULT;
 		// honest backward-solved deceleration - unchanged
-		double t = result ? 1.0 : clamp01(el / (double) SPIN_MS);
+		double t = result ? 1.0 : clamp01(el / (double) spinMs());
 		double theta = wheelThetaEnd * (1 - Math.pow(1 - t, 3));
 		long rt = result ? el : 0;
 
@@ -1952,6 +2008,13 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		int cy = ch / 2 + 10;
 
 		drawCenteredText(g, "STYLE ROULETTE", cx, cy - radius - 64, FONT_TITLE, GOLD, true);
+		if (styleResult.getPrevious() == null)
+		{
+			// the longer first spin is only worth the seconds if the player is told
+			// what it is deciding; every roll after this one is merely a re-roll
+			drawCenteredText(g, "Your first colours - and a chest to match",
+				cx, cy - radius - 44, FONT_SMALL, new Color(215, 200, 165), false);
+		}
 
 		// drop shadow under the whole wheel
 		g.setColor(new Color(0, 0, 0, 80));
@@ -2395,7 +2458,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		if (offer.isPartyRoll())
 		{
 			// shared party contract: clicking VOTES rather than accepts
-			drawDuoSilhouette(g, parchX + parchW - 20, ribY + 4);
+			drawPartySilhouette(g, parchX + parchW - 20, ribY + 4);
 		}
 
 		int fieldX = parchX + 8;
@@ -2427,13 +2490,28 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 				FONT_SMALL, PARCH_INK_SOFT, fieldW);
 		}
 
+		// The Ante, inked on the contract itself: an armed wager must be legible
+		// on the very thing the player is about to click, not only in a panel
+		// they may have scrolled away from. Clamped like every other line.
+		int footerY = cbY + 16;
+		if (TaskService.anteEligible(offer) && taskService.anteArmed())
+		{
+			int stake = taskService.previewAnteStake();
+			if (stake > 0 && footerY < parchBot - 8)
+			{
+				drawInkLine(g, "ANTE ARMED — " + stake + " GC", parchX + parchW / 2, footerY,
+					FONT_SMALL, PARCH_ANTE, fieldW);
+				footerY += 14;
+			}
+		}
+
 		// side bets footer under an ink rule; skipped entirely when the
 		// scroll is too short (no overlapping text at any canvas size)
 		if (art.betLines.length > 0)
 		{
 			g.setFont(FONT_SMALL);
 			FontMetrics fm = g.getFontMetrics();
-			int by = cbY + 16;
+			int by = footerY;
 			if (by + fm.getHeight() * 2 <= parchBot - 8)
 			{
 				g.setColor(PARCH_EDGE_SOFT);
@@ -2513,7 +2591,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		}
 	}
 
-	private void drawDuoSilhouette(Graphics2D g, int x, int y)
+	private void drawPartySilhouette(Graphics2D g, int x, int y)
 	{
 		g.setColor(new Color(150, 170, 200, 200));
 		g.fillOval(x, y, 7, 7);
@@ -2653,7 +2731,8 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		long el = now - phaseStartMs;
 		TaskService.TaskCompletionSummary sum = completionSummary;
 		int w = Math.min(470, cw - 60);
-		int h = 190 + (sum.getFragmentsEarned() > 0 ? 22 : 0);
+		boolean docket = sum.getTask() != null && sum.getTask().isSlayerAligned();
+		int h = 190 + (sum.getFragmentsEarned() > 0 ? 22 : 0) + (docket ? 22 : 0);
 		int x = (cw - w) / 2;
 		int y = (ch - h) / 2 - 20;
 
@@ -2691,6 +2770,14 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		drawCenteredText(g, "+" + sum.getCompletionGcAwarded() + " GC", cw / 2, cy, FONT_HUGE,
 			Color.WHITE, true);
 		cy += 30;
+		// directly under the GC figure: this is the line that explains why the
+		// number is bigger than the contract said it would be
+		if (docket)
+		{
+			drawCenteredText(g, "Double Docket — x" + Tuning.DOUBLE_DOCKET_MULT + " Slayer bonus",
+				cw / 2, cy, FONT_BODY, new Color(110, 230, 110), true);
+			cy += 22;
+		}
 		if (sum.getSideBetsHit() > 0)
 		{
 			drawCenteredText(g, "Side bets hit: " + sum.getSideBetsHit(), cw / 2, cy, FONT_BODY,

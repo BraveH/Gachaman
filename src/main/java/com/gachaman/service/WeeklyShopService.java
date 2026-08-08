@@ -127,7 +127,7 @@ public class WeeklyShopService
 		}
 		String weekKey = currentWeekKey();
 		OwnedCard card = new OwnedCard(UUID.randomUUID().toString(), slot.getCard().getCardId(),
-			null, Variant.NORMAL, System.currentTimeMillis(), "shop:" + weekKey);
+			null, Variant.NORMAL, System.currentTimeMillis(), "shop:" + weekKey, 0);
 		stateService.mutate(s -> {
 			List<OwnedCard> owned = new ArrayList<>(s.getOwnedCards());
 			owned.add(card);

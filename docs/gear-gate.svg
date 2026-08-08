@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 560" width="820" height="560" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#302A20"/>
+      <stop offset="1" stop-color="#1C1812"/>
+    </linearGradient>
+    <linearGradient id="pane" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#242019"/>
+      <stop offset="1" stop-color="#191611"/>
+    </linearGradient>
+    <linearGradient id="shiny" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF9BD2"/>
+      <stop offset="0.35" stop-color="#9BE3FF"/>
+      <stop offset="0.7" stop-color="#C9FF9B"/>
+      <stop offset="1" stop-color="#FFD79B"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="820" height="560" rx="12" fill="#141414" stroke="#2C2822"/>
+
+  <text x="40" y="44" font-size="19" font-weight="bold" fill="#E6BE50" letter-spacing="2.5">CAN I WEAR THIS?</text>
+  <text x="40" y="68" font-size="12" fill="#8A8A8A">two gates stand between you and every piece of combat gear in the game</text>
+
+  <!-- gate 1 -->
+  <rect x="40" y="96" width="340" height="196" rx="8" fill="url(#pane)" stroke="#4E4436"/>
+  <text x="62" y="126" font-size="13" font-weight="bold" fill="#E6BE50">GATE 1 — do you own the card?</text>
+  <text x="62" y="150" font-size="11.5" fill="#C0C0C0">Every combat-relevant equipable item has</text>
+  <text x="62" y="168" font-size="11.5" fill="#C0C0C0">one. Cards come out of chests. Cosmetic-only</text>
+  <text x="62" y="186" font-size="11.5" fill="#C0C0C0">gear has no card and stays freely wearable.</text>
+
+  <rect x="62" y="204" width="60" height="72" rx="5" fill="url(#card)" stroke="#B0B0B0" stroke-width="1.5"/>
+  <rect x="68" y="210" width="48" height="40" rx="3" fill="#3A3228"/>
+  <text x="92" y="266" font-size="8" fill="#B0B0B0" text-anchor="middle">COMMON</text>
+  <text x="136" y="222" font-size="11" fill="#C0C0C0">Plain card</text>
+  <text x="136" y="240" font-size="10.5" fill="#8A8A8A">unlocks exactly that</text>
+  <text x="136" y="256" font-size="10.5" fill="#8A8A8A">one item</text>
+
+  <path d="M 392 194 L 414 194" stroke="#6E6252" stroke-width="2"/>
+  <path d="M 413 188 L 413 200 L 421 194 Z" fill="#6E6252"/>
+
+  <!-- gate 2 -->
+  <rect x="432" y="96" width="348" height="196" rx="8" fill="url(#pane)" stroke="#4E4436"/>
+  <text x="454" y="126" font-size="13" font-weight="bold" fill="#E6BE50">GATE 2 — is it in your loadout?</text>
+  <text x="454" y="150" font-size="11.5" fill="#C0C0C0">Owning a card is not enough. Assign it to the</text>
+  <text x="454" y="168" font-size="11.5" fill="#C0C0C0">matching loadout slot and the item goes live.</text>
+  <text x="454" y="186" font-size="11.5" fill="#C0C0C0">A fresh profile has only three slots open:</text>
+
+  <rect x="454" y="204" width="90" height="26" rx="4" fill="#2E2820" stroke="#E6BE50"/>
+  <text x="499" y="221" font-size="10.5" fill="#E6BE50" text-anchor="middle">WEAPON</text>
+  <rect x="552" y="204" width="90" height="26" rx="4" fill="#2E2820" stroke="#E6BE50"/>
+  <text x="597" y="221" font-size="10.5" fill="#E6BE50" text-anchor="middle">BODY</text>
+  <rect x="650" y="204" width="90" height="26" rx="4" fill="#2E2820" stroke="#E6BE50"/>
+  <text x="695" y="221" font-size="10.5" fill="#E6BE50" text-anchor="middle">AMMO</text>
+
+  <rect x="454" y="238" width="286" height="26" rx="4" fill="#1E1B16" stroke="#4A4238" stroke-dasharray="4 3"/>
+  <text x="597" y="255" font-size="10.5" fill="#7A7168" text-anchor="middle">the other eight need Slot Deeds</text>
+  <text x="454" y="282" font-size="10" fill="#8A8A8A">Deeds drop from chests, or arrive as milestones at 10 / 25 / 45 / 70+ tasks.</text>
+
+  <!-- verdict row -->
+  <rect x="40" y="312" width="360" height="74" rx="8" fill="#1A2318" stroke="#4F7A45"/>
+  <circle cx="72" cy="349" r="14" fill="#6EC86E" fill-opacity="0.18" stroke="#6EC86E"/>
+  <path d="M 66 349 L 70 354 L 78 344" fill="none" stroke="#6EC86E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="100" y="342" font-size="12" font-weight="bold" fill="#8FD48F">Both gates pass</text>
+  <text x="100" y="364" font-size="11" fill="#A8B8A4">Wear it. Normal item, normal game.</text>
+
+  <rect x="420" y="312" width="360" height="74" rx="8" fill="#231818" stroke="#7A4540"/>
+  <circle cx="452" cy="349" r="14" fill="#E55A50" fill-opacity="0.18" stroke="#E55A50"/>
+  <path d="M 447 344 L 457 354 M 457 344 L 447 354" fill="none" stroke="#E55A50" stroke-width="2.2" stroke-linecap="round"/>
+  <text x="480" y="336" font-size="12" font-weight="bold" fill="#EC7A72">Either gate fails</text>
+  <text x="480" y="356" font-size="11" fill="#BCA6A4">Wield/Wear vanishes from the menu, clicks are</text>
+  <text x="480" y="373" font-size="11" fill="#BCA6A4">swallowed, a crossed circle marks the icon.</text>
+
+  <!-- the two special cards -->
+  <text x="40" y="424" font-size="13" font-weight="bold" fill="#E6BE50" letter-spacing="1.5">TWO CARDS THAT BREAK THE RULE</text>
+
+  <rect x="40" y="440" width="360" height="98" rx="8" fill="url(#pane)" stroke="#8A6FA8"/>
+  <rect x="62" y="456" width="48" height="66" rx="5" fill="url(#card)" stroke="url(#shiny)" stroke-width="2"/>
+  <rect x="67" y="461" width="38" height="34" rx="3" fill="#3A3228"/>
+  <path d="M 67 495 L 105 461" stroke="url(#shiny)" stroke-width="3" stroke-opacity="0.7"/>
+  <text x="124" y="470" font-size="12" font-weight="bold" fill="#E9A7D6">Shiny — 1 in 64</text>
+  <text x="124" y="490" font-size="11" fill="#C0C0C0">Unlocks that item and every lower-tier</text>
+  <text x="124" y="506" font-size="11" fill="#C0C0C0">version of it. A shiny rune scimitar card</text>
+  <text x="124" y="522" font-size="11" fill="#C0C0C0">covers every scimitar rune and below.</text>
+
+  <rect x="420" y="440" width="360" height="98" rx="8" fill="url(#pane)" stroke="#4E93B0"/>
+  <rect x="442" y="456" width="48" height="66" rx="5" fill="#16222A" stroke="#78DCFF" stroke-width="2"/>
+  <rect x="447" y="461" width="38" height="34" rx="3" fill="#1D3340"/>
+  <path d="M 447 472 L 485 472 M 447 482 L 485 482 M 447 492 L 485 492" stroke="#78DCFF" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="504" y="470" font-size="12" font-weight="bold" fill="#78DCFF">Hologram — 1 in 256</text>
+  <text x="504" y="490" font-size="11" fill="#C0C0C0">Represents a whole tier, not an item. Put</text>
+  <text x="504" y="506" font-size="11" fill="#C0C0C0">a Dragon hologram in your weapon slot</text>
+  <text x="504" y="522" font-size="11" fill="#C0C0C0">and any dragon weapon is legal there.</text>
+</svg>

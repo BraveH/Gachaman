@@ -3,11 +3,14 @@ package com.gachaman.ui.panel;
 import com.gachaman.data.CardDatabase;
 import com.gachaman.model.GachaState;
 import com.gachaman.service.GachaStateService;
+import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -15,6 +18,13 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.RenderingHints;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.geom.Area;
+import java.awt.geom.Ellipse2D;
+import java.awt.geom.Path2D;
+import java.awt.geom.QuadCurve2D;
+import java.awt.image.BufferedImage;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Map;
@@ -25,6 +35,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
@@ -40,6 +51,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
+import net.runelite.client.util.LinkBrowser;
 
 /**
  * The Gachaman sidebar: a tab strip over a CardLayout hosting the tabs.
@@ -60,6 +72,14 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		SETS("Sets"),
 		JOURNAL("Journal"),
 		TIMELINE("Timeline"),
+		// Dossier and Party must stay BEFORE LOADOUT: updateLoadoutTabVisibility()
+		// re-inserts the Loadout button at Tab.LOADOUT.ordinal(), which is only a
+		// valid tabRow index because EVERY tab of lower ordinal is unconditionally
+		// visible. Loadout is the only hideable tab, so any future tab is safe here
+		// and only here — inserting one AFTER Loadout would push Loadout's ordinal
+		// past the button count while Loadout is hidden and throw on re-insert.
+		DOSSIER("Dossier"),
+		PARTY("Party"),
 		LOADOUT("Loadout"),
 		HELP("Help");
 
@@ -73,6 +93,9 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 
 	private static final String CARD_LOADING = "LOADING";
 	private static final int SCAN_POLL_MS = 400;
+	private static final String GITHUB_URL = "https://github.com/BraveH/Gachaman";
+	private static final String KOFI_URL = "https://ko-fi.com/amrothabet";
+	private static final int LINK_ICON_SIZE = 18;
 
 	private final GachaStateService stateService;
 	private final CardDatabase cardDatabase;
@@ -82,6 +105,8 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	private final SetsTab setsTab;
 	private final JournalTab journalTab;
 	private final TimelineTab timelineTab;
+	private final DossierTab dossierTab;
+	private final PartyTab partyTab;
 	private final LoadoutTab loadoutTab;
 	private final HelpTab helpTab;
 
@@ -110,6 +135,8 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		SetsTab setsTab,
 		JournalTab journalTab,
 		TimelineTab timelineTab,
+		DossierTab dossierTab,
+		PartyTab partyTab,
 		LoadoutTab loadoutTab,
 		HelpTab helpTab,
 		com.gachaman.GachamanConfig config)
@@ -124,6 +151,8 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		this.setsTab = setsTab;
 		this.journalTab = journalTab;
 		this.timelineTab = timelineTab;
+		this.dossierTab = dossierTab;
+		this.partyTab = partyTab;
 		this.loadoutTab = loadoutTab;
 		this.helpTab = helpTab;
 
@@ -133,10 +162,20 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 
 		JPanel header = new JPanel(new BorderLayout(0, 6));
 		header.setOpaque(false);
+		JPanel titleRow = new JPanel(new BorderLayout(6, 0));
+		titleRow.setOpaque(false);
 		JLabel titleLabel = new JLabel("Gachaman");
 		titleLabel.setFont(FontManager.getRunescapeBoldFont().deriveFont(18f));
 		titleLabel.setForeground(Color.WHITE);
-		header.add(titleLabel, BorderLayout.NORTH);
+		titleRow.add(titleLabel, BorderLayout.CENTER);
+		JPanel links = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+		links.setOpaque(false);
+		links.add(linkIcon(githubIcon(false), githubIcon(true), GITHUB_URL,
+			"Gachaman on GitHub — source, issues and releases"));
+		links.add(linkIcon(kofiIcon(false), kofiIcon(true), KOFI_URL,
+			"Support Gachaman on Ko-fi"));
+		titleRow.add(links, BorderLayout.EAST);
+		header.add(titleRow, BorderLayout.NORTH);
 
 		tabRow = new JPanel(new GridLayout(0, 3, 3, 3));
 		tabRow.setOpaque(false);
@@ -167,6 +206,8 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		content.add(wrapScroll(setsTab), Tab.SETS.name());
 		content.add(wrapScroll(journalTab), Tab.JOURNAL.name());
 		content.add(timelineTab, Tab.TIMELINE.name()); // timeline manages its own scroll
+		content.add(dossierTab, Tab.DOSSIER.name()); // dossier pins its totals outside the scroll
+		content.add(wrapScroll(partyTab), Tab.PARTY.name());
 		content.add(wrapScroll(loadoutTab), Tab.LOADOUT.name());
 		content.add(wrapScroll(helpTab), Tab.HELP.name());
 		add(content, BorderLayout.CENTER);
@@ -208,7 +249,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		stopScanTimer();
 	}
 
-	/** Wired later by the plugin: whether the player is in a party (duo offers). */
+	/** Wired later by the plugin: whether the player is in a party (party offers). */
 	public void setInPartySupplier(BooleanSupplier supplier)
 	{
 		overviewTab.setInPartySupplier(supplier);
@@ -300,6 +341,12 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 				case TIMELINE:
 					timelineTab.rebuild();
 					break;
+				case DOSSIER:
+					dossierTab.rebuild();
+					break;
+				case PARTY:
+					partyTab.rebuild();
+					break;
 				case LOADOUT:
 					loadoutTab.rebuild();
 					break;
@@ -351,6 +398,125 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 			button.setBackground(isSelected ? ColorScheme.BRAND_ORANGE : ColorScheme.DARKER_GRAY_COLOR);
 			button.setForeground(isSelected ? Color.BLACK : ColorScheme.LIGHT_GRAY_COLOR);
 		}
+	}
+
+	// --- Header links ---
+
+	/**
+	 * A flat icon that opens a URL.
+	 *
+	 * A JLabel rather than a JButton on purpose: a button brings a border, a fill
+	 * and a focus ring, and three of those stacked immediately above the tab strip
+	 * read as two competing rows of controls. The icon IS the control, so hover is
+	 * the only affordance it needs — hence the swapped bright variant and the hand
+	 * cursor.
+	 *
+	 * LinkBrowser rather than Desktop.browse(): it is RuneLite's own opener, so it
+	 * respects the client's link-confirmation setting and degrades to a
+	 * copy-to-clipboard prompt on a machine with no usable browser handler,
+	 * instead of throwing onto the EDT.
+	 */
+	private static JLabel linkIcon(ImageIcon normal, ImageIcon hover, String url, String tooltip)
+	{
+		JLabel label = new JLabel(normal);
+		label.setToolTipText(tooltip);
+		label.setCursor(new Cursor(Cursor.HAND_CURSOR));
+		label.addMouseListener(new MouseAdapter()
+		{
+			@Override
+			public void mousePressed(MouseEvent e)
+			{
+				LinkBrowser.browse(url);
+			}
+
+			@Override
+			public void mouseEntered(MouseEvent e)
+			{
+				label.setIcon(hover);
+			}
+
+			@Override
+			public void mouseExited(MouseEvent e)
+			{
+				label.setIcon(normal);
+			}
+		});
+		return label;
+	}
+
+	/**
+	 * The GitHub mark, drawn as a UNION of primitives rather than a traced bezier.
+	 *
+	 * A hand-transcribed path would be a long opaque string that nobody can review
+	 * and that silently renders as a blob if one control point is wrong; ears, body,
+	 * legs and tail as named shapes stay legible and scale cleanly with
+	 * {@link #LINK_ICON_SIZE}. Drawn rather than shipped as a PNG to match the rest
+	 * of this plugin's icons (see HelpTab's padlock and crossed circle).
+	 */
+	static ImageIcon githubIcon(boolean hover)
+	{
+		BufferedImage image = new BufferedImage(LINK_ICON_SIZE, LINK_ICON_SIZE,
+			BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = image.createGraphics();
+		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		double s = LINK_ICON_SIZE / 18.0; // authored at 18px, scaled from there
+		g.scale(s, s);
+
+		// The body sits HIGH and is deliberately shallower than it is wide: the legs
+		// and the tail are what separate the mark from a generic cat face, and a
+		// body deep enough to be circular swallows both of them.
+		Area mark = new Area(new Ellipse2D.Float(1.7f, 4.2f, 14.6f, 10.2f));
+		mark.add(new Area(triangle(3.1f, 6.8f, 3.5f, 1.6f, 7.6f, 4.6f)));   // left ear
+		mark.add(new Area(triangle(14.9f, 6.8f, 14.5f, 1.6f, 10.4f, 4.6f))); // right ear
+		mark.add(new Area(new java.awt.geom.RoundRectangle2D.Float(
+			5.5f, 11.6f, 2.4f, 5.6f, 1.8f, 1.8f)));                         // left leg
+		mark.add(new Area(new java.awt.geom.RoundRectangle2D.Float(
+			10.1f, 11.6f, 2.4f, 5.6f, 1.8f, 1.8f)));                        // right leg
+
+		g.setColor(hover ? Color.WHITE : ColorScheme.LIGHT_GRAY_COLOR);
+		g.fill(mark);
+		// The tail starts high on the flank and swings WIDE before dropping, so it
+		// reads as a tail rather than as a third leg next to the other two.
+		g.setStroke(new BasicStroke(2.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+		g.draw(new QuadCurve2D.Float(4.0f, 10.8f, 0.6f, 13.2f, 2.2f, 16.4f));
+		g.dispose();
+		return new ImageIcon(image);
+	}
+
+	/** The Ko-fi cup: a white mug and two steam wisps on the brand's coral plate. */
+	static ImageIcon kofiIcon(boolean hover)
+	{
+		BufferedImage image = new BufferedImage(LINK_ICON_SIZE, LINK_ICON_SIZE,
+			BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = image.createGraphics();
+		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		double s = LINK_ICON_SIZE / 18.0;
+		g.scale(s, s);
+
+		g.setColor(hover ? new Color(255, 110, 107) : new Color(214, 78, 75));
+		g.fillRoundRect(0, 0, 18, 18, 6, 6);
+
+		g.setColor(Color.WHITE);
+		g.fillRoundRect(3, 8, 8, 7, 2, 2);                                  // mug body
+		g.setStroke(new BasicStroke(1.5f));
+		g.drawArc(9, 8, 5, 5, 90, -180);                                    // handle
+		g.fillRoundRect(2, 15, 11, 2, 1, 1);                                // saucer
+		g.setStroke(new BasicStroke(1.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+		g.draw(new QuadCurve2D.Float(5.2f, 6.6f, 6.8f, 4.8f, 5.2f, 2.8f));  // steam
+		g.draw(new QuadCurve2D.Float(8.6f, 6.6f, 10.2f, 4.8f, 8.6f, 2.8f));
+		g.dispose();
+		return new ImageIcon(image);
+	}
+
+	private static Path2D.Float triangle(float x1, float y1, float x2, float y2,
+		float x3, float y3)
+	{
+		Path2D.Float path = new Path2D.Float();
+		path.moveTo(x1, y1);
+		path.lineTo(x2, y2);
+		path.lineTo(x3, y3);
+		path.closePath();
+		return path;
 	}
 
 	// --- Scan progress polling ---

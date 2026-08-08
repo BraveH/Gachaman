@@ -491,6 +491,100 @@ public class CardDatabase
 		return cardId == null ? null : byCardId.get(cardId);
 	}
 
+	/**
+	 * Card ids of Common weapons whose dominant offensive bonus is this style.
+	 *
+	 * <p>Common is this database's own low-power band (see rarityForPower), so
+	 * these are starter-grade by construction. The plugin holds no level
+	 * requirements for untiered items — tiers.json ladders only metal, dhide and
+	 * robes, and there is no tiered ranged or magic WEAPON in it at all — so
+	 * "humble" is the closest honest stand-in for "equippable today", and the
+	 * caller pairs it with the Rusty pool's reachability clamp.
+	 *
+	 * <p>CLIENT THREAD ONLY: stats are read live rather than stored on the card,
+	 * because a style field on CardDefinition would have to bump the card-DB
+	 * cache version and force every existing install into a full item rescan to
+	 * answer a question that is asked once per account.
+	 */
+	public Set<Integer> weaponCardIdsForStyle(@Nullable com.gachaman.model.AttackStyle style)
+	{
+		Set<Integer> ids = new HashSet<>();
+		if (style == null)
+		{
+			return ids;
+		}
+		for (CardDefinition card : byCardId.values())
+		{
+			if (card.getSlot() != GearSlot.WEAPON || card.getRarity() != Rarity.COMMON)
+			{
+				continue;
+			}
+			try
+			{
+				// cardId IS the lowest item id of the merged variant group, so it
+				// is always a concrete item (same idiom as lowStatSuspects)
+				ItemStats stats = itemManager.getItemStats(card.getCardId());
+				if (stats == null || stats.getEquipment() == null)
+				{
+					continue;
+				}
+				net.runelite.client.game.ItemEquipmentStats e = stats.getEquipment();
+				if (dominantStyle(e.getAstab(), e.getAslash(), e.getAcrush(),
+					e.getArange(), e.getAmagic()) == style)
+				{
+					ids.add(card.getCardId());
+				}
+			}
+			catch (Exception ex)
+			{
+				// one unreadable item must never cost the player their gift
+			}
+		}
+		return ids;
+	}
+
+	/**
+	 * Which style does this equipment actually attack with? A tie or no offence
+	 * at all returns null: gear that is not unambiguously one style's weapon is
+	 * not a promise worth making. Melee is the max of its three attack types
+	 * because an item only ever swings with one of them.
+	 */
+	@Nullable
+	static com.gachaman.model.AttackStyle dominantStyle(int astab, int aslash, int acrush,
+		int arange, int amagic)
+	{
+		int melee = Math.max(astab, Math.max(aslash, acrush));
+		int best = Math.max(melee, Math.max(arange, amagic));
+		if (best <= 0)
+		{
+			return null;
+		}
+		int winners = 0;
+		if (melee == best)
+		{
+			winners++;
+		}
+		if (arange == best)
+		{
+			winners++;
+		}
+		if (amagic == best)
+		{
+			winners++;
+		}
+		if (winners != 1)
+		{
+			return null;
+		}
+		if (melee == best)
+		{
+			return com.gachaman.model.AttackStyle.MELEE;
+		}
+		return arange == best
+			? com.gachaman.model.AttackStyle.RANGED
+			: com.gachaman.model.AttackStyle.MAGIC;
+	}
+
 	public Map<Integer, CardDefinition> all()
 	{
 		return byCardId;
@@ -560,13 +654,16 @@ public class CardDatabase
 
 	private File cacheFile()
 	{
+		// v5: "Runite" joins the rune tier's prefixes — "Runite bolts" is the one
+		//     equipable item spelt the long way, and it was landing untiered
+		//     (rarity by power, gated by nothing at all);
 		// v4: rarity audit overrides + barrows degrade-suffix merge (the v3
 		//     cache predated the "Ahrim's staff 100" name cleaning and held
 		//     112 stale duplicate cards — the rebuild folds them away);
 		// v3: black/white prefix family exclusions (Black mask etc. untiered);
 		// v2: cosmetic-only equipment filtered out. Old caches must not load.
 		return new File(new File(RuneLite.RUNELITE_DIR, "gachaman"),
-			"carddb-v4-rev" + client.getRevision() + ".json.gz");
+			"carddb-v5-rev" + client.getRevision() + ".json.gz");
 	}
 
 	@Nullable

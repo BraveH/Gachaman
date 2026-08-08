@@ -32,4 +32,5 @@ public class TimelineEvent
 	public static final String KIND_VIOLATION = "VIOLATION";
 	public static final String KIND_TAINT = "TAINT";
 	public static final String KIND_CLEANSE = "CLEANSE";
+	public static final String KIND_CHARTER = "CHARTER";
 }

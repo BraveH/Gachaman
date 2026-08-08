@@ -158,7 +158,7 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener
 	}
 
 	@Override
-	public void onDuoProgress(ActiveTask task)
+	public void onPartyProgress(ActiveTask task)
 	{
 		// partner progress pulses could go here later
 	}

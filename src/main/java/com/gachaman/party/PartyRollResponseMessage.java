@@ -27,4 +27,12 @@ public class PartyRollResponseMessage extends PartyMemberMessage
 	private boolean members;
 	private int combatLevel;
 	private int slayerLevel;
+	/** This member's locked attack style (AttackStyle name); null from a client that predates the clash bonus. */
+	private String allowedStyle;
+	/**
+	 * Which roll rules this client implements; 0 from a client that predates
+	 * Fighting Weight, which puts the whole party back on lowest-level sizing.
+	 * MUST stay last — {@code @AllArgsConstructor} is positional.
+	 */
+	private int rollProtocol;
 }

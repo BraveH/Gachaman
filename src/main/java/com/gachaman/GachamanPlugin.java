@@ -10,8 +10,10 @@ import com.gachaman.overlay.GachaInfoboxOverlay;
 import com.gachaman.overlay.KillJuiceOverlay;
 import com.gachaman.overlay.RevealInputListener;
 import com.gachaman.overlay.RevealOverlay;
+import com.gachaman.party.GachaPresenceMessage;
 import com.gachaman.party.PartyCompleteMessage;
 import com.gachaman.party.PartyKillsMessage;
+import com.gachaman.party.PartyPresenceService;
 import com.gachaman.party.PartyRollProposeMessage;
 import com.gachaman.party.PartyRollResponseMessage;
 import com.gachaman.party.PartyRollService;
@@ -139,6 +141,8 @@ public class GachamanPlugin extends Plugin
 	@Inject
 	private com.gachaman.service.TimelineService timelineService;
 	@Inject
+	private com.gachaman.service.CharterService charterService;
+	@Inject
 	private BossKcService bossKcService;
 	@Inject
 	private SetPerkService setPerkService;
@@ -158,9 +162,15 @@ public class GachamanPlugin extends Plugin
 	@Inject
 	private PartyRollService partyRollService;
 	@Inject
+	private PartyPresenceService partyPresenceService;
+	@Inject
 	private com.gachaman.service.CombatBlockService combatBlockService;
 	@Inject
 	private com.gachaman.service.LoadoutService loadoutService;
+	@Inject
+	private com.gachaman.service.ServiceRecordService serviceRecordService;
+	@Inject
+	private com.gachaman.service.SlayerAlignment slayerAlignment;
 
 	// overlays & UI
 	@Inject
@@ -272,7 +282,7 @@ public class GachamanPlugin extends Plugin
 		}
 
 		@Override
-		public void onDuoProgress(com.gachaman.model.ActiveTask task)
+		public void onPartyProgress(com.gachaman.model.ActiveTask task)
 		{
 		}
 	};
@@ -324,6 +334,10 @@ public class GachamanPlugin extends Plugin
 		// service listener graph
 		styleTracker.addListener(complianceService);
 		styleTracker.addListener(taskService); // any attack keeps the combo chain alive
+		// before taskService: the contract's final kill is then tallied before
+		// completeTask fires the flush. Out of order it is merely deferred to
+		// the next flush, never lost — but this way the last kill lands too.
+		killTracker.addListener(serviceRecordService);
 		killTracker.addListener(taskService);
 		complianceService.addListener(taskService); // rhythm combo breaks on violations
 		taskService.addListener(killJuiceOverlay);
@@ -331,11 +345,23 @@ public class GachamanPlugin extends Plugin
 		taskService.addListener(assistedKillFeedback);
 		taskService.setOfferAcceptedHook(timelineService::onOfferAccepted);
 		taskService.setPartyVoteHook(partyRollService::voteLocal);
+		taskService.setSlayerTargetHook(slayerAlignment::liveTarget);
+		taskService.setSlayerLatchHook(this::announceDoubleDocket);
 		partyRollService.setRefreshHook(gachamanPanel::refresh);
+		partyPresenceService.setRefreshHook(gachamanPanel::refresh);
+		// scoped: a dead vote closes the offer scrolls it invalidated, nothing else
+		partyRollService.setCeremonyAbortHook(
+			() -> revealOverlay.abortActiveCeremony(CeremonyBus.Type.TASK_OFFERS));
+		// The Charter Office sells a personal, binding contract onto a personal
+		// board, so it stands down for the whole of any party roll
+		charterService.setPartyBusyHook(partyRollService::isPartyRollLive);
+		charterService.setRefreshHook(gachamanPanel::refresh);
 		permissionService.start();
 		setPerkService.start();
 		prestigeService.start(creditSink);
 		complianceService.addListener(complianceFeedback);
+
+		taskService.addListener(serviceRecordService); // flush the tally at contract completion
 
 		// Firsts Journal: stamps ride the existing listener graphs
 		taskService.addListener(firstsService);
@@ -382,6 +408,7 @@ public class GachamanPlugin extends Plugin
 		eventBus.register(combatBlockService);
 		eventBus.register(loadoutTabButton);
 		eventBus.register(partyRollService);
+		eventBus.register(partyPresenceService);
 		clientThreadInvokeCreateButton();
 
 		// party messages
@@ -390,8 +417,10 @@ public class GachamanPlugin extends Plugin
 		wsClient.registerMessage(com.gachaman.party.PartyRollStartMessage.class);
 		wsClient.registerMessage(com.gachaman.party.PartyRollCancelMessage.class);
 		wsClient.registerMessage(PartyRollVoteMessage.class);
+		wsClient.registerMessage(com.gachaman.party.PartyRollResolveMessage.class);
 		wsClient.registerMessage(PartyKillsMessage.class);
 		wsClient.registerMessage(PartyCompleteMessage.class);
+		wsClient.registerMessage(GachaPresenceMessage.class);
 
 		// sidebar
 		navButton = NavigationButton.builder()
@@ -423,11 +452,15 @@ public class GachamanPlugin extends Plugin
 		revealOverlay.reset(); // drop any claimed-but-unshown fanfare too
 		chestService.commitPending(); // idempotent: catches opens queued but never presented
 		ceremonyBus.clear();
+		// the kills flushPending just emitted are tallied but unwritten, and the
+		// listener is still attached above, so they reached the tally
+		serviceRecordService.flush();
 		stateService.checkpoint();
 		stateService.unload();
 
 		styleTracker.removeListener(complianceService);
 		styleTracker.removeListener(taskService);
+		killTracker.removeListener(serviceRecordService);
 		killTracker.removeListener(taskService);
 		complianceService.removeListener(taskService);
 		taskService.removeListener(killJuiceOverlay);
@@ -435,8 +468,16 @@ public class GachamanPlugin extends Plugin
 		taskService.removeListener(assistedKillFeedback);
 		taskService.setOfferAcceptedHook(null);
 		taskService.setPartyVoteHook(null);
+		taskService.setSlayerTargetHook(null);
+		taskService.setSlayerLatchHook(null);
 		partyRollService.setRefreshHook(null);
+		partyPresenceService.setRefreshHook(null);
+		partyPresenceService.reset();
+		partyRollService.setCeremonyAbortHook(null);
+		charterService.setPartyBusyHook(null);
+		charterService.setRefreshHook(null);
 		complianceService.removeListener(complianceFeedback);
+		taskService.removeListener(serviceRecordService);
 		taskService.removeListener(firstsService);
 		complianceService.removeListener(firstsService);
 		chestService.removeChestListener(firstsService);
@@ -456,8 +497,10 @@ public class GachamanPlugin extends Plugin
 		wsClient.unregisterMessage(com.gachaman.party.PartyRollStartMessage.class);
 		wsClient.unregisterMessage(com.gachaman.party.PartyRollCancelMessage.class);
 		wsClient.unregisterMessage(PartyRollVoteMessage.class);
+		wsClient.unregisterMessage(com.gachaman.party.PartyRollResolveMessage.class);
 		wsClient.unregisterMessage(PartyKillsMessage.class);
 		wsClient.unregisterMessage(PartyCompleteMessage.class);
+		wsClient.unregisterMessage(GachaPresenceMessage.class);
 
 		eventBus.unregister(styleTracker);
 		eventBus.unregister(killTracker);
@@ -469,6 +512,7 @@ public class GachamanPlugin extends Plugin
 		eventBus.unregister(combatBlockService);
 		eventBus.unregister(loadoutTabButton);
 		eventBus.unregister(partyRollService);
+		eventBus.unregister(partyPresenceService);
 		clientThreadInvokeRemoveButton();
 
 		mouseManager.unregisterMouseListener(revealInputListener);
@@ -502,10 +546,21 @@ public class GachamanPlugin extends Plugin
 			killTracker.flushPending();
 			revealOverlay.abortActiveCeremony();
 			chestService.commitPending();
+			// must land BEFORE the checkpoint, under THIS profile's key: the
+			// profile-changed handler discards without saving
+			serviceRecordService.flush();
 			stateService.checkpoint();
 			// transient combat must not survive a logout (stale combos would
-			// leak across characters and defeat the idle reset)
+			// leak across characters and defeat the idle reset). Convictions go
+			// with them — pending kills were just flushed above, so nothing is
+			// left to judge, and a conviction outliving its profile could pardon
+			// away the next character's taint.
 			taskService.resetTransientCombat();
+			complianceService.resetTransient();
+			// the presence line we last broadcast describes a character that just
+			// logged out — force a re-announce rather than let the heartbeat carry
+			// the old one into the next login
+			partyPresenceService.reset();
 			// a half-finished strip must not resume against the next character
 			unequipService.cancel();
 		}
@@ -544,8 +599,20 @@ public class GachamanPlugin extends Plugin
 			}
 			cardDatabase.beginBuild(tierTable, setTable);
 			chestService.recoverPending(); // crash-interrupted reveal: auto-commit
+			// crash-interrupted party session: the vote and the shared-contract
+			// session died with the old process, but the party-flagged offers and
+			// the contract itself came back off disk. Orphaned offers are demoted
+			// (every click would route into a vote nobody counts) and an orphaned
+			// contract is resurrected, so it can resync, complete or convert like
+			// any other. Guarded internally, so a hop with a live session is
+			// untouched.
+			partyRollService.recoverPartySession();
 			cardDatabase.onReady(this::healStaleCardIds);
 			cardDatabase.onReady(this::grantStarterCards);
+			// the gift needs the DB before it can know what the rolled style
+			// actually swings; a save whose roll was armed in an earlier session
+			// that died mid-ceremony is redeemed from here rather than below
+			cardDatabase.onReady(this::redeemFirstColoursChestIfOwed);
 			cardDatabase.onReady(graduationService::refresh); // baseline worn gear
 			// ceremonies parked while logged out present now
 			ceremonyBus.drain();
@@ -589,6 +656,11 @@ public class GachamanPlugin extends Plugin
 			// everything is off; stop resuming this on every future login
 			stateService.mutate(s -> s.isTutorialStripPending() ? s.withTutorialStripPending(false) : s);
 		}
+
+		// The Charter Office: refresh the scalars the panel reads off the EDT, and
+		// settle any open deed escrow. Deliberately below the load block's return,
+		// so the first tick that sees a hold runs against a fully restored board.
+		charterService.tick();
 	}
 
 	/** First style roll + first task offers, in that order (ceremonies queue sequentially). */
@@ -602,12 +674,37 @@ public class GachamanPlugin extends Plugin
 		if (state.getAllowedStyle() == null)
 		{
 			styleService.roll(styleTracker.currentTick());
+			// between the roulette and the task offers, so the three ceremonies
+			// queue in the order the player reads them: colours, kit, work
+			redeemFirstColoursChestIfOwed();
 		}
 		if (state.getActiveTask() == null
 			&& (state.getPendingOffers() == null || state.getPendingOffers().isEmpty()))
 		{
 			taskService.rollOffers();
 		}
+	}
+
+	/**
+	 * Deal the free chest the opening style roll armed, now that the card
+	 * database can say what that style actually swings.
+	 *
+	 * <p>Idempotence rides on the persisted owed flag, not on "have we been here
+	 * before": a client that died between the roll and the reveal still gets its
+	 * gift on the next login, and an account that already collected one can never
+	 * be handed a second. A no-op when the DB is not ready yet — the onReady hook
+	 * registered at load time covers that case.
+	 */
+	private void redeemFirstColoursChestIfOwed()
+	{
+		var state = stateService.get();
+		if (state == null || !state.isFirstColoursChestOwed() || state.getAllowedStyle() == null)
+		{
+			return;
+		}
+		com.gachaman.model.AttackStyle style =
+			com.gachaman.model.AttackStyle.valueOf(state.getAllowedStyle());
+		chestService.openFirstColoursChest(cardDatabase.weaponCardIdsForStyle(style));
 	}
 
 	/**
@@ -672,7 +769,7 @@ public class GachamanPlugin extends Plugin
 			{
 				granted.add(new com.gachaman.model.OwnedCard(
 					java.util.UUID.randomUUID().toString(), card.getCardId(), null,
-					com.gachaman.model.Variant.NORMAL, System.currentTimeMillis(), "starter"));
+					com.gachaman.model.Variant.NORMAL, System.currentTimeMillis(), "starter", 0));
 			}
 		}
 		if (!granted.isEmpty())
@@ -799,6 +896,21 @@ public class GachamanPlugin extends Plugin
 		stateService.discard();
 		stateLoadPending = true;
 		taskService.resetTransientCombat();
+		// dropped, not flushed: the profile key already moved, so writing the
+		// tally would credit the NEW account's cards with the old account's
+		// kills. The LOGIN_SCREEN handler above already flushed under the
+		// correct key.
+		serviceRecordService.drop();
+		// the conviction ledger is scored against the OLD profile's taint counter
+		complianceService.resetTransient();
+		// the vote session is CLIENT-scoped while the offers it votes on are
+		// per-profile: left running, a vote resolving after the switch would sign
+		// a shared contract into an account that never rolled it, and its live
+		// flags would block the new profile's orphan recovery below
+		partyRollService.resetForDebug();
+		// same reason as the vote session above: the last presence we sent named
+		// the PREVIOUS profile's style, level and contract
+		partyPresenceService.reset();
 		// parked ceremonies from the previous account must never replay into
 		// this one (their rewards are already persisted per-profile)
 		ceremonyBus.clear();
@@ -810,6 +922,7 @@ public class GachamanPlugin extends Plugin
 		// must run before ConfigManager's shutdown flush (priority ordering)
 		revealOverlay.abortActiveCeremony();
 		chestService.commitPending();
+		serviceRecordService.flush();
 		stateService.checkpoint();
 	}
 
@@ -944,6 +1057,7 @@ public class GachamanPlugin extends Plugin
 					.withActiveTask(null)
 					.withPendingOffers(new java.util.ArrayList<>()));
 				taskService.resetTransientCombat();
+				serviceRecordService.flush(); // the wiped contract's kills were still served
 				partyRollService.resetForDebug();
 				debugChat("Active task and rolled offers cleared.");
 				break;
@@ -1014,6 +1128,20 @@ public class GachamanPlugin extends Plugin
 		}
 	}
 
+	/**
+	 * Fires once, on the kill where the contract latches on to the Slayer bonus.
+	 * chatPing rather than debugChatAlways: this is a grant, not enforcement, so
+	 * it honours the chat-notifications setting — the sidebar and the task
+	 * overlay both state the bonus permanently, so muting chat cannot make it a
+	 * surprise.
+	 */
+	private void announceDoubleDocket()
+	{
+		chatPing("<col=6ec86e>Double Docket!</col> This contract is also your Slayer task —"
+			+ " completion pays x" + Tuning.DOUBLE_DOCKET_MULT + ". It stays locked in"
+			+ " even if you finish the Slayer task first.");
+	}
+
 	private void debugChatAlways(String message)
 	{
 		chatMessageManager.queue(QueuedMessage.builder()
@@ -1056,9 +1184,11 @@ public class GachamanPlugin extends Plugin
 						cardDatabase.cardForItem(card.getCardId());
 					if (target != null)
 					{
+						// carry the service record through the remap — a card-DB
+						// heal must not reset the odometer
 						next = new com.gachaman.model.OwnedCard(card.getUuid(),
 							target.getCardId(), card.getTierKey(), card.getVariant(),
-							card.getAcquiredAtMs(), card.getProvenance());
+							card.getAcquiredAtMs(), card.getProvenance(), card.getKillsServed());
 						changed = true;
 					}
 				}

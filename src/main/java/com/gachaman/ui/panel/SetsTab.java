@@ -126,7 +126,11 @@ public class SetsTab extends JPanel
 				new EmptyBorder(7, 7, 7, 7)));
 		}
 
-		String titleText = set.getName() + (set.isBoss() ? " ★" : "");
+		// "*" not a star glyph: the RuneScape faces have no U+2605 and painted 44 tofu
+		// boxes here, one per boss set. The marker itself has to stay — it is gated on
+		// isBoss(), while GOLD and the gold border are gated on the orthogonal
+		// `completed`, so nothing else on the row carries "this is a boss set".
+		String titleText = set.getName() + (set.isBoss() ? " *" : "");
 		JLabel title = GachamanPanel.line(titleText, completed ? GOLD : Color.WHITE,
 			FontManager.getRunescapeBoldFont());
 		row.add(title);

@@ -25,4 +25,21 @@ public class PartyRollProposeMessage extends PartyMemberMessage
 	private boolean members;
 	private int combatLevel;
 	private int slayerLevel;
+	/**
+	 * The proposer's locked attack style (AttackStyle name), for the style
+	 * clash bonus. A NAME rather than an ordinal: an older client omits the
+	 * field entirely and Gson leaves a String null ("unknown, ignore"),
+	 * whereas an int would deserialize to 0 and fabricate MELEE.
+	 */
+	private String allowedStyle;
+	/**
+	 * Which roll RULES this client implements. Absent from an older client, and
+	 * Gson leaves an int 0 — which is exactly the "predates Fighting Weight"
+	 * answer, so the whole party falls back to the old lowest-combat-level
+	 * sizing rather than rolling two different boards from one shared seed.
+	 *
+	 * MUST stay the last field: {@code @AllArgsConstructor} is positional, so
+	 * inserting above this silently reorders every existing call site.
+	 */
+	private int rollProtocol;
 }

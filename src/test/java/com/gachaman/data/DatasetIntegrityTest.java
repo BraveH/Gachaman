@@ -47,7 +47,13 @@ public class DatasetIntegrityTest
 				JsonObject tier = tierEl.getAsJsonObject();
 				Assert.assertTrue(tier.get("rank").getAsInt() >= 1);
 				Assert.assertTrue(tier.getAsJsonArray("prefixes").size() >= 1);
-				tierKeys.add(tier.get("tierKey").getAsString());
+				// a tier with no requirements fails closed and vanishes from gated rolls
+				String key = tier.get("tierKey").getAsString();
+				Assert.assertTrue(key + " needs reqLevel", tier.has("reqLevel"));
+				Assert.assertTrue(key + " needs reqDefence", tier.has("reqDefence"));
+				Assert.assertTrue(key + " reqLevel >= 1", tier.get("reqLevel").getAsInt() >= 1);
+				Assert.assertTrue(key + " reqDefence >= 1", tier.get("reqDefence").getAsInt() >= 1);
+				tierKeys.add(key);
 			}
 		}
 		JsonArray holograms = tiers.getAsJsonArray("hologramTiers");

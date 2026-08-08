@@ -14,6 +14,6 @@ public class TaskOffer
 	int completionGc;
 	List<SideBet> sideBets;
 	boolean redemption; // clears all taint, no per-kill pay
-	/** Part of a party roll: clicking VOTES; unanimity accepts for everyone. */
+	/** Part of a party roll: clicking VOTES; a majority accepts for everyone. */
 	boolean partyRoll;
 }

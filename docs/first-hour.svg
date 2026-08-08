@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 350" width="820" height="350" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="col" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2B2620"/>
+      <stop offset="1" stop-color="#1B1813"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="820" height="350" rx="12" fill="#141414" stroke="#2C2822"/>
+
+  <text x="40" y="44" font-size="19" font-weight="bold" fill="#E6BE50" letter-spacing="2.5">YOUR FIRST HOUR</text>
+  <text x="40" y="68" font-size="12" fill="#8A8A8A">what actually happens after you tick the box</text>
+
+  <path d="M 84 112 L 736 112" stroke="#4E4436" stroke-width="2"/>
+
+  <!-- 1 -->
+  <circle cx="84" cy="112" r="12" fill="#141414" stroke="#96BEF0" stroke-width="2.5"/>
+  <text x="84" y="117" font-size="12" font-weight="bold" fill="#96BEF0" text-anchor="middle">1</text>
+  <rect x="11" y="134" width="146" height="170" rx="8" fill="url(#col)" stroke="#4E4436"/>
+  <text x="27" y="160" font-size="11.5" font-weight="bold" fill="#96BEF0">Install &amp; log in</text>
+  <text x="27" y="200" font-size="9.8" fill="#C0C0C0">The plugin reads your</text>
+  <text x="27" y="216" font-size="9.8" fill="#C0C0C0">item cache and builds</text>
+  <text x="27" y="232" font-size="9.8" fill="#C0C0C0">the card database.</text>
+  <text x="27" y="248" font-size="9.8" fill="#C0C0C0">Watch the sidebar for</text>
+  <text x="27" y="264" font-size="9.8" fill="#C0C0C0">scan progress.</text>
+
+  <!-- 2 -->
+  <circle cx="247" cy="112" r="12" fill="#141414" stroke="#E6BE50" stroke-width="2.5"/>
+  <text x="247" y="117" font-size="12" font-weight="bold" fill="#E6BE50" text-anchor="middle">2</text>
+  <rect x="174" y="134" width="146" height="170" rx="8" fill="url(#col)" stroke="#4E4436"/>
+  <text x="190" y="160" font-size="11.5" font-weight="bold" fill="#E6BE50">Step off Tutorial</text>
+  <text x="190" y="176" font-size="11.5" font-weight="bold" fill="#E6BE50">Island</text>
+  <text x="190" y="200" font-size="9.8" fill="#C0C0C0">Everything the tutorial</text>
+  <text x="190" y="216" font-size="9.8" fill="#C0C0C0">handed you comes off —</text>
+  <text x="190" y="232" font-size="9.8" fill="#C0C0C0">none of it is unlocked.</text>
+  <text x="190" y="248" font-size="9.8" fill="#C0C0C0">Starter cards and a</text>
+  <text x="190" y="264" font-size="9.8" fill="#C0C0C0">loadout arrive instead.</text>
+
+  <!-- 3 -->
+  <circle cx="410" cy="112" r="12" fill="#141414" stroke="#E2943E" stroke-width="2.5"/>
+  <text x="410" y="117" font-size="12" font-weight="bold" fill="#E2943E" text-anchor="middle">3</text>
+  <rect x="337" y="134" width="146" height="170" rx="8" fill="url(#col)" stroke="#4E4436"/>
+  <text x="353" y="160" font-size="11.5" font-weight="bold" fill="#E2943E">First Colours</text>
+  <text x="353" y="200" font-size="9.8" fill="#C0C0C0">A free Rusty chest, on</text>
+  <text x="353" y="216" font-size="9.8" fill="#C0C0C0">the house. Your first</text>
+  <text x="353" y="232" font-size="9.8" fill="#C0C0C0">ceremony, and your</text>
+  <text x="353" y="248" font-size="9.8" fill="#C0C0C0">first real cards.</text>
+
+  <!-- 4 -->
+  <circle cx="573" cy="112" r="12" fill="#141414" stroke="#6EC86E" stroke-width="2.5"/>
+  <text x="573" y="117" font-size="12" font-weight="bold" fill="#6EC86E" text-anchor="middle">4</text>
+  <rect x="500" y="134" width="146" height="170" rx="8" fill="url(#col)" stroke="#4E4436"/>
+  <text x="516" y="160" font-size="11.5" font-weight="bold" fill="#6EC86E">Sign a contract</text>
+  <text x="516" y="200" font-size="9.8" fill="#C0C0C0">Roll the board, pick a</text>
+  <text x="516" y="216" font-size="9.8" fill="#C0C0C0">difficulty, start</text>
+  <text x="516" y="232" font-size="9.8" fill="#C0C0C0">killing. Coins land on</text>
+  <text x="516" y="248" font-size="9.8" fill="#C0C0C0">every on-task kill.</text>
+
+  <!-- 5 -->
+  <circle cx="736" cy="112" r="12" fill="#141414" stroke="#B0B0B0" stroke-width="2.5"/>
+  <text x="736" y="117" font-size="12" font-weight="bold" fill="#B0B0B0" text-anchor="middle">5</text>
+  <rect x="663" y="134" width="146" height="170" rx="8" fill="url(#col)" stroke="#4E4436"/>
+  <text x="679" y="160" font-size="11.5" font-weight="bold" fill="#B0B0B0">Two Rusty chests</text>
+  <text x="679" y="176" font-size="11.5" font-weight="bold" fill="#B0B0B0">left</text>
+  <text x="679" y="200" font-size="9.8" fill="#C0C0C0">150 GC each, then they</text>
+  <text x="679" y="216" font-size="9.8" fill="#C0C0C0">rust away forever. The</text>
+  <text x="679" y="232" font-size="9.8" fill="#C0C0C0">free one counted as</text>
+  <text x="679" y="248" font-size="9.8" fill="#C0C0C0">one of the three.</text>
+
+  <text x="40" y="332" font-size="10.5" fill="#6E6252" font-style="italic">Accounts that install the plugin after Tutorial Island are never stripped — step 2 simply does not happen to you.</text>
+</svg>
