@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.gachaman.service.RollMathTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-08-08T11:31:38" hostname="MSI" time="0.023">
+  <properties/>
+  <testcase name="killCbMultiplierCurve" classname="com.gachaman.service.RollMathTest" time="0.0"/>
+  <testcase name="violationPenaltyRules" classname="com.gachaman.service.RollMathTest" time="0.001"/>
+  <testcase name="pityBonusShiftsMassUpward" classname="com.gachaman.service.RollMathTest" time="0.013"/>
+  <testcase name="rarityDistributionMatchesOddsWithinTolerance" classname="com.gachaman.service.RollMathTest" time="0.007"/>
+  <testcase name="lowLevelMultiplierTapers" classname="com.gachaman.service.RollMathTest" time="0.0"/>
+  <testcase name="splitmixIsDeterministic" classname="com.gachaman.service.RollMathTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

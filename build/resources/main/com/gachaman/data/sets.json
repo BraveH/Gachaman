@@ -1,0 +1,772 @@
+{
+  "sets": [
+    {
+      "setKey": "ahrim",
+      "name": "Ahrim the Blighted",
+      "cardNames": ["Ahrim's hood", "Ahrim's staff", "Ahrim's robetop", "Ahrim's robeskirt"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Dharok the Wretched", "Ahrim the Blighted", "Karil the Tainted", "Guthan the Infested", "Torag the Corrupted", "Verac the Defiled"],
+        "magnitudePercent": 5
+      },
+      "boss": false
+    },
+    {
+      "setKey": "dharok",
+      "name": "Dharok the Wretched",
+      "cardNames": ["Dharok's helm", "Dharok's greataxe", "Dharok's platebody", "Dharok's platelegs"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Dharok the Wretched", "Ahrim the Blighted", "Karil the Tainted", "Guthan the Infested", "Torag the Corrupted", "Verac the Defiled"],
+        "magnitudePercent": 5
+      },
+      "boss": false
+    },
+    {
+      "setKey": "guthan",
+      "name": "Guthan the Infested",
+      "cardNames": ["Guthan's helm", "Guthan's warspear", "Guthan's platebody", "Guthan's chainskirt"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Dharok the Wretched", "Ahrim the Blighted", "Karil the Tainted", "Guthan the Infested", "Torag the Corrupted", "Verac the Defiled"],
+        "magnitudePercent": 5
+      },
+      "boss": false
+    },
+    {
+      "setKey": "karil",
+      "name": "Karil the Tainted",
+      "cardNames": ["Karil's coif", "Karil's crossbow", "Karil's leathertop", "Karil's leatherskirt"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Dharok the Wretched", "Ahrim the Blighted", "Karil the Tainted", "Guthan the Infested", "Torag the Corrupted", "Verac the Defiled"],
+        "magnitudePercent": 5
+      },
+      "boss": false
+    },
+    {
+      "setKey": "torag",
+      "name": "Torag the Corrupted",
+      "cardNames": ["Torag's helm", "Torag's hammers", "Torag's platebody", "Torag's platelegs"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Dharok the Wretched", "Ahrim the Blighted", "Karil the Tainted", "Guthan the Infested", "Torag the Corrupted", "Verac the Defiled"],
+        "magnitudePercent": 5
+      },
+      "boss": false
+    },
+    {
+      "setKey": "verac",
+      "name": "Verac the Defiled",
+      "cardNames": ["Verac's helm", "Verac's flail", "Verac's brassard", "Verac's plateskirt"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Dharok the Wretched", "Ahrim the Blighted", "Karil the Tainted", "Guthan the Infested", "Torag the Corrupted", "Verac the Defiled"],
+        "magnitudePercent": 5
+      },
+      "boss": false
+    },
+    {
+      "setKey": "dragon_weaponry",
+      "name": "Dragon Weaponry",
+      "cardNames": ["Dragon dagger", "Dragon scimitar", "Dragon longsword", "Dragon mace", "Dragon battleaxe", "Dragon 2h sword"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "CATEGORY_TAG",
+        "scopeValues": ["dragon"],
+        "magnitudePercent": 5
+      },
+      "boss": false
+    },
+    {
+      "setKey": "dragon_armour",
+      "name": "Dragon Armour",
+      "cardNames": ["Dragon med helm", "Dragon chainbody", "Dragon platelegs", "Dragon sq shield", "Dragon boots"],
+      "perk": {
+        "type": "COMPLETION_GC_PERCENT",
+        "scope": "CATEGORY_TAG",
+        "scopeValues": ["dragon"],
+        "magnitudePercent": 6
+      },
+      "boss": false
+    },
+    {
+      "setKey": "rune_armour",
+      "name": "Rune Armour",
+      "cardNames": ["Rune full helm", "Rune platebody", "Rune platelegs", "Rune kiteshield"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "GLOBAL",
+        "scopeValues": [],
+        "magnitudePercent": 3
+      },
+      "boss": false
+    },
+    {
+      "setKey": "adamant_armour",
+      "name": "Adamant Armour",
+      "cardNames": ["Adamant full helm", "Adamant platebody", "Adamant platelegs", "Adamant kiteshield"],
+      "perk": {
+        "type": "COMPLETION_GC_PERCENT",
+        "scope": "GLOBAL",
+        "scopeValues": [],
+        "magnitudePercent": 3
+      },
+      "boss": false
+    },
+    {
+      "setKey": "black_dhide",
+      "name": "Black Dragonhide",
+      "cardNames": ["Black d'hide body", "Black d'hide chaps", "Black d'hide vambraces"],
+      "perk": {
+        "type": "SIDEBET_GC_PERCENT",
+        "scope": "GLOBAL",
+        "scopeValues": [],
+        "magnitudePercent": 5
+      },
+      "boss": false
+    },
+    {
+      "setKey": "green_dhide",
+      "name": "Green Dragonhide",
+      "cardNames": ["Green d'hide body", "Green d'hide chaps", "Green d'hide vambraces"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "CATEGORY_TAG",
+        "scopeValues": ["dragon"],
+        "magnitudePercent": 3
+      },
+      "boss": false
+    },
+    {
+      "setKey": "mystic",
+      "name": "Mystic Robes",
+      "cardNames": ["Mystic hat", "Mystic robe top", "Mystic robe bottom", "Mystic gloves", "Mystic boots"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "CATEGORY_TAG",
+        "scopeValues": ["demon"],
+        "magnitudePercent": 4
+      },
+      "boss": false
+    },
+    {
+      "setKey": "infinity",
+      "name": "Infinity Robes",
+      "cardNames": ["Infinity hat", "Infinity top", "Infinity bottoms", "Infinity gloves", "Infinity boots"],
+      "perk": {
+        "type": "SIDEBET_GC_PERCENT",
+        "scope": "GLOBAL",
+        "scopeValues": [],
+        "magnitudePercent": 4
+      },
+      "boss": false
+    },
+    {
+      "setKey": "bandos",
+      "name": "Bandos Armour",
+      "cardNames": ["Bandos chestplate", "Bandos tassets", "Bandos boots"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "CATEGORY_TAG",
+        "scopeValues": ["boss"],
+        "magnitudePercent": 4
+      },
+      "boss": false
+    },
+    {
+      "setKey": "armadyl",
+      "name": "Armadyl Armour",
+      "cardNames": ["Armadyl helmet", "Armadyl chestplate", "Armadyl chainskirt"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "CATEGORY_TAG",
+        "scopeValues": ["avian"],
+        "magnitudePercent": 6
+      },
+      "boss": false
+    },
+    {
+      "setKey": "obsidian",
+      "name": "TzHaar Obsidian",
+      "cardNames": ["Obsidian helmet", "Obsidian platebody", "Obsidian platelegs", "Toktz-ket-xil"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "CATEGORY_TAG",
+        "scopeValues": ["tzhaar"],
+        "magnitudePercent": 6
+      },
+      "boss": false
+    },
+    {
+      "setKey": "void_knight",
+      "name": "Void Knight",
+      "cardNames": ["Void melee helm", "Void knight top", "Void knight robe", "Void knight gloves"],
+      "perk": {
+        "type": "COMPLETION_GC_PERCENT",
+        "scope": "GLOBAL",
+        "scopeValues": [],
+        "magnitudePercent": 4
+      },
+      "boss": false
+    },
+    {
+      "setKey": "granite",
+      "name": "Granite",
+      "cardNames": ["Granite helm", "Granite body", "Granite legs", "Granite shield", "Granite maul"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "CATEGORY_TAG",
+        "scopeValues": ["slayer"],
+        "magnitudePercent": 5
+      },
+      "boss": false
+    },
+    {
+      "setKey": "snakeskin",
+      "name": "Snakeskin",
+      "cardNames": ["Snakeskin bandana", "Snakeskin body", "Snakeskin chaps", "Snakeskin vambraces", "Snakeskin boots"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "CATEGORY_TAG",
+        "scopeValues": ["reptile"],
+        "magnitudePercent": 5
+      },
+      "boss": false
+    },
+    {
+      "setKey": "zulrah",
+      "name": "Zulrah",
+      "cardNames": ["Serpentine helm", "Toxic blowpipe", "Trident of the swamp", "Toxic staff of the dead", "Tanzanite helm", "Magma helm"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Zulrah"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "vorkath",
+      "name": "Vorkath",
+      "cardNames": ["Dragonbone necklace", "Dragonfire ward", "Ava's assembler", "Dragonfire shield"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Vorkath"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "kraken",
+      "name": "Kraken",
+      "cardNames": ["Trident of the seas", "Abyssal tentacle", "Mystic water staff", "Rune warhammer"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Kraken"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "saradomin",
+      "name": "Saradomin (Commander Zilyana)",
+      "cardNames": ["Saradomin sword", "Armadyl crossbow", "Saradomin godsword", "Staff of light"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Commander Zilyana"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "zamorak",
+      "name": "Zamorak (K'ril Tsutsaroth)",
+      "cardNames": ["Zamorakian spear", "Staff of the dead", "Steam battlestaff", "Zamorak godsword"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["K'ril Tsutsaroth"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "dagannoth",
+      "name": "Dagannoth Kings",
+      "cardNames": ["Archers ring", "Berserker ring", "Seers ring", "Warrior ring", "Dragon axe", "Seercull"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Dagannoth Rex", "Dagannoth Prime", "Dagannoth Supreme"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "kalphite",
+      "name": "Kalphite Queen",
+      "cardNames": ["Dragon chainbody", "Dragon 2h sword", "Dragon pickaxe", "Rune chainbody", "Lava battlestaff"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Kalphite Queen"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "kbd",
+      "name": "King Black Dragon",
+      "cardNames": ["Dragon pickaxe", "Dragonfire shield", "Rune longsword", "Adamant platebody", "Adamant kiteshield"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["King Black Dragon"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "cerberus",
+      "name": "Cerberus",
+      "cardNames": ["Primordial boots", "Pegasian boots", "Eternal boots"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Cerberus"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "smoke_devil",
+      "name": "Thermonuclear Smoke Devil",
+      "cardNames": ["Occult necklace", "Smoke battlestaff", "Dragon chainbody", "Dragon scimitar", "Ancient staff"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Thermonuclear smoke devil"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "sarachnis",
+      "name": "Sarachnis",
+      "cardNames": ["Sarachnis cudgel", "Dragon med helm", "Rune platebody", "Rune 2h sword", "Rune med helm"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Sarachnis"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "corp",
+      "name": "Corporeal Beast",
+      "cardNames": ["Spirit shield", "Blessed spirit shield", "Spectral spirit shield", "Arcane spirit shield", "Elysian spirit shield"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Corporeal Beast"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "barrows",
+      "name": "Barrows (all six brothers)",
+      "cardNames": ["Ahrim's hood", "Ahrim's staff", "Ahrim's robetop", "Ahrim's robeskirt", "Dharok's helm", "Dharok's greataxe", "Dharok's platebody", "Dharok's platelegs", "Guthan's helm", "Guthan's warspear", "Guthan's platebody", "Guthan's chainskirt", "Karil's coif", "Karil's crossbow", "Karil's leathertop", "Karil's leatherskirt", "Torag's helm", "Torag's hammers", "Torag's platebody", "Torag's platelegs", "Verac's helm", "Verac's flail", "Verac's brassard", "Verac's plateskirt"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Dharok the Wretched", "Ahrim the Blighted", "Karil the Tainted", "Guthan the Infested", "Torag the Corrupted", "Verac the Defiled"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "abyssal_sire",
+      "name": "Abyssal Sire",
+      "cardNames": ["Abyssal bludgeon", "Abyssal dagger", "Abyssal whip"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Abyssal Sire"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "alchemical_hydra",
+      "name": "Alchemical Hydra",
+      "cardNames": ["Hydra slayer helmet", "Dragon hunter lance", "Ferocious gloves", "Brimstone ring"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Alchemical Hydra"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "muspah",
+      "name": "Phantom Muspah",
+      "cardNames": ["Venator bow", "Ancient sceptre"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Phantom Muspah"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "nex",
+      "name": "Nex",
+      "cardNames": ["Torva full helm", "Torva platebody", "Torva platelegs", "Zaryte vambraces", "Zaryte crossbow", "Ancient godsword"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Nex"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "duke",
+      "name": "Duke Sucellus",
+      "cardNames": ["Magus ring", "Virtus mask", "Virtus robe top", "Virtus robe bottom"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Duke Sucellus"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "vardorvis",
+      "name": "Vardorvis",
+      "cardNames": ["Ultor ring", "Soulreaper axe"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Vardorvis"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "leviathan",
+      "name": "The Leviathan",
+      "cardNames": ["Venator ring", "Virtus mask"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["The Leviathan"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "whisperer",
+      "name": "The Whisperer",
+      "cardNames": ["Bellator ring", "Virtus robe bottom"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["The Whisperer"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "vetion",
+      "name": "Vet'ion",
+      "cardNames": ["Ring of the gods", "Accursed sceptre", "Voidwaker"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Vet'ion", "Calvar'ion"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "callisto",
+      "name": "Callisto",
+      "cardNames": ["Tyrannical ring", "Ursine chainmace", "Voidwaker"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Callisto", "Artio"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "venenatis",
+      "name": "Venenatis",
+      "cardNames": ["Treasonous ring", "Webweaver bow", "Voidwaker"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Venenatis", "Spindel"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "wilderness_wards",
+      "name": "Wilderness Wards",
+      "cardNames": ["Odium ward", "Malediction ward"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Scorpia", "Chaos Fanatic", "Crazy archaeologist", "Deranged archaeologist"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "chaos_elemental",
+      "name": "Chaos Elemental",
+      "cardNames": ["Dragon pickaxe", "Dragon 2h sword", "Dragon platelegs"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Chaos Elemental"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "f2p_boss",
+      "name": "Free-to-play Bosses",
+      "cardNames": ["Hill giant club", "Bryophyta's staff", "Mooleta"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Obor", "Bryophyta", "Brutus", "Demonic Brutus"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "skilling_boss",
+      "name": "Skilling Bosses",
+      "cardNames": ["Crystal pickaxe", "Crystal axe", "Crystal harpoon", "Dragon harpoon", "Tome of water"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Zalcano", "Hespori", "Tempoross"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "demon_boss",
+      "name": "Demonic Armaments",
+      "cardNames": ["Emberlight", "Scorching bow", "Purging staff", "Burning claws"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Tormented Demon", "Skotizo"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "amoxliatl",
+      "name": "Amoxliatl",
+      "cardNames": ["Glacial temotli", "Pendant of ates"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Amoxliatl"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "hueycoatl",
+      "name": "The Hueycoatl",
+      "cardNames": ["Dragon hunter wand", "Tome of earth", "Hueycoatl hide coif", "Hueycoatl hide body", "Hueycoatl hide chaps", "Hueycoatl hide vambraces"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["The Hueycoatl"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "nightmare",
+      "name": "The Nightmare",
+      "cardNames": ["Inquisitor's great helm", "Inquisitor's hauberk", "Inquisitor's plateskirt", "Inquisitor's mace", "Nightmare staff", "Harmonised nightmare staff"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["The Nightmare", "Phosani's Nightmare"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "tzhaar",
+      "name": "TzHaar Champion",
+      "cardNames": ["Fire cape", "Infernal cape", "Obsidian cape", "Tzhaar-ket-om", "Toktz-xil-ak", "Toktz-mej-tal"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["TzTok-Jad", "TzKal-Zuk"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "scurrius",
+      "name": "Scurrius",
+      "cardNames": ["Bone mace", "Bone shortbow", "Bone staff"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Scurrius"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "araxxor",
+      "name": "Araxxor",
+      "cardNames": ["Noxious halberd", "Amulet of rancour", "Araxyte slayer helmet"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Araxxor"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "grotesque_guardians",
+      "name": "Grotesque Guardians",
+      "cardNames": ["Granite gloves", "Granite ring", "Granite hammer", "Granite maul"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Dusk", "Dawn"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "mimic",
+      "name": "The Mimic",
+      "cardNames": ["3rd age longsword", "3rd age bow", "3rd age mage hat", "3rd age platebody", "3rd age full helmet", "3rd age kiteshield"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["The Mimic"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "colosseum",
+      "name": "Fortis Colosseum",
+      "cardNames": ["Dizana's quiver", "Sunfire fanatic helm", "Sunfire fanatic cuirass", "Sunfire fanatic chausses", "Tonalztics of ralos", "Echo boots"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Sol Heredit"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "royal_titans",
+      "name": "The Royal Titans",
+      "cardNames": ["Twinflame staff", "Mystic fire staff", "Mystic water staff", "Fire battlestaff"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Branda the Fire Queen", "Eldric the Ice King"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "yama",
+      "name": "Yama",
+      "cardNames": ["Oathplate helm", "Oathplate chest", "Oathplate legs", "Soulflame horn"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Yama"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "doom",
+      "name": "Doom of Mokhaiotl",
+      "cardNames": ["Eye of ayak", "Avernic treads", "Confliction gauntlets"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Doom of Mokhaiotl"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "maggot_king",
+      "name": "Maggot King",
+      "cardNames": ["Crimson kisten", "Necklace of rupture"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Maggot King"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "shellbane",
+      "name": "Shellbane Gryphon",
+      "cardNames": ["Belle's folly", "Dragon spear", "Rune claws", "Rune scimitar"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Shellbane gryphon"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    },
+    {
+      "setKey": "gauntlet",
+      "name": "The Gauntlet",
+      "cardNames": ["Blade of saeldor", "Bow of faerdhinen", "Crystal helm", "Crystal body", "Crystal legs"],
+      "perk": {
+        "type": "KILL_GC_PERCENT",
+        "scope": "MONSTER_NAME_SET",
+        "scopeValues": ["Crystalline Hunllef", "Corrupted Hunllef"],
+        "magnitudePercent": 8
+      },
+      "boss": true
+    }
+  ]
+}

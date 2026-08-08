@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.gachaman.service.FirstsServiceTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-08-08T11:31:38" hostname="MSI" time="0.002">
+  <properties/>
+  <testcase name="stampsForSlotsDetectsRarityVariantAndDupes" classname="com.gachaman.service.FirstsServiceTest" time="0.0"/>
+  <testcase name="everyStampHasNameAndExplainer" classname="com.gachaman.service.FirstsServiceTest" time="0.001"/>
+  <testcase name="payoutsCoverEveryStampAndSumJustUnder500" classname="com.gachaman.service.FirstsServiceTest" time="0.0"/>
+  <testcase name="alreadyClaimedNullSetMeansUnclaimed" classname="com.gachaman.service.FirstsServiceTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,155 @@
+package com.gachaman;
+
+import net.runelite.client.config.Config;
+import net.runelite.client.config.ConfigGroup;
+import net.runelite.client.config.ConfigItem;
+import net.runelite.client.config.ConfigSection;
+import net.runelite.client.config.Range;
+
+@ConfigGroup(GachamanConfig.GROUP)
+public interface GachamanConfig extends Config
+{
+	String GROUP = "gachaman";
+
+	@ConfigSection(
+		name = "General",
+		description = "Sounds and celebration settings",
+		position = 0
+	)
+	String generalSection = "general";
+
+	@ConfigSection(
+		name = "Enforcement",
+		description = "Style-lock warning behavior",
+		position = 1
+	)
+	String enforcementSection = "enforcement";
+
+	@ConfigSection(
+		name = "Party",
+		description = "Shared party contract settings",
+		position = 2
+	)
+	String partySection = "party";
+
+	@ConfigSection(
+		name = "Advanced",
+		description = "Safety and developer settings",
+		position = 3
+	)
+	String advancedSection = "advanced";
+
+	@ConfigItem(
+		keyName = "soundsEnabled",
+		name = "Sounds",
+		description = "Play ceremony and reward sounds",
+		section = generalSection,
+		position = 0
+	)
+	default boolean soundsEnabled()
+	{
+		return true;
+	}
+
+	@Range(min = 0, max = 100)
+	@ConfigItem(
+		keyName = "soundVolume",
+		name = "Sound volume",
+		description = "Ceremony sound volume",
+		section = generalSection,
+		position = 1
+	)
+	default int soundVolume()
+	{
+		return 70;
+	}
+
+	@ConfigItem(
+		keyName = "chatPings",
+		name = "Chat notifications",
+		description = "Informational chat lines (starter grants, vouchers, milestones)."
+			+ " Enforcement feedback — style penalties, pardons, tainted and assisted"
+			+ " kills, blocked equips — always shows.",
+		section = generalSection,
+		position = 2
+	)
+	default boolean chatPings()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "highlightTaskNpc",
+		name = "Highlight task NPCs",
+		description = "Outline NPCs that match your active task",
+		section = generalSection,
+		position = 3
+	)
+	default boolean highlightTaskNpc()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "oneCardPerSlot",
+		name = "One card per slot",
+		description = "ON: unlocked equipment is wearable only when its card is assigned to a loadout slot. OFF: owning the card is enough — the loadout page is hidden.",
+		section = generalSection,
+		position = 4
+	)
+	default boolean oneCardPerSlot()
+	{
+		return true;
+	}
+
+	@Range(min = 10, max = 300)
+	@ConfigItem(
+		keyName = "styleWarningSeconds",
+		name = "Style warning duration",
+		description = "How long the 'style changed - switch gear' chip shows (seconds)",
+		section = enforcementSection,
+		position = 0
+	)
+	default int styleWarningSeconds()
+	{
+		return 60;
+	}
+
+	@ConfigItem(
+		keyName = "partyRollsEnabled",
+		name = "Party contracts",
+		description = "Take part in shared party contract rolls while in a RuneLite Party."
+			+ " When off, you count as busy: proposals excuse you automatically and you"
+			+ " cannot propose or join.",
+		section = partySection,
+		position = 0
+	)
+	default boolean partyRollsEnabled()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "safeModeAbort",
+		name = "Combat aborts ceremonies",
+		description = "Taking damage or being targeted closes reveals safely (outcome still granted)",
+		section = advancedSection,
+		position = 0
+	)
+	default boolean safeModeAbort()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "debugCommands",
+		name = "Debug commands",
+		description = "Enable ::gacha* developer commands",
+		section = advancedSection,
+		position = 1
+	)
+	default boolean debugCommands()
+	{
+		return false;
+	}
+}

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.gachaman.service.BossKcParseTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-08-08T11:31:38" hostname="MSI" time="0.007">
+  <properties/>
+  <testcase name="everyCuratedBossChatNameRoundTrips" classname="com.gachaman.service.BossKcParseTest" time="0.006"/>
+  <testcase name="barrowsChestLineCapturesTheConfiguredName" classname="com.gachaman.service.BossKcParseTest" time="0.0"/>
+  <testcase name="thousandsSeparatorIsParsed" classname="com.gachaman.service.BossKcParseTest" time="0.0"/>
+  <testcase name="killLinesCaptureNamesWithPunctuationAndSpaces" classname="com.gachaman.service.BossKcParseTest" time="0.0"/>
+  <testcase name="nonKcChatIsIgnored" classname="com.gachaman.service.BossKcParseTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
