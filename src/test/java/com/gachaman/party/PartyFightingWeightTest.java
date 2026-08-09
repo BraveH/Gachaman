@@ -168,7 +168,9 @@ public class PartyFightingWeightTest
 	{
 		PartyRollProposeMessage propose = gson.fromJson(gson.toJson(
 			new PartyRollProposeMessage(7L, 3L, true, 50, 12, "MAGIC",
-				PartyRollService.ROLL_PROTOCOL)), PartyRollProposeMessage.class);
+				PartyRollService.ROLL_PROTOCOL, PartySizing.FIGHTING_WEIGHT.name(),
+				java.util.List.of(), null)),
+			PartyRollProposeMessage.class);
 		Assert.assertEquals(PartyRollService.ROLL_PROTOCOL, propose.getRollProtocol());
 		// the field was appended LAST, so the older fields must still land where
 		// they did — a positional @AllArgsConstructor gives no other warning
@@ -178,7 +180,8 @@ public class PartyFightingWeightTest
 
 		PartyRollResponseMessage response = gson.fromJson(gson.toJson(
 			new PartyRollResponseMessage(7L, PartyRollResponseMessage.AGREE, 3L, true, 50, 12,
-				"RANGED", PartyRollService.ROLL_PROTOCOL)), PartyRollResponseMessage.class);
+				"RANGED", PartyRollService.ROLL_PROTOCOL, java.util.List.of(), null)),
+			PartyRollResponseMessage.class);
 		Assert.assertEquals(PartyRollService.ROLL_PROTOCOL, response.getRollProtocol());
 		Assert.assertEquals(50, response.getCombatLevel());
 		Assert.assertEquals(12, response.getSlayerLevel());

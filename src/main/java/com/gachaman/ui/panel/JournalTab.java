@@ -95,7 +95,8 @@ public class JournalTab extends JPanel
 				ColorScheme.BRAND_ORANGE, discovered + " / " + next));
 			section.add(Box.createVerticalStrut(2));
 			section.add(GachamanPanel.smallLine("Next: " + next + " species — +"
-					+ com.gachaman.Tuning.BESTIARY_MILESTONE_GC[nextIndex] + " GC",
+					+ QuantityFormatter.formatNumber(
+						com.gachaman.Tuning.BESTIARY_MILESTONE_GC[nextIndex]) + " GC",
 				ColorScheme.LIGHT_GRAY_COLOR));
 		}
 		else
@@ -104,8 +105,10 @@ public class JournalTab extends JPanel
 				ColorScheme.BRAND_ORANGE));
 		}
 		section.add(Box.createVerticalStrut(2));
-		section.add(GachamanPanel.wrapped("First on-task kill of a new species pays +"
-				+ com.gachaman.Tuning.DISCOVERY_GC + " GC.",
+		// "on-contract", not "on-task": this plugin has a real Slayer task concept
+		// sitting one tab away (Double Docket), so "on-task" reads as the wrong one
+		section.add(GachamanPanel.wrapped("First on-contract kill of a new species pays +"
+				+ QuantityFormatter.formatNumber(com.gachaman.Tuning.DISCOVERY_GC) + " GC.",
 			ColorScheme.MEDIUM_GRAY_COLOR));
 		if (discovered > 0)
 		{
@@ -164,7 +167,7 @@ public class JournalTab extends JPanel
 			Integer gc = com.gachaman.Tuning.FIRSTS_GC.get(stamp);
 			// markers limited to glyphs the RuneScape TTFs actually cover
 			String text = (got ? "* " : "- ") + stamp.getDisplayName()
-				+ (got ? "" : "  (+" + (gc == null ? 0 : gc) + " GC)");
+				+ (got ? "" : "  (+" + QuantityFormatter.formatNumber(gc == null ? 0 : gc) + " GC)");
 			JLabel line = GachamanPanel.smallLine(text,
 				got ? new Color(230, 190, 80) : ColorScheme.MEDIUM_GRAY_COLOR);
 			section.add(line);
@@ -190,25 +193,37 @@ public class JournalTab extends JPanel
 			any = true;
 			section.add(GachamanPanel.line(difficulty.getDisplayName(), difficulty.getColor(),
 				FontManager.getRunescapeBoldFont()));
+			// The record and the monster that set it go on separate lines. Appended,
+			// "Biggest haul: 12,345 GC — Commander Zilyana" runs to 284px in a 205px
+			// column, and with the horizontal scrollbar disabled the name — the half
+			// the player cannot infer — was the half that got cut.
 			if (pb.getFastestTaskMs() > 0)
 			{
 				section.add(GachamanPanel.smallLine(
-					"Fastest: " + formatDuration(pb.getFastestTaskMs())
-						+ (pb.getFastestMonster() != null ? " — " + pb.getFastestMonster() : ""),
+					"Fastest: " + formatDuration(pb.getFastestTaskMs()),
 					ColorScheme.LIGHT_GRAY_COLOR));
+				if (pb.getFastestMonster() != null)
+				{
+					section.add(GachamanPanel.smallLine("    " + pb.getFastestMonster(),
+						ColorScheme.MEDIUM_GRAY_COLOR));
+				}
 			}
 			if (pb.getBiggestHaulGc() > 0)
 			{
 				section.add(GachamanPanel.smallLine(
-					"Biggest haul: " + QuantityFormatter.formatNumber(pb.getBiggestHaulGc()) + " GC"
-						+ (pb.getBiggestHaulMonster() != null ? " — " + pb.getBiggestHaulMonster() : ""),
+					"Biggest haul: " + QuantityFormatter.formatNumber(pb.getBiggestHaulGc()) + " GC",
 					ColorScheme.LIGHT_GRAY_COLOR));
+				if (pb.getBiggestHaulMonster() != null)
+				{
+					section.add(GachamanPanel.smallLine("    " + pb.getBiggestHaulMonster(),
+						ColorScheme.MEDIUM_GRAY_COLOR));
+				}
 			}
 			section.add(Box.createVerticalStrut(4));
 		}
 		if (!any)
 		{
-			section.add(GachamanPanel.smallLine("No records yet — complete some tasks!",
+			section.add(GachamanPanel.smallLine("No records yet — complete some contracts!",
 				ColorScheme.MEDIUM_GRAY_COLOR));
 		}
 		return section;
@@ -224,7 +239,9 @@ public class JournalTab extends JPanel
 			return section;
 		}
 
-		String[] columns = {"Monster", "Kills", "GC", "Tasks"};
+		// "Done", not "Contracts": the column is 36px wide and the totals line
+		// under the table spells the noun out in full anyway.
+		String[] columns = {"Monster", "Kills", "GC", "Done"};
 		List<Object[]> rows = new ArrayList<>();
 		long totalKills = 0;
 		long totalGc = 0;
@@ -256,6 +273,10 @@ public class JournalTab extends JPanel
 
 		JTable table = new JTable(model);
 		table.setAutoCreateRowSorter(true);
+		// Long.class picks up the default number renderer, which right-aligns but
+		// prints "1234567" — the one place in the plugin where a GC figure had no
+		// separators. Sorting still runs on the Long, not on this string.
+		table.setDefaultRenderer(Long.class, new NumberCell());
 		table.setFont(FontManager.getRunescapeSmallFont());
 		table.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 		table.setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -283,13 +304,34 @@ public class JournalTab extends JPanel
 		section.add(tableWrap);
 		section.add(Box.createVerticalStrut(4));
 
-		JLabel totals = GachamanPanel.smallLine(
-			"Totals: " + QuantityFormatter.formatNumber(totalKills) + " kills  ·  "
-				+ QuantityFormatter.formatNumber(totalGc) + " GC  ·  "
-				+ QuantityFormatter.formatNumber(totalTasks) + " tasks",
-			ColorScheme.BRAND_ORANGE);
-		section.add(totals);
+		// Two lines: all three totals on one ran to 238px in a 205px column.
+		section.add(GachamanPanel.smallLine(
+			"Totals: " + QuantityFormatter.formatNumber(totalKills)
+				+ (totalKills == 1 ? " kill  ·  " : " kills  ·  ")
+				+ QuantityFormatter.formatNumber(totalGc) + " GC",
+			ColorScheme.BRAND_ORANGE));
+		section.add(GachamanPanel.smallLine(
+			"from " + QuantityFormatter.formatNumber(totalTasks)
+				+ (totalTasks == 1 ? " contract" : " contracts"),
+			ColorScheme.BRAND_ORANGE));
 		return section;
+	}
+
+	/** Right-aligned, separator-formatted cell for the table's three Long columns. */
+	private static final class NumberCell extends javax.swing.table.DefaultTableCellRenderer
+	{
+		NumberCell()
+		{
+			setHorizontalAlignment(javax.swing.SwingConstants.RIGHT);
+		}
+
+		@Override
+		protected void setValue(Object value)
+		{
+			setText(value instanceof Number
+				? QuantityFormatter.formatNumber(((Number) value).longValue())
+				: (value == null ? "" : value.toString()));
+		}
 	}
 
 	private static String formatDuration(long ms)

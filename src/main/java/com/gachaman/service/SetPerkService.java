@@ -196,7 +196,7 @@ public class SetPerkService implements GachaStateService.Listener
 				what = "kill GC";
 				break;
 			case COMPLETION_GC_PERCENT:
-				what = "task completion GC";
+				what = "contract completion GC";
 				break;
 			default:
 				what = "side bet GC";

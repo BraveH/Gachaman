@@ -58,7 +58,9 @@ public class TaskServiceChargeTest
 		com.gachaman.data.MonsterTable monsterTable =
 			com.gachaman.data.MonsterTable.load(new com.google.gson.Gson());
 		taskService = new TaskService(null, stateService, creditSink, complianceService,
-			styleService, ceremonyBus, new GachaRng(1L), monsterTable);
+			styleService, ceremonyBus, new GachaRng(1L), monsterTable,
+			// null Client already means these tests never reach rollOffers()
+			null);
 	}
 
 	private void seed(long gc, int compactors, int extenders, boolean withTask)

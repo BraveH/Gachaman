@@ -2,7 +2,11 @@ package com.gachaman.ui;
 
 import com.gachaman.model.CardWear;
 import java.awt.Rectangle;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -107,31 +111,21 @@ public class CardRendererTest
 	}
 
 	// --- cosmetic wear (Cracked Cards) ---
+	//
+	// Creases and scratches cross the whole card face, ART INCLUDED — that is the
+	// design, and the reason these tests no longer model a sprite rect at all. A
+	// card creases through the picture. What wear may never sit on is TEXT.
+	//
+	// The other half of the design, and the harder one to keep by accident: every
+	// card wears DIFFERENTLY and every card in a bracket wears the same AMOUNT.
+	// Pattern is seeded, weight is not.
 
 	private static final int[] SEEDS = {0, 1, -1, 7, 42, -913, 100003, Integer.MIN_VALUE,
 		Integer.MAX_VALUE, "Abyssal whip".hashCode(), "Bandos chestplate".hashCode(),
 		"Twisted bow".hashCode()};
 
-	/**
-	 * The four sprite shapes the card layout can produce: no sprite at all, the
-	 * common wide-and-short item, a narrow tall one, and a full-bleed sprite that
-	 * leaves no side gutter whatsoever. The wide case mirrors the real measured
-	 * rect on a 90px thumbnail (x+12..x+78, y+14..y+76).
-	 */
-	private static Rectangle artShape(int style, int x, int y, int w, int h)
-	{
-		switch (style)
-		{
-			case 1:
-				return new Rectangle(x + w * 13 / 100, y + h * 12 / 100, w * 74 / 100, h * 52 / 100);
-			case 2:
-				return new Rectangle(x + w * 33 / 100, y + h * 12 / 100, w * 34 / 100, h * 52 / 100);
-			case 3:
-				return new Rectangle(x + 1, y + h * 12 / 100, w - 2, h * 52 / 100);
-			default:
-				return null;
-		}
-	}
+	private static final CardWear[] WORN = {CardWear.HAIRLINE, CardWear.CRACKED,
+		CardWear.SHATTERED};
 
 	/** The band edges drawFace hands the wear pass, re-derived from its own arithmetic. */
 	private static int topBandBottom(int y, int w, int h)
@@ -142,6 +136,19 @@ public class CardRendererTest
 	private static int nameBandTop(int y, int h)
 	{
 		return y + h - Math.max(16, h / 6) - h / 8;
+	}
+
+	private static List<int[]> ofKind(List<int[]> segments, int kind)
+	{
+		List<int[]> out = new ArrayList<>();
+		for (int[] s : segments)
+		{
+			if (s[4] == kind)
+			{
+				out.add(s);
+			}
+		}
+		return out;
 	}
 
 	/**
@@ -156,7 +163,7 @@ public class CardRendererTest
 		double y0 = Math.min(seg[1], seg[3]) - reach;
 		double x1 = Math.max(seg[0], seg[2]) + reach;
 		double y1 = Math.max(seg[1], seg[3]) + reach;
-		String[] names = {"the rarity label / service pill", "the item icon", "the card name"};
+		String[] names = {"the rarity label / service pill", "the card name"};
 		for (int i = 0; i < protect.length; i++)
 		{
 			Rectangle r = protect[i];
@@ -166,42 +173,40 @@ public class CardRendererTest
 			}
 			boolean overlaps = x1 > r.getMinX() && x0 < r.getMaxX()
 				&& y1 > r.getMinY() && y0 < r.getMaxY();
-			Assert.assertFalse(where + ": gold covers " + names[i] + " " + r, overlaps);
+			Assert.assertFalse(where + ": wear covers " + names[i] + " " + r, overlaps);
 		}
 	}
 
 	/**
-	 * The whole promise of this feature in one assertion: wear is art added to a
-	 * card you already own, so it may never sit on top of the three things you
-	 * read the card BY. Swept across every card size the plugin draws, both
-	 * origins, all four sprite shapes, all stages and a spread of name hashes,
-	 * because a guarantee that holds only for the sizes someone happened to look
-	 * at is not a guarantee.
+	 * The promise this feature still makes: wear is art added to a card you
+	 * already own, so it may never sit on top of the words you read the card BY.
+	 * Swept across every size the plugin draws, both origins, all stages and a
+	 * spread of name hashes, because a guarantee that holds only for the sizes
+	 * someone happened to look at is not a guarantee.
+	 *
+	 * <p>Note what is NOT in the protected set any more: the item sprite. Keeping
+	 * the damage out of the picture is exactly what forced the old renderer to
+	 * route its cracks down the eight-pixel gutters beside the art, and that is
+	 * what made them read as margin scribble instead of as wear.
 	 */
 	@Test
-	public void crackArtNeverCoversTheIconTheNameOrTheRarityLabel()
+	public void wearNeverCoversTheNameOrTheRarityLabel()
 	{
 		for (int w = 40; w <= 260; w += 2)
 		{
 			int h = w * 29 / 20;
 			int x = (w % 7) * 13;
 			int y = (w % 5) * 9;
-			int top = topBandBottom(y, w, h);
-			int bottom = nameBandTop(y, h);
-			for (int style = 0; style < 4; style++)
+			Rectangle[] protect = CardRenderer.wearProtect(x, y, w, h,
+				topBandBottom(y, w, h), nameBandTop(y, h));
+			for (CardWear wear : CardWear.values())
 			{
-				Rectangle art = artShape(style, x, y, w, h);
-				Rectangle[] protect = CardRenderer.wearProtect(x, y, w, h, top, bottom, art);
-				List<Rectangle> lanes = CardRenderer.wearCorridors(x, y, w, h, top, bottom, art);
-				for (CardWear wear : CardWear.values())
+				for (int seed : SEEDS)
 				{
-					for (int seed : SEEDS)
+					String where = "w=" + w + " " + wear + " seed=" + seed;
+					for (int[] seg : CardRenderer.wearSegments(x, y, w, h, wear, seed, protect))
 					{
-						String where = "w=" + w + " style=" + style + " " + wear + " seed=" + seed;
-						for (int[] seg : CardRenderer.wearSegments(w, wear, seed, lanes, protect))
-						{
-							assertInkIsClear(where, seg, protect, CardRenderer.wearInkReach(w));
-						}
+						assertInkIsClear(where, seg, protect, CardRenderer.wearInkReach(w));
 					}
 				}
 			}
@@ -209,24 +214,41 @@ public class CardRendererTest
 	}
 
 	/**
-	 * The routing inset must always be at least the ink reach, at every size.
-	 * Corridors and the blocked() backstop are both measured in the pad, so a pad
-	 * that ever fell below the reach would let the gold creep over the sprite
-	 * without any check firing.
+	 * A crease is supposed to cross the sprite. This is the assertion that keeps
+	 * the old design from creeping back in: measure the box the art actually
+	 * occupies and require the fold to enter it. Without this, a well-meaning
+	 * "let's keep the icon clean" edit would pass every other test in this file
+	 * while undoing the entire point of the rewrite.
 	 */
 	@Test
-	public void theRoutingPadAlwaysCoversTheInk()
+	public void creasesRunStraightAcrossTheItemSprite()
 	{
-		for (int w = 1; w <= 2000; w++)
+		int[][] sizes = {{THUMB_W, THUMB_H}, {150, 200}, {195, 338}};
+		for (int[] size : sizes)
 		{
-			Assert.assertTrue("pad is thinner than the ink at w=" + w,
-				CardRenderer.wearStrokePad(w) >= CardRenderer.wearInkReach(w));
+			int w = size[0];
+			int h = size[1];
+			// the rect drawFace gives a typical wide sprite
+			Rectangle art = new Rectangle(w * 13 / 100, h * 12 / 100, w * 74 / 100, h * 52 / 100);
+			Rectangle[] protect = CardRenderer.wearProtect(0, 0, w, h,
+				topBandBottom(0, w, h), nameBandTop(0, h));
+			for (int seed : SEEDS)
+			{
+				boolean touched = false;
+				for (int[] s : ofKind(CardRenderer.wearSegments(0, 0, w, h, CardWear.CRACKED,
+					seed, protect), CardRenderer.KIND_CREASE))
+				{
+					touched |= art.intersectsLine(s[0], s[1], s[2], s[3]);
+				}
+				Assert.assertTrue("no crease reaches the art at " + w + "x" + h + " seed=" + seed,
+					touched);
+			}
 		}
 	}
 
 	/**
 	 * Safe in the sense of "draws nothing" is not good enough — this is a reward,
-	 * and it has to be visible on the two surfaces it actually ships on: the 90px
+	 * and it has to be visible on the surfaces it actually ships on: the 90px
 	 * album thumbnail and the reveal card at its smallest and largest. Swept over
 	 * a range of band edges so a font-metric difference on someone else's machine
 	 * cannot silently empty the card.
@@ -239,22 +261,17 @@ public class CardRendererTest
 		{
 			int w = size[0];
 			int h = size[1];
-			Rectangle art = artShape(1, 0, 0, w, h);
 			for (int top = h / 14 + 4 + Math.max(8, w / 11) - 4; top <= h / 5; top++)
 			{
 				for (int bottom = nameBandTop(0, h) - 3; bottom <= nameBandTop(0, h) + 3; bottom++)
 				{
-					Rectangle[] protect = CardRenderer.wearProtect(0, 0, w, h, top, bottom, art);
-					List<Rectangle> lanes = CardRenderer.wearCorridors(0, 0, w, h, top, bottom, art);
-					for (CardWear wear : CardWear.values())
+					Rectangle[] protect = CardRenderer.wearProtect(0, 0, w, h, top, bottom);
+					for (CardWear wear : WORN)
 					{
-						if (wear == CardWear.NONE)
-						{
-							continue;
-						}
-						String where = w + "x" + h + " top=" + top + " bottom=" + bottom + " " + wear;
+						String where = w + "x" + h + " top=" + top + " bottom=" + bottom
+							+ " " + wear;
 						Assert.assertFalse("no wear drawn at all on " + where,
-							CardRenderer.wearSegments(w, wear, 12345, lanes, protect).isEmpty());
+							CardRenderer.wearSegments(0, 0, w, h, wear, 12345, protect).isEmpty());
 					}
 				}
 			}
@@ -262,49 +279,186 @@ public class CardRendererTest
 	}
 
 	/**
-	 * Pin the actual density on the album thumbnail. "Non-empty" would still pass
-	 * if a refactor thinned three cracks down to one stub, and the difference
-	 * between a badge you notice and one you do not is exactly this number.
+	 * The rule that is easy to break without noticing: two cards at the same stage
+	 * carry the same WEIGHT of damage, in different places. Scratches are pinned
+	 * exactly — every scratch a bracket promises lands whole, which is why
+	 * wearSegments confines them to the clear band rather than letting the name
+	 * label quietly eat a card's third scratch.
+	 *
+	 * <p>Creases are pinned to a floor instead of an equality, because a crease
+	 * entering through the top edge genuinely does run under the rarity label and
+	 * lose its first step or two. That is the intended look; what is not
+	 * acceptable is a crease losing most of itself, so two thirds is the bar.
 	 */
 	@Test
-	public void theThumbnailDrawsEveryCrackItPromises()
+	public void everyCardInABracketCarriesTheSameAmountOfWear()
 	{
-		Rectangle art = artShape(1, 0, 0, THUMB_W, THUMB_H);
-		int top = topBandBottom(0, THUMB_W, THUMB_H);
-		int bottom = nameBandTop(0, THUMB_H);
-		Rectangle[] protect = CardRenderer.wearProtect(0, 0, THUMB_W, THUMB_H, top, bottom, art);
-		List<Rectangle> lanes = CardRenderer.wearCorridors(0, 0, THUMB_W, THUMB_H, top, bottom, art);
-		Assert.assertEquals("a wide sprite should leave both gutters and the band below it",
-			3, lanes.size());
+		int steps = CardRenderer.WEAR_STEPS;
+		for (int w = 60; w <= 220; w += 5)
+		{
+			int h = w * 29 / 20;
+			Rectangle[] protect = CardRenderer.wearProtect(0, 0, w, h,
+				topBandBottom(0, w, h), nameBandTop(0, h));
+			for (CardWear wear : CardWear.values())
+			{
+				int scratchesDue = CardRenderer.scratchCount(wear) * steps;
+				int creaseFloor = CardRenderer.creaseCount(wear) * steps * 2 / 3;
+				for (int seed : SEEDS)
+				{
+					List<int[]> segs = CardRenderer.wearSegments(0, 0, w, h, wear, seed, protect);
+					String where = "w=" + w + " " + wear + " seed=" + seed;
+					Assert.assertEquals("this card got a different amount of scuffing, " + where,
+						scratchesDue, ofKind(segs, CardRenderer.KIND_SCRATCH).size());
+					Assert.assertTrue("this card lost most of a crease, " + where,
+						ofKind(segs, CardRenderer.KIND_CREASE).size() >= creaseFloor);
+				}
+			}
+		}
+	}
+
+	/**
+	 * The other half of that rule: same amount, never the same picture. Every pair
+	 * of seeds has to differ somewhere, or the album is a wall of stamped copies.
+	 */
+	@Test
+	public void noTwoCardsWearInTheSamePlaces()
+	{
+		Rectangle[] protect = CardRenderer.wearProtect(0, 0, THUMB_W, THUMB_H,
+			topBandBottom(0, THUMB_W, THUMB_H), nameBandTop(0, THUMB_H));
+		for (CardWear wear : WORN)
+		{
+			for (int i = 0; i < SEEDS.length; i++)
+			{
+				List<int[]> a = CardRenderer.wearSegments(0, 0, THUMB_W, THUMB_H, wear,
+					SEEDS[i], protect);
+				for (int j = i + 1; j < SEEDS.length; j++)
+				{
+					List<int[]> b = CardRenderer.wearSegments(0, 0, THUMB_W, THUMB_H, wear,
+						SEEDS[j], protect);
+					boolean differs = a.size() != b.size();
+					for (int k = 0; !differs && k < a.size(); k++)
+					{
+						differs = !Arrays.equals(a.get(k), b.get(k));
+					}
+					Assert.assertTrue("seeds " + SEEDS[i] + " and " + SEEDS[j]
+						+ " wear identically at " + wear, differs);
+				}
+			}
+		}
+	}
+
+	/**
+	 * The first crease of every card is forced left-to-right through the clear
+	 * band between the two text strips, which is what makes the visibility test
+	 * hold for EVERY seed rather than for the lucky ones. Pin it: a crease
+	 * entering at the same height as the name band would be dropped whole, and a
+	 * one-crease card would then show nothing folded at all.
+	 */
+	@Test
+	public void theFirstCreaseAlwaysCrossesTheOpenMiddle()
+	{
+		for (int w = 40; w <= 260; w += 2)
+		{
+			int h = w * 29 / 20;
+			Rectangle[] protect = CardRenderer.wearProtect(0, 0, w, h,
+				topBandBottom(0, w, h), nameBandTop(0, h));
+			int[] band = CardRenderer.wearOpenBand(protect, 0, h);
+			Assert.assertTrue("the open band collapsed at w=" + w, band[1] - band[0] >= 4);
+			for (int seed : SEEDS)
+			{
+				int left = Integer.MAX_VALUE;
+				int right = Integer.MIN_VALUE;
+				for (int[] s : ofKind(CardRenderer.wearSegments(0, 0, w, h, CardWear.CRACKED,
+					seed, protect), CardRenderer.KIND_CREASE))
+				{
+					left = Math.min(left, Math.min(s[0], s[2]));
+					right = Math.max(right, Math.max(s[0], s[2]));
+				}
+				Assert.assertTrue("the forced crease vanished at w=" + w + " seed=" + seed,
+					right > left);
+				Assert.assertTrue("the forced crease does not span the card at w=" + w
+					+ " seed=" + seed + " (" + left + ".." + right + ")",
+					right - left >= w * 3 / 4);
+			}
+		}
+	}
+
+	/**
+	 * The open band is derived from the protected rects rather than from a second
+	 * copy of drawFace's arithmetic, so it has to survive whatever shape those
+	 * rects take — including the degenerate ones a hostile size could produce.
+	 */
+	@Test
+	public void theOpenBandFallsBackRatherThanInverting()
+	{
+		Assert.assertArrayEquals(new int[]{0, 100}, CardRenderer.wearOpenBand(null, 0, 100));
+		Assert.assertArrayEquals(new int[]{0, 100},
+			CardRenderer.wearOpenBand(new Rectangle[]{null, null}, 0, 100));
+		// bands that meet in the middle leave nothing: fall back to the whole card
+		// and let the per-segment text check do the work
+		Assert.assertArrayEquals(new int[]{0, 100}, CardRenderer.wearOpenBand(
+			new Rectangle[]{new Rectangle(0, 0, 80, 50), new Rectangle(0, 50, 80, 50)}, 0, 100));
+		// the normal case, and it must not care which order they arrive in
+		Rectangle topBand = new Rectangle(0, 0, 80, 20);
+		Rectangle nameBand = new Rectangle(0, 85, 80, 15);
+		Assert.assertArrayEquals(new int[]{20, 85},
+			CardRenderer.wearOpenBand(new Rectangle[]{topBand, nameBand}, 0, 100));
+		Assert.assertArrayEquals(new int[]{20, 85},
+			CardRenderer.wearOpenBand(new Rectangle[]{nameBand, topBand}, 0, 100));
+	}
+
+	/**
+	 * Pin the actual density on the album thumbnail. "Non-empty" would still pass
+	 * if a refactor thinned three creases down to one stub, and the difference
+	 * between a badge you notice and one you do not is exactly this number.
+	 *
+	 * <p>A ceiling, not an equality: segments crossing the two text bands are
+	 * dropped, and how many that is depends on which edges the seed picked.
+	 */
+	@Test
+	public void theThumbnailDrawsMostOfEveryLineItPromises()
+	{
+		Rectangle[] protect = CardRenderer.wearProtect(0, 0, THUMB_W, THUMB_H,
+			topBandBottom(0, THUMB_W, THUMB_H), nameBandTop(0, THUMB_H));
 		for (CardWear wear : CardWear.values())
 		{
-			int drawn = CardRenderer.wearSegments(THUMB_W, wear, 12345, lanes, protect).size();
-			Assert.assertEquals("wrong number of segments at " + wear,
-				CardRenderer.crackCount(wear) * 4, drawn);
+			int lines = CardRenderer.creaseCount(wear) + CardRenderer.scratchCount(wear);
+			int ceiling = lines * CardRenderer.WEAR_STEPS;
+			for (int seed : SEEDS)
+			{
+				int drawn = CardRenderer.wearSegments(0, 0, THUMB_W, THUMB_H, wear, seed,
+					protect).size();
+				Assert.assertTrue("more segments than there are steps at " + wear,
+					drawn <= ceiling);
+				// over half of every promised polyline actually lands: the bands
+				// clip the ends of a crease, never the bulk of it
+				Assert.assertTrue("only " + drawn + " of " + ceiling + " segments at "
+					+ wear + " seed=" + seed, drawn >= ceiling / 2);
+			}
 		}
 	}
 
 	/**
 	 * A card under the first threshold must render exactly as it did before this
-	 * feature existed. Not "almost nothing" — nothing.
+	 * feature existed. Not "almost nothing" — nothing, across all four passes.
 	 */
 	@Test
 	public void aPristineCardDrawsNoWearAtAll()
 	{
-		Rectangle art = artShape(1, 0, 0, THUMB_W, THUMB_H);
-		List<Rectangle> lanes = CardRenderer.wearCorridors(0, 0, THUMB_W, THUMB_H,
-			topBandBottom(0, THUMB_W, THUMB_H), nameBandTop(0, THUMB_H), art);
 		Rectangle[] protect = CardRenderer.wearProtect(0, 0, THUMB_W, THUMB_H,
-			topBandBottom(0, THUMB_W, THUMB_H), nameBandTop(0, THUMB_H), art);
-		Assert.assertEquals(0, CardRenderer.crackCount(CardWear.NONE));
+			topBandBottom(0, THUMB_W, THUMB_H), nameBandTop(0, THUMB_H));
+		Assert.assertEquals(0, CardRenderer.creaseCount(CardWear.NONE));
+		Assert.assertEquals(0, CardRenderer.scratchCount(CardWear.NONE));
 		Assert.assertEquals(0, CardRenderer.wearAlpha(CardWear.NONE));
+		Assert.assertEquals(0, CardRenderer.grimeAlpha(CardWear.NONE));
+		Assert.assertEquals(0, CardRenderer.edgeNicks(CardWear.NONE));
 		for (int seed : SEEDS)
 		{
-			Assert.assertTrue("a pristine card drew wear",
-				CardRenderer.wearSegments(THUMB_W, CardWear.NONE, seed, lanes, protect).isEmpty());
+			Assert.assertTrue("a pristine card drew wear", CardRenderer.wearSegments(
+				0, 0, THUMB_W, THUMB_H, CardWear.NONE, seed, protect).isEmpty());
 		}
-		Assert.assertTrue("a null stage drew wear",
-			CardRenderer.wearSegments(THUMB_W, null, 7, lanes, protect).isEmpty());
+		Assert.assertTrue("a null stage drew wear", CardRenderer.wearSegments(
+			0, 0, THUMB_W, THUMB_H, null, 7, protect).isEmpty());
 	}
 
 	/**
@@ -313,38 +467,32 @@ public class CardRendererTest
 	 * the same after a restart, and the album thumbnail matches the reveal card.
 	 */
 	@Test
-	public void theSameCardCracksTheSameWayEveryTime()
+	public void theSameCardWearsTheSameWayEveryTime()
 	{
-		Rectangle art = artShape(1, 0, 0, THUMB_W, THUMB_H);
-		int top = topBandBottom(0, THUMB_W, THUMB_H);
-		int bottom = nameBandTop(0, THUMB_H);
-		Rectangle[] protect = CardRenderer.wearProtect(0, 0, THUMB_W, THUMB_H, top, bottom, art);
-		List<Rectangle> lanes = CardRenderer.wearCorridors(0, 0, THUMB_W, THUMB_H, top, bottom, art);
-
+		Rectangle[] protect = CardRenderer.wearProtect(0, 0, THUMB_W, THUMB_H,
+			topBandBottom(0, THUMB_W, THUMB_H), nameBandTop(0, THUMB_H));
 		int seed = "Abyssal whip".hashCode();
-		List<int[]> first = CardRenderer.wearSegments(THUMB_W, CardWear.CRACKED, seed, lanes, protect);
-		List<int[]> again = CardRenderer.wearSegments(THUMB_W, CardWear.CRACKED, seed, lanes, protect);
+		List<int[]> first = CardRenderer.wearSegments(0, 0, THUMB_W, THUMB_H,
+			CardWear.CRACKED, seed, protect);
+		List<int[]> again = CardRenderer.wearSegments(0, 0, THUMB_W, THUMB_H,
+			CardWear.CRACKED, seed, protect);
 		Assert.assertEquals(first.size(), again.size());
 		for (int i = 0; i < first.size(); i++)
 		{
-			Assert.assertArrayEquals("crack " + i + " moved between draws", first.get(i), again.get(i));
+			Assert.assertArrayEquals("segment " + i + " moved between draws",
+				first.get(i), again.get(i));
 		}
-
-		List<int[]> other = CardRenderer.wearSegments(THUMB_W, CardWear.CRACKED,
-			"Bandos chestplate".hashCode(), lanes, protect);
-		boolean differs = other.size() != first.size();
-		for (int i = 0; !differs && i < first.size(); i++)
-		{
-			differs = !java.util.Arrays.equals(first.get(i), other.get(i));
-		}
-		Assert.assertTrue("two different cards cracked identically", differs);
 	}
 
 	/**
 	 * Wear only ever accumulates, so a card that reaches a heavier stage must
-	 * never show LESS than it did before. This is the trap the stage-independent
-	 * pad exists to avoid: a thicker vein at SHATTERED would need a wider
-	 * corridor, and a card could visibly heal on its thousandth kill.
+	 * never show LESS than it did before. True by construction — line k's geometry
+	 * depends on the seed and on k, never on the stage — and this is what pins
+	 * that construction down.
+	 *
+	 * <p>Containment, not index equality: a heavier stage inserts its extra crease
+	 * ahead of the scratches, so the shared lines sit at different offsets in the
+	 * list even though every one of them is unmoved on the card.
 	 */
 	@Test
 	public void aHeavierStageNeverShowsLessThanALighterOne()
@@ -352,104 +500,134 @@ public class CardRendererTest
 		for (int w = 60; w <= 200; w += 5)
 		{
 			int h = w * 29 / 20;
-			int top = topBandBottom(0, w, h);
-			int bottom = nameBandTop(0, h);
-			for (int style = 0; style < 4; style++)
+			Rectangle[] protect = CardRenderer.wearProtect(0, 0, w, h,
+				topBandBottom(0, w, h), nameBandTop(0, h));
+			for (int seed : SEEDS)
 			{
-				Rectangle art = artShape(style, 0, 0, w, h);
-				Rectangle[] protect = CardRenderer.wearProtect(0, 0, w, h, top, bottom, art);
-				List<Rectangle> lanes = CardRenderer.wearCorridors(0, 0, w, h, top, bottom, art);
-				for (int seed : SEEDS)
+				for (int i = 1; i < WORN.length; i++)
 				{
-					int hairline = CardRenderer.wearSegments(w, CardWear.HAIRLINE, seed, lanes, protect).size();
-					int cracked = CardRenderer.wearSegments(w, CardWear.CRACKED, seed, lanes, protect).size();
-					int shattered = CardRenderer.wearSegments(w, CardWear.SHATTERED, seed, lanes, protect).size();
-					String where = "w=" + w + " style=" + style + " seed=" + seed;
-					Assert.assertTrue("wear went backwards at CRACKED, " + where, cracked >= hairline);
-					Assert.assertTrue("wear went backwards at SHATTERED, " + where, shattered >= cracked);
+					List<int[]> lighter = CardRenderer.wearSegments(0, 0, w, h, WORN[i - 1],
+						seed, protect);
+					List<int[]> heavier = CardRenderer.wearSegments(0, 0, w, h, WORN[i],
+						seed, protect);
+					String where = "w=" + w + " seed=" + seed + " " + WORN[i - 1]
+						+ " -> " + WORN[i];
+					Assert.assertTrue("wear went backwards at " + where,
+						heavier.size() >= lighter.size());
+					Set<String> after = new HashSet<>();
+					for (int[] s : heavier)
+					{
+						after.add(Arrays.toString(s));
+					}
+					for (int[] s : lighter)
+					{
+						Assert.assertTrue("a line moved when the card aged, " + where + " "
+							+ Arrays.toString(s), after.contains(Arrays.toString(s)));
+					}
 				}
 			}
 		}
 	}
 
 	/**
-	 * A badge, not damage. The gold gets denser as the record grows but never
-	 * turns opaque and never shatters the face into a spiderweb — the card has to
-	 * keep reading as a thing you earned, not a thing about to break.
+	 * A badge, not damage. Every layer gets denser as the record grows, but the
+	 * lines never turn opaque, the grime never drowns the art, and the face never
+	 * folds into origami — the card has to keep reading as a thing you earned, not
+	 * a thing about to fall apart.
 	 */
 	@Test
 	public void wearReadsAsABadgeAndNotAsDamage()
 	{
-		Assert.assertTrue(CardRenderer.crackCount(CardWear.HAIRLINE)
-			< CardRenderer.crackCount(CardWear.CRACKED));
-		Assert.assertTrue(CardRenderer.crackCount(CardWear.CRACKED)
-			< CardRenderer.crackCount(CardWear.SHATTERED));
-		Assert.assertTrue("the top stage shreds the card face",
-			CardRenderer.crackCount(CardWear.SHATTERED) <= 6);
+		Assert.assertTrue("the top stage folds the card to pieces",
+			CardRenderer.creaseCount(CardWear.SHATTERED) <= 3);
+		Assert.assertTrue("scuffing should show before a fold does",
+			CardRenderer.scratchCount(CardWear.HAIRLINE)
+				> CardRenderer.creaseCount(CardWear.HAIRLINE));
 
-		Assert.assertTrue(CardRenderer.wearAlpha(CardWear.HAIRLINE)
-			< CardRenderer.wearAlpha(CardWear.CRACKED));
-		Assert.assertTrue(CardRenderer.wearAlpha(CardWear.CRACKED)
-			< CardRenderer.wearAlpha(CardWear.SHATTERED));
 		for (CardWear wear : CardWear.values())
 		{
 			Assert.assertTrue("wear paints opaque at " + wear, CardRenderer.wearAlpha(wear) < 255);
 			Assert.assertTrue("negative alpha at " + wear, CardRenderer.wearAlpha(wear) >= 0);
+			// grime is the layer you notice second: it must never out-shout the
+			// line work. NONE is both-zero and so is skipped rather than
+			// special-cased into a <=, which would let a future stage tie.
+			Assert.assertTrue("grime drowns the art at " + wear,
+				wear == CardWear.NONE
+					|| CardRenderer.grimeAlpha(wear) < CardRenderer.wearAlpha(wear));
+		}
+
+		CardWear[] ladder = {CardWear.NONE, CardWear.HAIRLINE, CardWear.CRACKED,
+			CardWear.SHATTERED};
+		for (int i = 1; i < ladder.length; i++)
+		{
+			String step = ladder[i - 1] + " -> " + ladder[i];
+			Assert.assertTrue("the lines faded at " + step,
+				CardRenderer.wearAlpha(ladder[i]) > CardRenderer.wearAlpha(ladder[i - 1]));
+			Assert.assertTrue("grime lifted at " + step,
+				CardRenderer.grimeAlpha(ladder[i]) > CardRenderer.grimeAlpha(ladder[i - 1]));
+			Assert.assertTrue("the edge healed at " + step,
+				CardRenderer.edgeNicks(ladder[i]) > CardRenderer.edgeNicks(ladder[i - 1]));
+			Assert.assertTrue("scratches buffed out at " + step,
+				CardRenderer.scratchCount(ladder[i]) > CardRenderer.scratchCount(ladder[i - 1]));
+			Assert.assertTrue("a crease unfolded at " + step,
+				CardRenderer.creaseCount(ladder[i]) >= CardRenderer.creaseCount(ladder[i - 1]));
 		}
 	}
 
 	/**
-	 * A corridor that passes the width filter must always yield a legal integer
-	 * line. If it did not, wearCorridors would be handing wearSegments lanes it
-	 * silently refuses to draw in, and the card would lose wear at some sizes for
-	 * no visible reason.
+	 * A crease is one continuous line, not a scatter of marks. Consecutive
+	 * segments must share an endpoint, because that is the difference between a
+	 * fold and the hatching the old renderer drew. Gaps are legal only where the
+	 * text check removed a segment.
 	 */
 	@Test
-	public void everyCorridorWideEnoughToKeepIsWideEnoughToDrawIn()
+	public void aCreaseIsAContinuousLine()
 	{
-		for (int w = 40; w <= 400; w += 1)
+		// no protected rects, so nothing is dropped and the polyline is whole
+		for (int w = 60; w <= 200; w += 5)
 		{
 			int h = w * 29 / 20;
-			int top = topBandBottom(0, w, h);
-			int bottom = nameBandTop(0, h);
-			for (int style = 0; style < 4; style++)
+			for (int seed : SEEDS)
 			{
-				Rectangle art = artShape(style, 0, 0, w, h);
-				for (Rectangle lane : CardRenderer.wearCorridors(0, 0, w, h, top, bottom, art))
+				List<int[]> creases = ofKind(CardRenderer.wearSegments(0, 0, w, h,
+					CardWear.CRACKED, seed, null), CardRenderer.KIND_CREASE);
+				Assert.assertEquals("a crease should be exactly one polyline",
+					CardRenderer.WEAR_STEPS, creases.size());
+				for (int i = 1; i < creases.size(); i++)
 				{
-					Assert.assertNotNull("kept an undrawable corridor " + lane + " at w=" + w,
-						CardRenderer.wearSafeBox(lane, CardRenderer.wearStrokePad(w)));
+					Assert.assertEquals("the crease broke between step " + (i - 1) + " and " + i,
+						creases.get(i - 1)[2], creases.get(i)[0]);
+					Assert.assertEquals("the crease broke between step " + (i - 1) + " and " + i,
+						creases.get(i - 1)[3], creases.get(i)[1]);
 				}
 			}
 		}
 	}
 
 	/**
-	 * Corridors are the free margin, so they must not overlap the protected rects
-	 * in the first place. Rejection-testing every segment is the backstop; this is
-	 * the property that makes "never obscures" true by construction.
+	 * The jitter is tapered to zero at both ends, so a line arrives exactly where
+	 * it was aimed and meets the frame cleanly. An untapered walk is what the old
+	 * renderer drew and what read as scribble — this is the assertion that stops
+	 * anyone quietly deleting the sin() term.
 	 */
 	@Test
-	public void corridorsNeverOverlapTheProtectedRegions()
+	public void aLineMeetsBothEndsWhereItWasAimed()
 	{
-		for (int w = 40; w <= 260; w += 2)
+		for (int seed : SEEDS)
 		{
-			int h = w * 29 / 20;
-			int top = topBandBottom(0, w, h);
-			int bottom = nameBandTop(0, h);
-			for (int style = 0; style < 4; style++)
+			double[][] path = CardRenderer.wearSeamPath(10, 50, 190, 70, seed, 40);
+			Assert.assertEquals(10, path[0][0], 1e-9);
+			Assert.assertEquals(50, path[0][1], 1e-9);
+			Assert.assertEquals(190, path[path.length - 1][0], 1e-9);
+			Assert.assertEquals(70, path[path.length - 1][1], 1e-9);
+			// and it genuinely wanders in between, or it is just a straight line
+			double maxOff = 0;
+			for (int s = 1; s < path.length - 1; s++)
 			{
-				Rectangle art = artShape(style, 0, 0, w, h);
-				Rectangle[] protect = CardRenderer.wearProtect(0, 0, w, h, top, bottom, art);
-				for (Rectangle lane : CardRenderer.wearCorridors(0, 0, w, h, top, bottom, art))
-				{
-					for (Rectangle r : protect)
-					{
-						Assert.assertFalse("corridor " + lane + " runs through " + r + " at w=" + w,
-							r != null && r.intersects(lane));
-					}
-				}
+				double t = s / (double) (path.length - 1);
+				maxOff = Math.max(maxOff, Math.abs(path[s][1] - (50 + 20 * t)));
 			}
+			Assert.assertTrue("the line is dead straight at seed=" + seed, maxOff > 1);
 		}
 	}
 
@@ -462,29 +640,46 @@ public class CardRendererTest
 			int h = w * 29 / 20;
 			int x = 17;
 			int y = 23;
-			int top = topBandBottom(y, w, h);
-			int bottom = nameBandTop(y, h);
+			Rectangle[] protect = CardRenderer.wearProtect(x, y, w, h,
+				topBandBottom(y, w, h), nameBandTop(y, h));
 			float reach = CardRenderer.wearInkReach(w);
-			for (int style = 0; style < 4; style++)
+			for (CardWear wear : CardWear.values())
 			{
-				Rectangle art = artShape(style, x, y, w, h);
-				Rectangle[] protect = CardRenderer.wearProtect(x, y, w, h, top, bottom, art);
-				List<Rectangle> lanes = CardRenderer.wearCorridors(x, y, w, h, top, bottom, art);
-				for (CardWear wear : CardWear.values())
+				for (int seed : SEEDS)
 				{
-					for (int seed : SEEDS)
+					for (int[] s : CardRenderer.wearSegments(x, y, w, h, wear, seed, protect))
 					{
-						for (int[] s : CardRenderer.wearSegments(w, wear, seed, lanes, protect))
-						{
-							Assert.assertTrue("wear escaped the card at w=" + w,
-								Math.min(s[0], s[2]) - reach >= x
-									&& Math.max(s[0], s[2]) + reach <= x + w
-									&& Math.min(s[1], s[3]) - reach >= y
-									&& Math.max(s[1], s[3]) + reach <= y + h);
-						}
+						Assert.assertTrue("wear escaped the card at w=" + w,
+							Math.min(s[0], s[2]) - reach >= x
+								&& Math.max(s[0], s[2]) + reach <= x + w
+								&& Math.min(s[1], s[3]) - reach >= y
+								&& Math.max(s[1], s[3]) + reach <= y + h);
 					}
 				}
 			}
+		}
+	}
+
+	/**
+	 * wearInkReach is the budget every clearance test above measures against, so
+	 * it has to cover the widest thing drawWearLines actually paints. Two passes
+	 * compete for it: the crease's soft valley, stroked at exactly twice the reach
+	 * and centred, and the lit ridge, offset a full stroke to one side and then
+	 * half of its own width beyond that. Both land on the reach exactly — there is
+	 * no slack here, which is why the ridge is drawn through Line2D rather than
+	 * being rounded to whole pixels first.
+	 */
+	@Test
+	public void theInkReachCoversEveryPassThatLands()
+	{
+		for (int w = 1; w <= 2000; w++)
+		{
+			float line = CardRenderer.wearStroke(w);
+			float reach = CardRenderer.wearInkReach(w);
+			Assert.assertTrue("the valley is wider than the reach at w=" + w, reach * 2f >= line);
+			Assert.assertTrue("the ridge sits outside the reach at w=" + w,
+				reach + 1e-4f >= line + line * 0.7f / 2f);
+			Assert.assertTrue("the crease vanished at w=" + w, line >= 1.6f);
 		}
 	}
 }

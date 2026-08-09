@@ -35,9 +35,9 @@ public class TaskProgressOverlay extends OverlayPanel
 	private static final Color MUTED = new Color(170, 170, 170);
 	private static final Color BAR_BG = new Color(24, 24, 24, 210);
 	private static final Color DONE_GREEN = new Color(120, 220, 120);
-	private static final String TITLE = "Gachaman task";
+	private static final String TITLE = "Gachaman contract";
 	private static final String OFFERS_WAITING = "Contracts rolled — view and pick one";
-	private static final String NO_TASK = "No task — roll one in the Gachaman panel";
+	private static final String NO_TASK = "No contract — roll one in the Gachaman panel";
 	private static final String SIDE_BETS_LABEL = "Side bets";
 	private static final String DOCKET_LABEL = "Double Docket";
 	/** Constant expression, so the steady-state frame still allocates nothing. */

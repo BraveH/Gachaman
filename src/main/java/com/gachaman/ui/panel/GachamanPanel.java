@@ -1,8 +1,10 @@
 package com.gachaman.ui.panel;
 
 import com.gachaman.data.CardDatabase;
+import com.gachaman.model.ContractRecord;
 import com.gachaman.model.GachaState;
 import com.gachaman.service.GachaStateService;
+import com.gachaman.service.PatronMark;
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
@@ -27,6 +29,7 @@ import java.awt.geom.QuadCurve2D;
 import java.awt.image.BufferedImage;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
@@ -72,14 +75,9 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		SETS("Sets"),
 		JOURNAL("Journal"),
 		TIMELINE("Timeline"),
-		// Dossier and Party must stay BEFORE LOADOUT: updateLoadoutTabVisibility()
-		// re-inserts the Loadout button at Tab.LOADOUT.ordinal(), which is only a
-		// valid tabRow index because EVERY tab of lower ordinal is unconditionally
-		// visible. Loadout is the only hideable tab, so any future tab is safe here
-		// and only here — inserting one AFTER Loadout would push Loadout's ordinal
-		// past the button count while Loadout is hidden and throw on re-insert.
 		DOSSIER("Dossier"),
 		PARTY("Party"),
+		PATRONS("Patrons"),
 		LOADOUT("Loadout"),
 		HELP("Help");
 
@@ -107,6 +105,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	private final TimelineTab timelineTab;
 	private final DossierTab dossierTab;
 	private final PartyTab partyTab;
+	private final PatronsTab patronsTab;
 	private final LoadoutTab loadoutTab;
 	private final HelpTab helpTab;
 
@@ -137,6 +136,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		TimelineTab timelineTab,
 		DossierTab dossierTab,
 		PartyTab partyTab,
+		PatronsTab patronsTab,
 		LoadoutTab loadoutTab,
 		HelpTab helpTab,
 		com.gachaman.GachamanConfig config)
@@ -153,6 +153,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		this.timelineTab = timelineTab;
 		this.dossierTab = dossierTab;
 		this.partyTab = partyTab;
+		this.patronsTab = patronsTab;
 		this.loadoutTab = loadoutTab;
 		this.helpTab = helpTab;
 
@@ -191,7 +192,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		}
 		header.add(tabRow, BorderLayout.CENTER);
 		add(header, BorderLayout.NORTH);
-		updateLoadoutTabVisibility();
+		updateTabVisibility();
 
 		content.setOpaque(false);
 		JPanel loading = new JPanel(new GridBagLayout());
@@ -208,6 +209,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		content.add(timelineTab, Tab.TIMELINE.name()); // timeline manages its own scroll
 		content.add(dossierTab, Tab.DOSSIER.name()); // dossier pins its totals outside the scroll
 		content.add(wrapScroll(partyTab), Tab.PARTY.name());
+		content.add(patronsTab, Tab.PATRONS.name()); // patrons pins its totals outside the scroll
 		content.add(wrapScroll(loadoutTab), Tab.LOADOUT.name());
 		content.add(wrapScroll(helpTab), Tab.HELP.name());
 		add(content, BorderLayout.CENTER);
@@ -255,6 +257,20 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		overviewTab.setInPartySupplier(supplier);
 	}
 
+	/**
+	 * Wired later by the plugin: the live party vote, or null when none is open.
+	 *
+	 * <p>Pushed in rather than injected, for the same reason as the supplier
+	 * above — the panel is built by Guice and the party layer takes its hooks
+	 * from the plugin, so a constructor dependency here would be the one edge
+	 * that points backwards.
+	 */
+	public void setVoteViewSupplier(
+		java.util.function.Supplier<com.gachaman.party.PartyRollService.VoteView> supplier)
+	{
+		partyTab.setVoteViewSupplier(supplier);
+	}
+
 	// --- State listener ---
 
 	@Override
@@ -283,6 +299,10 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 			return;
 		}
 		dirty.addAll(EnumSet.allOf(Tab.class));
+		// on every refresh, not just on a config change: the first filed contract
+		// and the first shared one are STATE changes, and a tab the player just
+		// earned should appear on the refresh that earned it
+		updateTabVisibility();
 		if (!cardDatabase.isReady())
 		{
 			updateScanLabel();
@@ -347,6 +367,9 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 				case PARTY:
 					partyTab.rebuild();
 					break;
+				case PATRONS:
+					patronsTab.rebuild();
+					break;
 				case LOADOUT:
 					loadoutTab.rebuild();
 					break;
@@ -361,32 +384,88 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		}
 	}
 
-	/** Show/hide the Loadout tab per the "one card per slot" setting. */
-	public void updateLoadoutTabVisibility()
+	/**
+	 * Rebuild the tab strip from the enum, keeping only the tabs that currently
+	 * have something behind them.
+	 *
+	 * The WHOLE strip is rebuilt rather than one button being spliced back in at
+	 * its ordinal. An index-based re-insert is only correct while at most one tab
+	 * is hideable and it is the last one before Help — with three hideable tabs
+	 * an ordinal is no longer a valid tabRow index (two hidden tabs below it push
+	 * every later ordinal past the button count) and the strip would either throw
+	 * or silently reorder itself. Removing and re-adding in enum order is O(tabs),
+	 * runs only on a refresh, and cannot get the order wrong by construction.
+	 *
+	 * Safe to call before the constructor finishes wiring: tabRow is the guard.
+	 */
+	public void updateTabVisibility()
 	{
-		JButton loadoutButton = tabButtons.get(Tab.LOADOUT);
-		if (loadoutButton == null || tabRow == null)
+		if (tabRow == null)
 		{
 			return;
 		}
-		boolean shouldShow = config.oneCardPerSlot();
-		boolean showing = loadoutButton.getParent() == tabRow;
-		if (shouldShow && !showing)
+		GachaState state = stateService.get();
+		tabRow.removeAll();
+		boolean selectedSurvives = false;
+		for (Tab tab : Tab.values())
 		{
-			// Re-insert at the enum position (every tab before LOADOUT is
-			// always visible) so Loadout does not end up after Help.
-			tabRow.add(loadoutButton, Tab.LOADOUT.ordinal());
-		}
-		else if (!shouldShow && showing)
-		{
-			tabRow.remove(loadoutButton);
-			if (selected == Tab.LOADOUT)
+			JButton button = tabButtons.get(tab);
+			if (button == null || !isTabVisible(tab, state))
 			{
-				selectTab(Tab.OVERVIEW);
+				continue;
 			}
+			tabRow.add(button);
+			selectedSurvives |= tab == selected;
 		}
 		tabRow.revalidate();
 		tabRow.repaint();
+		if (!selectedSurvives)
+		{
+			// the page the player was reading just went away — land them somewhere
+			// that always exists rather than on a card with no button to leave it
+			selectTab(Tab.OVERVIEW);
+		}
+	}
+
+	/**
+	 * Whether a tab is worth a button right now.
+	 *
+	 * Empty pages are HIDDEN rather than shown empty: the strip is a 3-column
+	 * grid in a 200px sidebar, so every button that explains nothing costs a row
+	 * of the ones that do. Overview is the fallback in
+	 * {@link #updateTabVisibility} and so must never be hidden here.
+	 */
+	private boolean isTabVisible(Tab tab, @Nullable GachaState state)
+	{
+		switch (tab)
+		{
+			case DOSSIER:
+				return hasContracts(state);
+			case PATRONS:
+				return PatronMark.partnerCount(state == null ? null : state.getPatrons()) > 0;
+			case LOADOUT:
+				return config.oneCardPerSlot();
+			default:
+				return true;
+		}
+	}
+
+	/** True once one contract has been filed — the Dossier's whole content. */
+	private static boolean hasContracts(@Nullable GachaState state)
+	{
+		List<ContractRecord> log = state == null ? null : state.getContractLog();
+		if (log == null)
+		{
+			return false;
+		}
+		for (ContractRecord record : log)
+		{
+			if (record != null)
+			{
+				return true; // Gson can hand back a null array element
+			}
+		}
+		return false;
 	}
 
 	private void updateTabButtonStyles()
@@ -671,14 +750,109 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		return line(text, color, FontManager.getRunescapeSmallFont());
 	}
 
-	/** A width-constrained, word-wrapping HTML label. */
-	static JLabel wrapped(String text, Color color)
+	/**
+	 * The viewport a scroll-wrapped tab actually gets.
+	 *
+	 * <p>{@link PluginPanel#getPreferredSize()} returns 242 for the super(false)
+	 * form this panel uses; take off the 6px panel border each side and the 9px
+	 * GameScrollBarUI and 221 is left. The scroll panes never scroll sideways,
+	 * so a child that wants more than this is not scrolled to — it is clipped.
+	 */
+	static final int VIEWPORT_WIDTH = PluginPanel.PANEL_WIDTH + PluginPanel.SCROLLBAR_WIDTH
+		- 2 * PluginPanel.BORDER_OFFSET - 9;
+
+	/**
+	 * The usable column inside a {@link #section}, whose padding is 8px a side.
+	 * The gold-bordered variants swap that padding for a 1px line plus 7px,
+	 * which is the same 8px, so one number covers every caller.
+	 */
+	static final int SECTION_WIDTH = VIEWPORT_WIDTH - 16;
+
+	/**
+	 * A width-constrained, word-wrapping HTML block sized for a direct child of
+	 * {@link #section}.
+	 *
+	 * <p>The text is inserted raw — {@code <b>} in a caller's string is meant to
+	 * render. Callers interpolating anything the player or the item cache
+	 * supplies must run it through {@link #escape} first.
+	 *
+	 * <p>Not an HTML JLabel with {@code style='width:205px'}, which is what this
+	 * used to be: Swing reads that width as a PREFERRED span, not a cap, so a
+	 * line that measures wider simply laid out wider than the column and the
+	 * viewport — which has no horizontal scrollbar — sheared the overflow off at
+	 * the right edge with no ellipsis. A JEditorPane wraps against the width it
+	 * is actually given, and pinning that width makes the column real.
+	 */
+	static JComponent wrapped(String text, Color color)
 	{
-		JLabel label = new JLabel("<html><body style='width:170px'>" + text + "</body></html>");
-		label.setForeground(color);
-		label.setFont(FontManager.getRunescapeSmallFont());
-		label.setAlignmentX(Component.LEFT_ALIGNMENT);
-		return label;
+		return wrapped(text, color, FontManager.getRunescapeSmallFont());
+	}
+
+	/**
+	 * {@link #wrapped} in a caller-chosen font. Same column — the only reason to
+	 * pick the font is a HEADING that has to wrap, and the bold face at ~7px/char
+	 * runs out of column a third sooner than the small one does.
+	 */
+	static JComponent wrapped(String text, Color color, Font font)
+	{
+		javax.swing.JEditorPane pane = new javax.swing.JEditorPane();
+		pane.setContentType("text/html");
+		pane.setEditable(false);
+		pane.setFocusable(false);
+		pane.setOpaque(false);
+		pane.setBorder(null);
+		pane.setMargin(new java.awt.Insets(0, 0, 0, 0));
+		// without this the pane renders in the HTML default face and colour and
+		// ignores setFont/setForeground entirely — the panel would go serif black
+		pane.putClientProperty(javax.swing.JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
+		pane.setFont(font);
+		pane.setForeground(color);
+		// no CSS width: the wrap comes from the size pinned below, which unlike the
+		// CSS hint is a width the layout cannot talk the pane out of
+		pane.setText("<html><body>" + text + "</body></html>");
+		pane.setAlignmentX(Component.LEFT_ALIGNMENT);
+		// size first, then ask: the line count only exists once there is a width
+		// to wrap against, and the height is only right for that same width
+		pane.setSize(SECTION_WIDTH, Short.MAX_VALUE);
+		Dimension fixed = new Dimension(SECTION_WIDTH, pane.getPreferredSize().height);
+		pane.setPreferredSize(fixed);
+		pane.setMinimumSize(fixed);
+		pane.setMaximumSize(fixed);
+		return pane;
+	}
+
+	/**
+	 * The between-facts separator for the HTML panes (Dossier, Patrons,
+	 * Timeline), matching the literal {@code "  ·  "} the plain-JLabel panels
+	 * use. Non-breaking because HTML collapses a run of spaces to one, so the
+	 * literal rendered a third of the intended gap and the segments ran together.
+	 */
+	static final String DOT = "&nbsp;&nbsp;·&nbsp;&nbsp;";
+
+	/**
+	 * Neutralise HTML in a string bound for a Swing HTML label. All three of
+	 * {@code & < >} — a lone {@code >} is legal text in HTML5 but Swing's parser
+	 * is HTML 3.2 and will happily close a tag it thinks it is inside.
+	 */
+	static String escape(@Nullable String text)
+	{
+		return text == null ? ""
+			: text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+	}
+
+	/**
+	 * "a" or "an" for a noun phrase, so generated sentences do not read "a Easy
+	 * contract" or "a Ornate Chest". Vowel letter, not vowel sound: every noun
+	 * this is used on is a difficulty or a chest name, and none of them is a
+	 * "u"-as-in-you or a silent-h word where the two rules disagree.
+	 */
+	static String article(@Nullable String noun)
+	{
+		if (noun == null || noun.isEmpty())
+		{
+			return "a";
+		}
+		return "AEIOUaeiou".indexOf(noun.charAt(0)) >= 0 ? "an" : "a";
 	}
 
 	static JComponent centeredNote(String text)
@@ -716,8 +890,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	/** Fixed-width HTML body so the dialog's preferred size is stable on any monitor. */
 	private static JComponent dialogBody(String message)
 	{
-		String escaped = message.replace("&", "&amp;").replace("<", "&lt;")
-			.replace("\n", "<br>");
+		String escaped = escape(message).replace("\n", "<br>");
 		return new JLabel("<html><body style='width:230px'>" + escaped + "</body></html>");
 	}
 
@@ -815,6 +988,22 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	/** Dark, RuneLite-styled combo box: colors, font, renderer and arrow. */
 	static void styleCombo(javax.swing.JComboBox<?> combo)
 	{
+		styleCombo(combo, value -> value == null ? "" : String.valueOf(value));
+	}
+
+	/**
+	 * As {@link #styleCombo(javax.swing.JComboBox)}, but rendering each entry
+	 * through {@code labeller} instead of its {@code toString()}.
+	 *
+	 * A combo box has exactly one renderer, and this method installs it — so a
+	 * caller that sets its own renderer first and then styles the box loses it
+	 * silently, and the list falls back to raw enum names ("ORNATE" rather than
+	 * "Ornate Chest"). Passing the label function in is the only ordering that
+	 * cannot be got wrong.
+	 */
+	static <T> void styleCombo(javax.swing.JComboBox<T> combo,
+		java.util.function.Function<T, String> labeller)
+	{
 		combo.setFont(FontManager.getRunescapeSmallFont());
 		combo.setForeground(Color.WHITE);
 		combo.setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -836,6 +1025,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		javax.swing.DefaultListCellRenderer renderer = new javax.swing.DefaultListCellRenderer()
 		{
 			@Override
+			@SuppressWarnings("unchecked")
 			public Component getListCellRendererComponent(javax.swing.JList<?> list, Object value,
 				int index, boolean isSelected, boolean cellHasFocus)
 			{
@@ -844,6 +1034,9 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 				setBackground(isSelected ? ColorScheme.DARK_GRAY_HOVER_COLOR : ColorScheme.DARKER_GRAY_COLOR);
 				setForeground(isSelected ? Color.WHITE : ColorScheme.LIGHT_GRAY_COLOR);
 				setBorder(new EmptyBorder(2, 5, 2, 5));
+				// Swing renders a null entry while the popup sizes itself and
+				// whenever the model is empty; the labeller never sees one.
+				setText(value == null ? "" : labeller.apply((T) value));
 				return this;
 			}
 		};

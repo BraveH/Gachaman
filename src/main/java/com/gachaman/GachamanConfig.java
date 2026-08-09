@@ -1,5 +1,6 @@
 package com.gachaman;
 
+import com.gachaman.party.PartySizing;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
@@ -79,9 +80,11 @@ public interface GachamanConfig extends Config
 	}
 
 	@ConfigItem(
+		// keyName is the persisted setting key and stays "highlightTaskNpc" —
+		// renaming it silently resets everyone who had turned this off
 		keyName = "highlightTaskNpc",
-		name = "Highlight task NPCs",
-		description = "Outline NPCs that match your active task",
+		name = "Highlight contract NPCs",
+		description = "Outline NPCs that match your active contract",
 		section = generalSection,
 		position = 3
 	)
@@ -143,6 +146,24 @@ public interface GachamanConfig extends Config
 	default boolean partyRollsEnabled()
 	{
 		return true;
+	}
+
+	@ConfigItem(
+		keyName = "partySizing",
+		name = "Party contract sizing",
+		description = "Which combat level a party roll sizes its contracts to."
+			+ " Fighting Weight: the party's AVERAGE, so a strong party gets contracts"
+			+ " worth its weight. Weakest Man: the party's LOWEST, so every contract is"
+			+ " one the weakest member could have taken alone."
+			+ " ONLY THE HOST'S SETTING APPLIES — whoever proposes the roll sets the rule"
+			+ " for everyone in it, because a seeded roll has to deal the same board on"
+			+ " every screen. Yours matters on the rolls you propose.",
+		section = partySection,
+		position = 1
+	)
+	default PartySizing partySizing()
+	{
+		return PartySizing.FIGHTING_WEIGHT;
 	}
 
 	@ConfigItem(

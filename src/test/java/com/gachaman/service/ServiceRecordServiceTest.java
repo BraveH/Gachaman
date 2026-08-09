@@ -6,8 +6,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -154,6 +156,93 @@ public class ServiceRecordServiceTest
 		Assert.assertNotNull(out);
 		Assert.assertEquals(1, out.size());
 		Assert.assertEquals(3, out.get(0).getKillsServed());
+	}
+
+	// --- setServed (::gachawear only) ---
+
+	@Test
+	public void setServedOverwritesOnlyTheNamedCopiesAndPreservesOrder()
+	{
+		List<OwnedCard> cards = Arrays.asList(card("u1", 11, 7), card("u2", 22, 7), card("u3", 33, 7));
+
+		List<OwnedCard> out = ServiceRecordService.setServed(
+			cards, Collections.singleton("u2"), 400);
+
+		Assert.assertNotNull(out);
+		Assert.assertEquals(3, out.size());
+		Assert.assertEquals("u1", out.get(0).getUuid());
+		Assert.assertEquals("u2", out.get(1).getUuid());
+		Assert.assertEquals("u3", out.get(2).getUuid());
+		Assert.assertEquals(7, out.get(0).getKillsServed());
+		Assert.assertEquals(400, out.get(1).getKillsServed());
+		Assert.assertEquals(7, out.get(2).getKillsServed());
+		Assert.assertSame(cards.get(0), out.get(0));
+		Assert.assertSame(cards.get(2), out.get(2));
+		// the rest of the card is not collateral damage
+		Assert.assertEquals(22, out.get(1).getCardId());
+		Assert.assertEquals(Variant.NORMAL, out.get(1).getVariant());
+		Assert.assertEquals(100L, out.get(1).getAcquiredAtMs());
+		Assert.assertEquals("chest:GILDED", out.get(1).getProvenance());
+	}
+
+	@Test
+	public void setServedReplacesRatherThanAdds()
+	{
+		// the one place in the plugin where a record may go DOWN. applyTally
+		// would have made this 1400; a debug SET means what it says
+		List<OwnedCard> cards = Collections.singletonList(card("u1", 11, 1000));
+
+		List<OwnedCard> out = ServiceRecordService.setServed(
+			cards, Collections.singleton("u1"), 400);
+
+		Assert.assertNotNull(out);
+		Assert.assertEquals(400, out.get(0).getKillsServed());
+	}
+
+	@Test
+	public void setServedCanClearARecordCompletely()
+	{
+		// ::gachawear none, for retaking a pristine screenshot after a worn one
+		List<OwnedCard> cards = Collections.singletonList(card("u1", 11, 1000));
+
+		List<OwnedCard> out = ServiceRecordService.setServed(
+			cards, Collections.singleton("u1"), 0);
+
+		Assert.assertNotNull(out);
+		Assert.assertEquals(0, out.get(0).getKillsServed());
+	}
+
+	@Test
+	public void setServedMovesEveryNamedCopyTogether()
+	{
+		// "Dragon scimitar" is one album cell but can be several owned copies,
+		// and the cell shows the best of them — moving one would look like a
+		// no-op on screen
+		List<OwnedCard> cards = Arrays.asList(card("u1", 11, 0), card("u2", 11, 0));
+		Set<String> both = new LinkedHashSet<>(Arrays.asList("u1", "u2"));
+
+		List<OwnedCard> out = ServiceRecordService.setServed(cards, both, 100);
+
+		Assert.assertNotNull(out);
+		Assert.assertEquals(100, out.get(0).getKillsServed());
+		Assert.assertEquals(100, out.get(1).getKillsServed());
+	}
+
+	@Test
+	public void setServedReturnsNullWhenNothingWouldChange()
+	{
+		// same null contract as applyTally: mutate() gets an unchanged state and
+		// skips the gzip + SHA-256 encode entirely
+		List<OwnedCard> cards = Collections.singletonList(card("u1", 11, 400));
+
+		Assert.assertNull("already at the asked-for number",
+			ServiceRecordService.setServed(cards, Collections.singleton("u1"), 400));
+		Assert.assertNull("uuid not owned",
+			ServiceRecordService.setServed(cards, Collections.singleton("gone"), 9));
+		Assert.assertNull(ServiceRecordService.setServed(cards, Collections.emptySet(), 9));
+		Assert.assertNull(ServiceRecordService.setServed(null, Collections.singleton("u1"), 9));
+		Assert.assertNull(ServiceRecordService.setServed(
+			Collections.emptyList(), Collections.singleton("u1"), 9));
 	}
 
 	// --- bestByCardId ---

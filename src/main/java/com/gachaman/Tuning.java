@@ -552,4 +552,26 @@ public final class Tuning
 		}
 		return CardWear.NONE;
 	}
+
+	/**
+	 * Fewest kills of service that earns a stage — the inverse of
+	 * {@link #cardWear(int)}, and deliberately in the same file so the two can
+	 * never drift apart in separate edits. Only the ::gachawear debug command
+	 * uses it; nothing in normal play sets a service record, it is only ever
+	 * counted up one kill at a time.
+	 */
+	public static int wearKills(CardWear wear)
+	{
+		switch (wear)
+		{
+			case SHATTERED:
+				return WEAR_SHATTERED_KILLS;
+			case CRACKED:
+				return WEAR_CRACKED_KILLS;
+			case HAIRLINE:
+				return WEAR_HAIRLINE_KILLS;
+			default:
+				return 0;
+		}
+	}
 }

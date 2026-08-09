@@ -15,9 +15,7 @@ It's a gacha game bolted onto an MMO, and it turns "I got a drop" into "I got *p
 > plugin off removes every restriction instantly. Nothing here touches other players, the game
 > server, or real money. See [Honest disclosures](#honest-disclosures).
 
-> **Screenshot wanted** — `docs/screenshots/sidebar-overview.png`: the Overview tab with a purse,
-> an active contract and the style chip visible.
-<!-- ![The Gachaman sidebar](docs/screenshots/sidebar-overview.png) -->
+![The Gachaman sidebar](docs/screenshots/sidebar-overview.png)
 
 ---
 
@@ -37,10 +35,6 @@ It's a gacha game bolted onto an MMO, and it turns "I got a drop" into "I got *p
 Install it, tick the box, log in. The plugin reads your item cache and builds a card for every
 combat-relevant equipable item in the game — derived from the live cache, so nothing with stats
 is missed, and cosmetic-only gear gets no card at all and stays freely wearable.
-
-> **Screenshot wanted** — `docs/screenshots/card-scan.png`: first login, sidebar showing the
-> card-database scan progress.
-<!-- ![Building the card database](docs/screenshots/card-scan.png) -->
 
 If you're starting a fresh account, **stepping off Tutorial Island strips everything it handed
 you** — none of it is card-unlocked, so keeping it would mean wearing gear you could never
@@ -64,9 +58,7 @@ Five beats, forever. The rest of this page is just those five beats in detail.
 A roulette wheel picks **melee, ranged or magic**. That's what you train. It can land on the same
 style twice in a row — fate is like that — and it **re-rolls after every 5 completed contracts**.
 
-> **Screenshot wanted** — `docs/screenshots/style-roulette.png`: the roulette mid-spin, or the
-> moment it lands.
-<!-- ![The style roulette](docs/screenshots/style-roulette.png) -->
+![The style roulette](docs/screenshots/style-roulette.gif)
 
 You can lean on the cycle from the shop:
 
@@ -109,9 +101,13 @@ stays paid zero.
 Roll four kill contracts — **Easy / Medium / Hard / Insane** — scaled to your combat level, so none
 of them are impossible. Sign one. **Rolls can't be undone and a signed contract is binding.**
 
-> **Screenshot wanted** — `docs/screenshots/contract-board.png`: the four rolled offers before you
-> sign one.
-<!-- ![Four contracts on the board](docs/screenshots/contract-board.png) -->
+Because it's binding, the board only deals monsters you can actually walk up to: your combat level,
+your Slayer level, whether you're on a members world, and **which quests you've finished**. A monster
+locked behind a quest you haven't done is simply not in the deck until you do it — no Nechryael
+before *Priest in Peril*, no Vorkath before *Dragon Slayer II*. Finish the quest and it joins the
+deck on your next roll.
+
+![Four contracts on the board](docs/screenshots/contract-board.gif)
 
 Every on-task kill pays Gacha Coins; the final kill pays a completion bonus. Stacked on top:
 
@@ -122,9 +118,7 @@ Every on-task kill pays Gacha Coins; the final kill pays a completion bonus. Sta
 - **Bestiary discovery** — the first on-task kill of each new species pays a bonus, with codex
   milestones at 50 / 100 / 150 species.
 
-> **Screenshot wanted** — `docs/screenshots/kill-progress.png`: a +GC floater over a dying monster
-> with the contract progress bar showing.
-<!-- ![Kill credit](docs/screenshots/kill-progress.png) -->
+![Kill credit](docs/screenshots/kill-progress.gif)
 
 <details>
 <summary><b>Ironman accounts</b> — assisted kills count half</summary>
@@ -162,7 +156,8 @@ contract shows its docket state.
 
 Instead of waiting for the board to offer what you want, buy it. A target must be **familiar** — 25
 banked kills, read straight off your journal — and must pass every gate a normal roll applies
-(combat, slayer, members), so a deed can never buy past a rule. Price scales with how far you're
+(combat, slayer, members, quests), so a deed can never buy past a rule — banked kills on a monster
+whose quest you never finished still won't put it on the counter. Price scales with how far you're
 punching up: **800 – 2,500 GC** in round tens.
 
 The GC is **held in escrow, not spent**. The deed joins your board as an extra offer for ~5 minutes,
@@ -202,9 +197,7 @@ The Rusty chest is the intended first purchase — it's cheap, it draws only fro
 and gear no higher than you can wield today, and its shiny odds are boosted to **1/16**. Your free
 **First Colours** chest *is* a Rusty chest and **counts as one of the three**, so two are left to buy.
 
-> **Screenshot wanted** — `docs/screenshots/chest-strain.png`: an Ornate chest mid-strain, just
-> before the lid gives.
-<!-- ![The chest strains](docs/screenshots/chest-strain.png) -->
+![The chest strains](docs/screenshots/chest-strain.gif)
 
 **The box tells you what it cost, and only that.** A chest fights before it opens: a shudder starts
 the strain, the shaking climbs toward the give, then everything goes dead still for a beat and the
@@ -212,9 +205,7 @@ lid loses. Groans scale with the price — Rusty gets none at all, Battered two,
 four. The schedule is a function of the tier you **bought** and nothing else, so the length of the
 fight physically cannot betray what's inside.
 
-> **Screenshot wanted** — `docs/screenshots/card-reveal.png`: a reveal with a good pull in it —
-> legendary, shiny or hologram.
-<!-- ![A reveal](docs/screenshots/card-reveal.png) -->
+![A reveal](docs/screenshots/card-reveal.png)
 
 Things that can happen mid-open:
 
@@ -239,8 +230,7 @@ first-card pity guarantee are all untouched, and Slot Chests roll Gilded odds.
 The Shop tab's **Chest Odds** panel prints the real per-rarity percentages for every tier, computed
 from the same constants the roller uses — so you can check the claim rather than take it.
 
-> **Screenshot wanted** — `docs/screenshots/shop-odds.png`: the Chest Odds panel open.
-<!-- ![Published odds](docs/screenshots/shop-odds.png) -->
+![Published odds](docs/screenshots/shop-odds.png)
 </details>
 
 ---
@@ -254,9 +244,7 @@ carded item when you own its card *and* have assigned it to the matching loadout
 equipment has its Wield/Wear option removed and clicks consumed, with a crossed-circle icon in your
 inventory and bank.
 
-> **Screenshot wanted** — `docs/screenshots/blocked-equip.png`: inventory or bank with
-> crossed-circle icons on card-locked gear.
-<!-- ![Card-locked gear](docs/screenshots/blocked-equip.png) -->
+![Card-locked gear](docs/screenshots/blocked-equip.png)
 
 Two card types break that one-card-one-item rule:
 
@@ -276,9 +264,7 @@ Ironman accounts also start with their **own** account type's armour cards — r
 hardcore, group, hardcore group or unranked group — and that set's platebody fills the body slot.
 Normal accounts get none of it, since the game would never let them wear it anyway.
 
-> **Screenshot wanted** — `docs/screenshots/loadout-tab.png`: the Loadout page with several slots
-> filled and at least one still locked.
-<!-- ![The loadout board](docs/screenshots/loadout-tab.png) -->
+![The loadout board](docs/screenshots/loadout-tab.png)
 
 The other **eight slots need Slot Deeds**:
 
@@ -294,14 +280,18 @@ instead. During your first five contracts, Medium/Hard/Insane completions also p
 
 Every card counts the kills it was **present for** — assigned to a loadout slot when the kill landed —
 and the number is permanent. Past **100 / 400 / 1,000** kills a card wears *Hairline* / *Cracked* /
-*Shattered, still holding*, drawn as gold-filled kintsugi repair.
+*Shattered, still holding*, drawn the way a played trading card actually ages: the print wears through
+at the rim and the pale stock shows, worst at the corners; creases run across the face with a shadow
+on one side and a lit ridge on the other; fine scratches come off sleeving; patina settles over it.
+
+Every card wears differently, and every card at the same stage carries the same *amount* of it. The
+counts and opacities are fixed per stage, so a *Shattered* card reads as *Shattered* at a glance —
+only where the creases enter, which way the scratches lean and where the rim thins are per-card.
 
 No rule anywhere reads it. A worn card rolls, equips, completes sets, burns at prestige and prices in
 the shop exactly like a pristine one. It's a veteran's stripe, not a durability system.
 
-> **Screenshot wanted** — `docs/screenshots/album.png`: the Album, ideally with a card carrying
-> kintsugi seams.
-<!-- ![The album](docs/screenshots/album.png) -->
+![The album](docs/screenshots/album.png)
 
 ---
 
@@ -311,14 +301,33 @@ Join a RuneLite Party and you can roll **one contract for everybody**.
 
 ![A party roll, step by step: propose, answer, roll, vote, one shared contract](docs/party-roll.svg)
 
-> **Screenshot wanted** — `docs/screenshots/party-vote.png`: the party contract board mid-vote.
-<!-- ![Voting on a contract](docs/screenshots/party-vote.png) -->
+![Voting on a contract](docs/screenshots/party-vote.png)
 
 A shared contract means **one pooled quota** that everyone's kills fill, completion pays the **1.6×**
 co-op bonus on every screen, and a party covering more than one attack style earns a flat **+0.25×**
 clash bonus — paid once, never scaled by how many styles, so any mixed party pays 1.85× while a
 mono-style party of any size pays 1.60×. The styles are frozen when the roll starts, alongside the
 offers: like every other contract term, the payout is fixed at signing.
+
+### Who the contracts are sized for
+
+The **host** — whoever proposes the roll — picks which combat level the board is built around, and
+their choice governs everyone in it:
+
+| Setting | Sizes to | Feels like |
+| --- | --- | --- |
+| **Fighting Weight** *(default)* | the party's **average** combat level | contracts worth the party's weight; smaller members are carried by the pooled quota |
+| **Weakest Man** | the party's **lowest** combat level | every contract is one the smallest member could have taken alone |
+
+Only the host's setting is read — yours applies to the rolls **you** propose. A party can't be half on
+one rule and half on the other: the roll is seeded, and two clients sizing to two different levels
+would deal two different boards from it. The rule and the level it produced are both printed in chat
+before anybody votes.
+
+Quests work the other way round — **every** member's answer counts, not just the host's. A party
+board only deals monsters the whole party has unlocked, so one member short of *Priest in Peril*
+keeps Nechryael off everyone's board. It has to be the whole party: a shared contract is one pooled
+quota, and a monster three of you can reach is still a contract the fourth can't help with.
 
 <details>
 <summary>What happens when things go wrong</summary>
@@ -330,9 +339,15 @@ offers: like every other contract term, the payout is fixed at signing.
   binding.
 - **A client crashes mid-vote** — it settles the same vote on its next login, so a crash can never
   leave your board waiting on a count nobody is making.
-- **Someone's on an older build** that has never heard of Fighting Weight — the whole party falls back
-  to sizing on the **lowest** combat level instead. It's all-or-nothing by design: the roll is seeded,
-  and two clients disagreeing about the target level would deal two different boards.
+- **Someone's on an older build** — the roll falls back to whatever every member's client can agree
+  on. A build that predates the host's sizing choice puts the party on **Fighting Weight** regardless
+  of what the host set; one that predates Fighting Weight itself puts it on the **lowest** combat
+  level; one that predates quest gating turns the quest filter **off for everyone** and deals from
+  the whole table. It's all-or-nothing by design: the roll is seeded, and two clients disagreeing
+  about the pool would deal two different boards. Both overrides are announced in chat **before the
+  vote** rather than quietly applied — the quest one especially, because it's the only fallback that
+  can put a monster somebody can't reach on the board, and a signed party contract can't be handed
+  back.
 - **Only the host ever settles a vote** and broadcasts the result, so a vote still in flight can't
   split the party across two contracts.
 </details>
@@ -340,24 +355,46 @@ offers: like every other contract term, the payout is fixed at signing.
 ### The Party page
 
 A sidebar tab showing who's with you: each member's rolled style as a colour swatch, their combat
-level, their contract progress, and badges for taint and for your Patron's Mark with them.
+level, and badges for taint and for your Patron's Mark with them.
+
+**It's grouped by contract, not by person.** A party is routinely not doing one thing — two members
+on one shared contract, two more on another, and somebody still mid-roll — so everyone working the
+same contract is drawn as one block under **one** progress meter. A shared contract has one quota,
+and repeating "Goblin 12/20" under three names would read as three jobs of twenty. Members on their
+own get their own block.
+
+Anyone without a contract says why in a line under their name:
+
+- **No contract** — idle, and free to join a roll.
+- **Undecided board** — they have offers dealt and have signed none of them. They can't join a
+  shared roll until they pick one or let the board clear. This is the one that isn't obvious from
+  looking: they'd otherwise seem idle, and the party would sit waiting on somebody who can't answer.
+- **No signal** — their client has said nothing for about a minute.
 
 It is **display only** — no roll, payout or gate reads it. Every line is self-reported by that
-member's own client and taken on trust; a member's row goes quiet after ~1 minute without a
-heartbeat. Turn **Party contracts** off and the tab stays put but broadcasts nothing and shows
-nothing — and says so, rather than sitting there looking empty.
+member's own client and taken on trust. Turn **Party contracts** off and the tab stays put but
+broadcasts nothing and shows nothing — and says so, rather than sitting there looking empty.
 
-> **Screenshot wanted** — `docs/screenshots/party-tab.png`: the Party page with two or more members
-> listed.
-<!-- ![The party page](docs/screenshots/party-tab.png) -->
+![The party page](docs/screenshots/party-tab.png)
 
 ### The Patron's Mark
 
-A private tally of how many shared contracts you've finished alongside each partner, keyed by display
-name so it survives logins. Marks at **10 / 25 / 100** (Patron I / II / III).
+A private tally of how many shared contracts you've finished alongside each partner. Marks at
+**10 / 25 / 100** (Patron I / II / III).
+
+It lives on the **Patrons** tab — everyone you've ever finished a shared contract with, most first,
+with their tier and when you last rolled together. The tab appears the day you earn your first mark.
+On the Party page each member you have history with wears a coloured pip; whoever you've shared most
+with gets a brighter outline.
+
+Keyed by **account**, not by name, so a partner who renames keeps one history instead of forking into
+two half-tallies. That identity is a truncated hash of their account — not the account id itself —
+and it's the same thing everyone in a RuneLite party can already see about each other, plus nothing.
 
 Deliberately **cosmetic** — it pays no GC and multiplies nothing, because a mark that was worth
 something would make farming a friend the correct play.
+
+![The patrons page](docs/screenshots/patrons-tab.png)
 
 ---
 
@@ -376,24 +413,24 @@ something would make farming a friend the correct play.
 
 ## Your sidebar
 
-Ten pages, and one of them is a help file:
+Eleven pages, one of them a help file — and three that don't turn up until you've earned them, so a
+fresh account isn't handed three empty tabs to wonder about:
 
 | Tab | What's on it |
 | --- | --- |
 | **Overview** | Purse, active contract, style, party controls, the board |
 | **Shop** | Chests, compactors, extenders, the weekly cards, published Chest Odds |
-| **Album** | Every card you own, with service seams |
+| **Album** | Every card you own, worn by the service it has seen |
 | **Sets** | The 64 sets and what completing each one pays |
 | **Journal** | Per-monster kill stats and personal bests |
 | **Timeline** | Every roll, pull, equip and event in colour-coded order — the last 500. Pick a from/to window and scrub through it |
-| **Dossier** | The honest ledger: every contract finished or failed, newest first, with what it paid. Keeps the last 200, and says so |
-| **Party** | Who's with you, and how they're doing |
-| **Loadout** | Assign cards to slots. There's an in-game overlay too, plus chatbox card search |
+| **Dossier** | The honest ledger: every contract finished or failed, newest first, with what it paid. Keeps the last 200, and says so. *Appears with your first finished contract* |
+| **Party** | Who's with you, and how they're doing — grouped by shared contract |
+| **Patrons** | Everyone you've shared a contract with, most first. *Appears with your first shared contract* |
+| **Loadout** | Assign cards to slots. There's an in-game overlay too, plus chatbox card search. *Appears with **One card per slot** on* |
 | **Help** | The rules, in the client, when you need them |
 
-> **Screenshot wanted** — `docs/screenshots/timeline.png`: the Fortune Timeline with a varied run of
-> colour-coded events.
-<!-- ![The fortune timeline](docs/screenshots/timeline.png) -->
+![The fortune timeline](docs/screenshots/timeline.png)
 
 ---
 
@@ -411,6 +448,11 @@ Ten pages, and one of them is a help file:
 - **Party features are trust-based**, like all client-side party plugins. Everything on the Party page
   is self-reported by that member's own client; it is drawn, never trusted by a rule. Remote values
   are clamped to sane ranges before they're shown.
+- **What your client tells your party.** While **Party contracts** is on, your client broadcasts your
+  rolled style, combat level, current contract and its progress, whether you have a board waiting,
+  and one identity token — a truncated SHA-256 of your account hash, never the hash itself — so that
+  a Patron's Mark survives a rename and shared contracts group correctly. Nothing else, nothing to
+  anyone outside your party, and nothing at all when the setting is off.
 - **The Ante risks only Gacha Coins**, the plugin's own currency. It's off by default, never
   preselected, and always takes an explicit confirmation. No real currency, no game gold, and nothing
   outside your own save is ever at stake.
@@ -450,6 +492,9 @@ Ten pages, and one of them is a help file:
 - **Party contracts** *(on)* — take part in shared party rolls while in a RuneLite Party. When off you
   count as busy: proposals excuse you automatically, you cannot propose or join, the party UI on the
   Overview page hides, and your client broadcasts no presence (the Party tab stays but shows nothing)
+- **Party contract sizing** *(Fighting Weight)* — which combat level a party roll sizes to: the party's
+  average (Fighting Weight) or its lowest (Weakest Man). Applies to the rolls **you host** — in
+  somebody else's roll, theirs is the one that counts
 </details>
 
 <details>
@@ -487,6 +532,7 @@ All of the above require the **Party contracts** setting (on by default).
 | `::gachatoken` | Grant a card reroll token |
 | `::gachacleartaint` | Clear all taint debt |
 | `::gachacleartask` | Wipe the active contract and rolled offers |
+| `::gachawear <none\|hairline\|cracked\|shattered\|N> [name]` | Set the Service Record on owned cards so the wear shows. `name` is a substring — leave it off to hit every card |
 | `::gachabutton` | Print loadout-button render diagnostics |
 | `::gachacosmetics [maxTotal]` | Audit: list untiered cards at or below a combat-bonus threshold (default 6) |
 </details>

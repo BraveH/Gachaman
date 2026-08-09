@@ -12,6 +12,7 @@ import java.util.List;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.Value;
+import net.runelite.client.util.QuantityFormatter;
 
 /**
  * Prestige/rebirth: sacrifice all Common+Uncommon NORMAL cards + GC for a
@@ -95,9 +96,10 @@ public class PrestigeService
 			&& state.getGc() >= Tuning.PRESTIGE_GC_COST;
 
 		int burnCount = (int) state.getOwnedCards().stream().filter(this::burnable).count();
-		String req = "Requires " + Tuning.PRESTIGE_TASKS_REQUIRED + " tasks ("
-			+ state.getTotalTasksCompleted() + ") or 90% C/U collection, plus "
-			+ Tuning.PRESTIGE_GC_COST + " GC";
+		String req = "Requires " + QuantityFormatter.formatNumber(Tuning.PRESTIGE_TASKS_REQUIRED)
+			+ " contracts (" + QuantityFormatter.formatNumber(state.getTotalTasksCompleted())
+			+ ") or 90% C/U collection, plus "
+			+ QuantityFormatter.formatNumber(Tuning.PRESTIGE_GC_COST) + " GC";
 		return new PrestigePlan(eligible, req, burnCount, Tuning.PRESTIGE_GC_COST,
 			state.getPrestigeRank() + 1);
 	}

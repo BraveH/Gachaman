@@ -12,9 +12,12 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.GradientPaint;
 import java.awt.Graphics2D;
+import java.awt.RadialGradientPaint;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Shape;
+import java.awt.geom.Line2D;
+import java.awt.geom.Point2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
@@ -39,14 +42,35 @@ public final class CardRenderer
 	private static final Color SERVICE_EDGE = new Color(176, 141, 87, 210);
 	private static final Color SERVICE_TEXT = new Color(226, 205, 158);
 	/**
-	 * Kintsugi, not fracture: the crack is filled with gold over a dark relief
-	 * stroke, so a worn card reads as a mended veteran rather than as damage the
-	 * player should fear. Grey fracture lines were rejected for exactly that.
+	 * Card stock. A printed card is ink over a pale board, so everywhere the print
+	 * has worn through — the rim, the corners, the lit ridge of a crease, a
+	 * shuffling scratch — what shows is this, slightly warm and never pure white.
+	 * That one fact is what makes wear read as wear instead of as drawn-on damage.
 	 */
-	private static final Color WEAR_GOLD = new Color(226, 184, 96);
-	private static final Color WEAR_SHADOW = new Color(18, 14, 8);
-	/** Segments per crack. Each one bends, so more segments means more wander. */
-	private static final int WEAR_SEGMENTS = 4;
+	private static final Color WEAR_STOCK = new Color(216, 208, 192);
+	private static final Color WEAR_SHADOW = new Color(10, 8, 5);
+	/** Handling dirt: fingers, sleeves, and a decade in a box. */
+	private static final Color WEAR_GRIME = new Color(26, 19, 10);
+	/**
+	 * Steps per crease. A crease is one polyline crossing the whole card, so this
+	 * is how finely it bends rather than how many separate marks are drawn — and
+	 * because the underlying meander is a smooth curve, MORE steps is smoother,
+	 * not busier. Twelve is where the joints stop being visible at 150px.
+	 */
+	static final int WEAR_STEPS = 12;
+	/** Segment kinds returned by {@link #wearSegments}, at index 4. */
+	static final int KIND_CREASE = 0;
+	static final int KIND_SCRATCH = 1;
+	/** How far a scratch bows off its own straight line, as a fraction of half its length. */
+	private static final double SCRATCH_BEND = 0.06;
+	/**
+	 * The bound on that bow once wearSeamPath's grit is included — its wave tops
+	 * out at 1.0 and the grit adds another 0.11 — rounded up. Placement adds this
+	 * to the plain sin/cos extent, because a scratch sized by trigonometry alone
+	 * pokes its tip into the name band and loses the last of itself to the text
+	 * check.
+	 */
+	private static final double WANDER = SCRATCH_BEND * 1.12;
 
 	@Value
 	@Builder
@@ -110,11 +134,6 @@ public final class CardRenderer
 
 		// art — cropped to its opaque bounds first: item sprites carry uneven
 		// transparent padding, so centering the raw sprite off-centers the art.
-		// artRect is hoisted because dw/dh exist only inside this block and the
-		// wear pass below needs the ACTUAL drawn rect to route cracks around; an
-		// edit that moved the art block below that pass would silently leave it
-		// null and quietly break the never-obscure guarantee.
-		Rectangle artRect = null;
 		if (view.getArt() != null)
 		{
 			int artH = (int) (h * 0.52);
@@ -128,7 +147,21 @@ public final class CardRenderer
 				RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
 			ga.drawImage(art, x + (w - dw) / 2, artY + (artH - dh) / 2, dw, dh, null);
 			ga.dispose();
-			artRect = new Rectangle(x + (w - dw) / 2, artY + (artH - dh) / 2, dw, dh);
+		}
+
+		// Cracked Cards, first of three passes: handling dirt. Deliberately over
+		// the art and under every piece of text — a veteran card's PICTURE is the
+		// part that goes dull with age, while its printing has to stay readable at
+		// 90px. Drawing it under the art instead would read as a dirty background
+		// rather than as a dirty card.
+		CardWear wear = Tuning.cardWear(view.getKillsServed());
+		if (wear != CardWear.NONE)
+		{
+			// seeded from the NAME, not from timeMs and not from a new CardView
+			// field: the pattern is then frame-stable (no shimmer on a static
+			// card), survives a restart, and is identical between the album
+			// thumbnail and the reveal card — one physical object, not two
+			drawWearGrime(g2, shape, x, y, w, h, wear, view.getName().hashCode());
 		}
 
 		// name band — the font SHRINKS to fit the name (ellipsis only as a
@@ -192,26 +225,20 @@ public final class CardRenderer
 			drawServiceBadge(g2, x, y, w, h, service);
 		}
 
-		// Cracked Cards: cosmetic wear earned from the Service Record, drawn
-		// BEFORE the border so the rarity frame always paints on top of it, and
-		// confined to the free margin around the art so it can never cover the
-		// item icon, the card name or the rarity label. "Never obscures" is a
-		// property of where the cracks are ALLOWED to run, not of an
-		// art-direction hope; the protected rects are a second, redundant check.
-		CardWear wear = Tuning.cardWear(view.getKillsServed());
+		// Second pass: creases and scratches. Drawn BEFORE the border so the
+		// rarity frame always paints on top of them, and allowed to run edge to
+		// edge straight ACROSS the art — a card creases through the picture, and
+		// confining the fold to the margins is what made this read as scribble
+		// rather than as damage. What it may never cover is TEXT: the service
+		// pill, the rarity label and the name band. A segment that would cross one
+		// is dropped, which leaves a clean gap, as if the band were a label stuck
+		// on the card and the crease ran underneath it.
+		int topBandBottom = Math.max(badgeBottom, y + h / 14 + 4 + labelSize);
+		int nameBandTop = y + h - bandH - h / 8;
 		if (wear != CardWear.NONE)
 		{
-			// the two band edges are measured once and handed to both helpers,
-			// so the corridors and the protected rects cannot disagree
-			int topBandBottom = Math.max(badgeBottom, y + h / 14 + 4 + labelSize);
-			int nameBandTop = y + h - bandH - h / 8;
-			// seeded from the NAME, not from timeMs and not from a new CardView
-			// field: the pattern is then frame-stable (no shimmer on a static
-			// badge), survives a restart, and is identical between the album
-			// thumbnail and the reveal card — one physical object, not two
-			drawWear(g2, shape, w, wear, wearSegments(w, wear, view.getName().hashCode(),
-				wearCorridors(x, y, w, h, topBandBottom, nameBandTop, artRect),
-				wearProtect(x, y, w, h, topBandBottom, nameBandTop, artRect)));
+			drawWearLines(g2, shape, w, wear, wearSegments(x, y, w, h, wear,
+				view.getName().hashCode(), wearProtect(x, y, w, h, topBandBottom, nameBandTop)));
 		}
 
 		// border (variant-tinted)
@@ -223,6 +250,15 @@ public final class CardRenderer
 		g2.setColor(border);
 		g2.setStroke(new BasicStroke(view.getRarity().atLeast(Rarity.RARE) ? 2.5f : 1.6f));
 		g2.draw(shape);
+
+		// Third pass: the chewed edge, and the only thing drawn AFTER the border —
+		// that is the whole point of it. A worn card's frame is interrupted where
+		// the gilt has flaked off, so the nicks have to bite the border itself
+		// rather than sit politely inside it.
+		if (wear != CardWear.NONE)
+		{
+			drawWearEdge(g2, shape, x, y, w, h, wear, view.getName().hashCode());
+		}
 
 		g2.dispose();
 	}
@@ -338,251 +374,449 @@ public final class CardRenderer
 	}
 
 	// --- cosmetic wear (Cracked Cards) ---
+	//
+	// Modelled on what a played trading card actually looks like, in the order a
+	// grader would list it. Edge whitening first — the print layer wears through
+	// at the rim and the pale stock core shows, worst at the corners, and it is
+	// the single most recognisable "this card has been handled" cue there is. Then
+	// creases: a card bends along a LINE, so a crease is near-straight and reads as
+	// a shadow with a lit ridge beside it. Then surface scratches from sleeving
+	// and shuffling, then general patina.
+	//
+	// Deliberately none of it is gold. An earlier pass drew kintsugi repair veins,
+	// which is a nice idea and looks nothing like a worn card.
+	//
+	// Every card wears differently; every card in a bracket wears the same AMOUNT.
+	// The counts and opacities below are functions of the stage alone, and the
+	// per-card seed only ever picks where a crease enters, which way the scratches
+	// lean, and where the fringe thins. So a SHATTERED card always reads as
+	// SHATTERED at a glance — the weight of the damage is the stage — and no two
+	// cards in the album carry it in the same places.
 
-	/** Gold vein width. Scales with the card so a 90px thumb and a 150px reveal read alike. */
+	/** Crease width. Scales with the card so a 90px thumb and a 150px reveal read alike. */
 	static float wearStroke(int w)
 	{
-		return Math.max(1f, w / 60f);
+		return Math.max(1.6f, w / 55f);
 	}
 
 	/**
-	 * How far the ink actually reaches from a crack's centre line. The relief is
-	 * the widest of the two passes and is drawn centred, so this is half its
-	 * width — drawWear strokes with exactly (2 * this), which is what lets a test
-	 * assert the painted footprint against the same number the renderer uses
-	 * instead of a copy of it that can drift.
+	 * How far the ink actually reaches from a line's centre line. The crease
+	 * shadow is the widest of the passes and is drawn centred, so this is half its
+	 * width — drawWearLines strokes with exactly (2 * this), which is what lets a
+	 * test assert the painted footprint against the same number the renderer uses
+	 * instead of against a copy of it that can drift.
 	 */
 	static float wearInkReach(int w)
 	{
-		return wearStroke(w) / 2f + 0.8f;
+		return wearStroke(w) * 1.35f;
 	}
 
 	/**
-	 * Clearance a crack must keep from anything protected, and the inset it keeps
-	 * from the walls of its own corridor. Always at least {@link #wearInkReach},
-	 * with the surplus as visible breathing room so the gold reads as sitting
-	 * beside the sprite rather than crowding it. Kept deliberately tight — the
-	 * free margin on a 90px album thumbnail is only about nine pixels, and a
-	 * generous pad would silently reject every crack and paint nothing at all.
-	 *
-	 * <p>Deliberately independent of the wear STAGE. If a heavier stage used a
-	 * thicker vein it would need a wider corridor, and a card could then show
-	 * hairline cracks but nothing at all once it reached SHATTERED.
+	 * Creases. A crease is the heaviest single thing that can happen to a card
+	 * short of a tear, so these numbers are small on purpose: none at all on a
+	 * lightly played card, one on a worn one, two on a wreck.
 	 */
-	static float wearStrokePad(int w)
-	{
-		return wearStroke(w) / 2f + 2.5f;
-	}
-
-	/** Cracks drawn. Strictly increasing with the stage. */
-	static int crackCount(CardWear wear)
+	static int creaseCount(CardWear wear)
 	{
 		switch (wear)
 		{
-			case HAIRLINE:
-				return 1;
 			case CRACKED:
-				return 3;
+				return 1;
 			case SHATTERED:
-				return 5;
+				return 2;
 			default:
 				return 0;
 		}
 	}
 
-	/** Gold opacity. Strictly increasing with the stage, never fully opaque. */
+	/**
+	 * Surface scratches from sleeving and shuffling. Unlike creases these start
+	 * immediately — a card with a hundred kills of service has been in and out of
+	 * a loadout a hundred times, and fine scuffing is the first thing that shows.
+	 */
+	static int scratchCount(CardWear wear)
+	{
+		switch (wear)
+		{
+			case HAIRLINE:
+				return 6;
+			case CRACKED:
+				return 10;
+			case SHATTERED:
+				return 16;
+			default:
+				return 0;
+		}
+	}
+
+	/** Line opacity for creases and scratches. Strictly increasing, never opaque. */
 	static int wearAlpha(CardWear wear)
 	{
 		switch (wear)
 		{
 			case HAIRLINE:
-				return 120;
+				return 96;
 			case CRACKED:
-				return 180;
+				return 150;
 			case SHATTERED:
-				return 230;
+				return 200;
 			default:
 				return 0;
 		}
 	}
 
 	/**
-	 * The three regions a crack may never touch: the top band (service pill plus
-	 * rarity label), the drawn art, and the name band plus the subtitle strip
-	 * below it. The art entry is null for a card with no sprite; blocked() skips
-	 * nulls.
+	 * Handling-dirt opacity at the rim, where the vignette is darkest. Kept well
+	 * under the line work: patina is the layer you notice last.
+	 */
+	static int grimeAlpha(CardWear wear)
+	{
+		switch (wear)
+		{
+			case HAIRLINE:
+				return 34;
+			case CRACKED:
+				return 62;
+			case SHATTERED:
+				return 92;
+			default:
+				return 0;
+		}
+	}
+
+	/**
+	 * Patches of worn print along the border. High counts on purpose — edge
+	 * whitening is a continuous frayed fringe, not a handful of chips, and the
+	 * only way to get a fringe out of discrete marks is to use enough of them
+	 * that they overlap.
+	 */
+	static int edgeNicks(CardWear wear)
+	{
+		switch (wear)
+		{
+			case HAIRLINE:
+				return 20;
+			case CRACKED:
+				return 38;
+			case SHATTERED:
+				return 60;
+			default:
+				return 0;
+		}
+	}
+
+	/**
+	 * The two regions a line may never touch, and they are both TEXT: the top
+	 * band (service pill plus rarity label) and the name band plus the subtitle
+	 * strip under it. The art is pointedly NOT protected — a card creases
+	 * through the picture, and keeping the fold out of the picture is exactly
+	 * what made the old routing read as margin scribble.
 	 *
 	 * <p>Callers pass the band edges they themselves drew with, so this cannot
 	 * drift out of step with drawFace the way a re-derived copy would.
 	 */
 	static Rectangle[] wearProtect(int x, int y, int w, int h, int topBandBottom,
-		int nameBandTop, @Nullable Rectangle art)
+		int nameBandTop)
 	{
 		return new Rectangle[]{
 			new Rectangle(x, y, w, Math.max(1, topBandBottom - y)),
-			art,
 			new Rectangle(x, nameBandTop, w, Math.max(1, y + h - nameBandTop))
 		};
 	}
 
 	/**
-	 * The free margin a crack is allowed to occupy: the strip left of the art,
-	 * the strip right of it, and the band between the art and the name band. A
-	 * card with no sprite yields one lane covering the whole middle.
+	 * The clear vertical window between the two text bands, as {lo, hi}. Derived
+	 * from the protected rects the caller already built rather than from a second
+	 * copy of drawFace's band arithmetic, so the two cannot disagree.
 	 *
-	 * <p>Routing cracks down these lanes, rather than radiating them from the
-	 * edge toward the centre, is what makes "never covers the item icon" a
-	 * property of the construction. On a 90px album thumbnail a wide sprite
-	 * leaves roughly eight pixels of gutter and nine below the art, so a crack
-	 * aimed at the centre would have to cross the sprite to be visible at all —
-	 * there is no version of the radiating design that is both visible and safe.
-	 *
-	 * <p>A lane narrower than the stroke can hold is dropped rather than
-	 * squeezed, so the failure direction is "no crack", never "a crack over the
-	 * art".
+	 * <p>A rect touching the top of the card pushes {@code lo} down past it;
+	 * anything else pulls {@code hi} up above it. That is exactly the shape of
+	 * {@link #wearProtect} and does not care what order it returns them in.
+	 * Degenerate input collapses to the whole card, and the per-segment
+	 * {@link #blocked} check still keeps the guarantee — it just means a card
+	 * whose bands eat the entire face draws no seams at all rather than seams in
+	 * the wrong place.
 	 */
-	static List<Rectangle> wearCorridors(int x, int y, int w, int h, int topBandBottom,
-		int nameBandTop, @Nullable Rectangle art)
+	static int[] wearOpenBand(@Nullable Rectangle[] protect, int y, int h)
 	{
-		List<Rectangle> out = new ArrayList<>();
-		// ceil(2*pad)+1 is always at least 2*ceil(pad), which is exactly what
-		// wearSafeBox needs to find a legal integer line, so a lane that survives
-		// this filter always produces a crack rather than silently producing none
-		int minSpan = (int) Math.ceil(wearStrokePad(w) * 2) + 1;
-		int top = Math.max(y, topBandBottom);
-		int bottom = Math.min(y + h, nameBandTop);
-		if (bottom - top < minSpan || w <= 0 || h <= 0)
+		int lo = y;
+		int hi = y + h;
+		if (protect != null)
 		{
-			return out;
+			for (Rectangle r : protect)
+			{
+				if (r == null)
+				{
+					continue;
+				}
+				if (r.y <= lo)
+				{
+					lo = Math.max(lo, r.y + r.height);
+				}
+				else
+				{
+					hi = Math.min(hi, r.y);
+				}
+			}
 		}
-		if (art == null || art.isEmpty())
-		{
-			out.add(new Rectangle(x, top, w, bottom - top));
-			return out;
-		}
-		int artLeft = Math.min(x + w, Math.max(x, art.x));
-		int artRight = Math.max(x, Math.min(x + w, art.x + art.width));
-		int artBottom = Math.max(top, Math.min(bottom, art.y + art.height));
-		if (artLeft - x >= minSpan)
-		{
-			out.add(new Rectangle(x, top, artLeft - x, bottom - top));
-		}
-		if (x + w - artRight >= minSpan)
-		{
-			out.add(new Rectangle(artRight, top, x + w - artRight, bottom - top));
-		}
-		if (bottom - artBottom >= minSpan)
-		{
-			out.add(new Rectangle(x, artBottom, w, bottom - artBottom));
-		}
-		return out;
+		return hi - lo < 4 ? new int[]{y, y + h} : new int[]{lo, hi};
 	}
 
 	/**
-	 * The inclusive integer box {minX, minY, maxX, maxY} that a crack's stored
-	 * endpoints must land in for the painted stroke to clear the walls of its own
-	 * corridor by the full pad. Null when the corridor holds no legal integer
-	 * line at all, in which case the caller skips it and draws nothing.
+	 * A point on the card's perimeter. {@code edge} is 0=top, 1=right, 2=bottom,
+	 * 3=left and {@code t} in 0..1 slides along it, squeezed into the middle 70%
+	 * so a seam never starts in a rounded corner where the clip would eat it.
 	 *
-	 * <p>This exists because endpoints are stored as ints. Insetting the corridor
-	 * by the pad in floating point and then truncating moves the endpoint back
-	 * toward the wall by up to a pixel, which on the nine-pixel band under a wide
-	 * sprite is enough to put the stroke back over the art. Rounding OUTWARD
-	 * first — ceil the low edge, floor the high edge — makes the clearance exact
-	 * at integer precision instead of nearly right.
+	 * <p>The left and right edges slide along {@code band} — the clear strip
+	 * between the two text bands — rather than the card's full height. A seam
+	 * entering at the same height as the name band would be dropped in its
+	 * entirety by the text check and paint nothing; entering through the open
+	 * middle, it always crosses the face. Top and bottom entries deliberately do
+	 * NOT get this treatment: losing their first few segments under the rarity
+	 * label is the look, a break running beneath a stuck-on label.
+	 *
+	 * <p>Inset by {@code pad} rather than sitting exactly on the boundary: the
+	 * seam is stroked round-capped, so an endpoint on the line would put half the
+	 * relief outside the card, where the clip flattens it into a blunt stub
+	 * instead of letting it taper into the frame.
 	 */
-	@Nullable
-	static int[] wearSafeBox(Rectangle lane, float pad)
+	static double[] wearEdgePoint(int x, int y, int w, int h, int[] band, int edge, float t,
+		float pad)
 	{
-		int minX = (int) Math.ceil(lane.x + pad);
-		int minY = (int) Math.ceil(lane.y + pad);
-		int maxX = (int) Math.floor(lane.x + lane.width - pad);
-		int maxY = (int) Math.floor(lane.y + lane.height - pad);
-		if (minX > maxX || minY > maxY)
+		double u = 0.15 + 0.70 * t;
+		double v = band[0] + u * (band[1] - band[0]);
+		switch (edge & 3)
 		{
-			return null;
+			case 0:
+				return new double[]{x + u * w, y + pad};
+			case 1:
+				return new double[]{x + w - pad, v};
+			case 2:
+				return new double[]{x + u * w, y + h - pad};
+			default:
+				return new double[]{x + pad, v};
 		}
-		return new int[]{minX, minY, maxX, maxY};
 	}
 
 	/**
-	 * Every crack segment to be drawn, as {x1,y1,x2,y2}. Each crack runs the
-	 * LENGTH of one corridor and wanders across its width, clamped to that
-	 * corridor's safe box so the round caps stay inside.
+	 * One seam as a polyline of {@link #WEAR_STEPS}+1 points, running from a to b
+	 * with seeded jitter perpendicular to that line.
 	 *
-	 * <p>The protected rects are still handed in and still tested per segment.
-	 * That is redundant with the corridors by construction, and deliberately so:
-	 * it is the backstop that keeps the guarantee true if a later edit changes a
-	 * band's geometry without changing the corridor maths.
+	 * <p>The offset is a MEANDER, not a random walk: two slow sine waves at a
+	 * seeded frequency and phase, with a little grit on top. Sampling an
+	 * independent random number per step is what draws a sawtooth, and a sawtooth
+	 * is precisely the "horrible ascii" this rewrite exists to delete. A real
+	 * break drifts, then turns; it does not alternate.
+	 *
+	 * <p>The whole offset is then tapered by {@code sin(pi*t)}, which is zero at
+	 * both ends. That is the second half of the trick: the seam wanders freely
+	 * across the middle of the card but arrives at each edge exactly where it was
+	 * aimed, so it meets the frame cleanly instead of stopping in mid-air.
+	 */
+	static double[][] wearSeamPath(double ax, double ay, double bx, double by, int seed,
+		double amp)
+	{
+		double dx = bx - ax;
+		double dy = by - ay;
+		double len = Math.hypot(dx, dy);
+		double nx = len < 1e-6 ? 0 : -dy / len;
+		double ny = len < 1e-6 ? 0 : dx / len;
+		// one full lobe at the low end, so even the calmest seam bows rather than
+		// running straight; the fast wave rides on it as a second, smaller kink
+		double slow = 1.0 + hash01(seed + 1) * 1.4;
+		double fast = 2.6 + hash01(seed + 2) * 2.4;
+		double slowPhase = hash01(seed + 3) * Math.PI * 2;
+		double fastPhase = hash01(seed + 4) * Math.PI * 2;
+		double lean = hash01(seed + 5) < 0.5 ? -1 : 1;
+		double[][] pts = new double[WEAR_STEPS + 1][2];
+		for (int s = 0; s <= WEAR_STEPS; s++)
+		{
+			double t = (double) s / WEAR_STEPS;
+			double wave = 0.66 * Math.sin(slow * Math.PI * t + slowPhase)
+				+ 0.34 * Math.sin(fast * Math.PI * t + fastPhase);
+			// grit is a fifth of the wave at most: enough to roughen the line,
+			// never enough to become the line
+			double grit = (hash01(seed + s * 31 + 7) - 0.5) * 0.22;
+			double offset = lean * amp * Math.sin(Math.PI * t) * (wave + grit);
+			pts[s][0] = ax + dx * t + nx * offset;
+			pts[s][1] = ay + dy * t + ny * offset;
+		}
+		return pts;
+	}
+
+	/**
+	 * Every line segment to be drawn, as {x1,y1,x2,y2,kind} with kind either
+	 * {@link #KIND_CREASE} or {@link #KIND_SCRATCH}. Both kinds share one list so
+	 * the text-clearance and stays-inside guarantees are proved once.
+	 *
+	 * <p>A CREASE is a fold, and a folded card creases from edge to edge in
+	 * essentially a straight line — the amplitude here is a third of what a
+	 * cracked-glass effect would use, because a crease that wanders is a tear.
+	 * A SCRATCH is shorter, sits anywhere on the face, and leans with the rest of
+	 * its card: cards get scuffed by sliding in and out of the same sleeve the
+	 * same way, so a seeded dominant angle with a little spread per scratch reads
+	 * as handling, where independent angles read as confetti.
+	 *
+	 * <p>Every card wears differently and every card in a bracket wears the same
+	 * AMOUNT. The counts and opacities come only from {@code wear}; the seed only
+	 * ever chooses where things land and which way they lean. That split is the
+	 * whole contract: the stage is legible at a glance because two SHATTERED
+	 * cards carry the same weight of damage, and the album does not look
+	 * stamped because no two carry it in the same places.
+	 *
+	 * <p>Segments that would cross protected text are dropped rather than
+	 * rerouted. Dropping leaves a gap in a line that carries on afterwards, which
+	 * reads correctly — the name band is a printed label and the crease runs
+	 * under it. Rerouting would bend the line around the band and put back the
+	 * kink this rewrite exists to remove.
+	 *
+	 * <p>The first crease of every card is forced left-to-right. Top and bottom
+	 * entries lose their first or last few segments to the two text bands, so
+	 * without this a one-crease card could roll a top-to-bottom fold and show
+	 * almost nothing; a horizontal crease always crosses the open middle.
 	 *
 	 * <p>Pure and deterministic in the seed, which is what lets a test prove the
 	 * never-obscure guarantee by sweeping sizes and seeds rather than by eye.
 	 */
-	static List<int[]> wearSegments(int w, @Nullable CardWear wear, int seed,
-		@Nullable List<Rectangle> corridors, @Nullable Rectangle[] protect)
+	static List<int[]> wearSegments(int x, int y, int w, int h, @Nullable CardWear wear,
+		int seed, @Nullable Rectangle[] protect)
 	{
 		List<int[]> out = new ArrayList<>();
-		int cracks = wear == null ? 0 : crackCount(wear);
-		if (cracks == 0 || corridors == null || corridors.isEmpty())
+		if (wear == null || w <= 0 || h <= 0)
 		{
 			return out;
 		}
-		float pad = wearStrokePad(w);
-		for (int k = 0; k < cracks; k++)
+		float pad = wearInkReach(w);
+		int[] band = wearOpenBand(protect, y, h);
+
+		double creaseAmp = Math.min(w, h) * 0.035;
+		for (int k = 0; k < creaseCount(wear); k++)
 		{
-			Rectangle lane = corridors.get(k % corridors.size());
-			int[] safe = wearSafeBox(lane, pad);
-			if (safe == null)
-			{
-				continue;
-			}
 			int cs = seed + k * 977;
-			// a tall lane is walked top to bottom, a wide one left to right, so a
-			// crack always runs the long way and never bridges the corridor
-			boolean vertical = lane.height >= lane.width;
-			int acrossLo = vertical ? safe[0] : safe[1];
-			int acrossHi = vertical ? safe[2] : safe[3];
-			int alongLo = vertical ? safe[1] : safe[0];
-			int alongHi = vertical ? safe[3] : safe[2];
-			if (alongHi - alongLo < 3)
+			int entry;
+			int exit;
+			if (k == 0)
 			{
-				// shorter than this reads as a speck of dirt, not a crack
-				continue;
+				entry = 3;
+				exit = 1;
 			}
-			double mid = (acrossLo + acrossHi) / 2.0;
-			double room = (acrossHi - acrossLo) / 2.0;
-			// a partial run of the lane, placed by the seed: two cracks sharing a
-			// lane then overlap only sometimes, the way real ones do, instead of
-			// stacking into one thick smear
-			double lenFrac = 0.30 + 0.35 * hash01(cs + 1);
-			double span = alongHi - alongLo;
-			double a0 = alongLo + span * (1 - lenFrac) * hash01(cs + 2);
-			double a1 = a0 + span * lenFrac;
-			int a = clamp((int) a0, alongLo, alongHi);
-			int c = clamp((int) (mid + (hash01(cs + 3) - 0.5) * 2 * room), acrossLo, acrossHi);
-			int px = vertical ? c : a;
-			int py = vertical ? a : c;
-			for (int s = 1; s <= WEAR_SEGMENTS; s++)
+			else
 			{
-				int na = clamp((int) (a0 + (a1 - a0) * s / WEAR_SEGMENTS), alongLo, alongHi);
-				int nc = clamp((int) (mid + (hash01(cs + s * 31 + 4) - 0.5) * 2 * room),
-					acrossLo, acrossHi);
-				int nx = vertical ? nc : na;
-				int ny = vertical ? na : nc;
-				if (!blocked(protect, px, py, nx, ny, pad))
-				{
-					out.add(new int[]{px, py, nx, ny});
-				}
-				px = nx;
-				py = ny;
+				entry = (int) (hash01(cs + 1) * 4) & 3;
+				// +1.. so the exit can never land back on the entry edge, which
+				// would give a fold that leaves and returns through the same side
+				exit = (entry + 1 + (int) (hash01(cs + 2) * 3)) & 3;
 			}
+			double[] a = wearEdgePoint(x, y, w, h, band, entry, hash01(cs + 3), pad);
+			double[] b = wearEdgePoint(x, y, w, h, band, exit, hash01(cs + 4), pad);
+			emitSeam(out, clampPath(wearSeamPath(a[0], a[1], b[0], b[1], cs + 5, creaseAmp),
+				x, y, w, h, pad), pad, protect, KIND_CREASE);
+		}
+
+		// one shuffle direction per card, shared by all of its scratches
+		double lean = hash01(seed + 61) * Math.PI;
+		for (int k = 0; k < scratchCount(wear); k++)
+		{
+			int ss = seed + 4099 + k * 613;
+			double angle = lean + (hash01(ss + 1) - 0.5) * 0.7;
+			// SQUARED, so most scratches are short and the occasional one is long.
+			// A uniform draw gave every card several near-full-length lines, and
+			// half a dozen long strokes at matched angles reads as straw laid on
+			// the card rather than as a surface that has been rubbed.
+			double r = hash01(ss + 2);
+			double half = Math.min(w, h) * (0.07 + 0.30 * r * r) / 2;
+			// How far the drawn scratch actually reaches from its centre on each
+			// axis. WANDER covers the meander wearSeamPath adds perpendicular to
+			// the line — small, but it is what a plain sin/cos bound misses, and
+			// missing it puts the tip of a scratch under the name band.
+			double rise = Math.abs(Math.sin(angle)) + WANDER;
+			double run = Math.abs(Math.cos(angle)) + WANDER;
+			// Length is chosen first and the centre is then placed only where the
+			// whole scratch fits between the two text bands. Not for safety — the
+			// per-segment check would drop any overhang anyway — but so the AMOUNT
+			// of scuffing is the same for every card in the bracket. A scratch
+			// half-eaten by the name band is a scratch this card silently did not
+			// get, and the stage would stop reading at a glance.
+			double roomY = (band[1] - band[0]) / 2.0 - pad;
+			if (half * rise > roomY)
+			{
+				// an open band shorter than the scratch: shorten the scratch, since
+				// the alternative is to draw it somewhere it will be thrown away
+				half = Math.max(1, roomY / rise);
+			}
+			double loY = band[0] + pad + half * rise;
+			double hiY = band[1] - pad - half * rise;
+			double cy = loY + hash01(ss + 4) * Math.max(0, hiY - loY);
+			double loX = x + pad + half * run;
+			double hiX = x + w - pad - half * run;
+			double cx = loX <= hiX
+				? loX + hash01(ss + 3) * (hiX - loX)
+				: x + w / 2.0;
+			double hx = Math.cos(angle) * half;
+			double hy = Math.sin(angle) * half;
+			// barely any wander: a scratch is a straight drag, and the curve is
+			// only here so it does not look ruled with a straightedge
+			emitSeam(out, clampPath(wearSeamPath(cx - hx, cy - hy, cx + hx, cy + hy,
+				ss + 5, half * SCRATCH_BEND), x, y, w, h, pad), pad, protect, KIND_SCRATCH);
 		}
 		return out;
 	}
 
-	private static int clamp(int v, int lo, int hi)
+	/**
+	 * Pull every point of a seam back inside the card by the ink reach. The
+	 * tapered jitter already lands both ENDS exactly where they were aimed, but
+	 * the bulge in the middle of a steep seam can swing past a side on a narrow
+	 * card. Clamping per point keeps the polyline connected, and it means "wear
+	 * never paints outside the card" is arithmetic rather than a job the
+	 * rounded-rect clip is quietly doing for us.
+	 *
+	 * <p>The bounds are rounded OUTWARD to whole pixels — ceil the low edge, floor
+	 * the high one — because emitSeam rounds each point to an int afterwards.
+	 * Clamping at x+2.4 and then rounding 10.4 down to 10 would put the ink back
+	 * over the edge by half a pixel; clamping at 11 cannot, since rounding never
+	 * moves a value below its own floor.
+	 */
+	private static double[][] clampPath(double[][] path, int x, int y, int w, int h, float pad)
 	{
-		return v < lo ? lo : Math.min(v, hi);
+		double loX = Math.ceil(x + pad);
+		double hiX = Math.floor(x + w - pad);
+		double loY = Math.ceil(y + pad);
+		double hiY = Math.floor(y + h - pad);
+		if (loX > hiX || loY > hiY)
+		{
+			// a card too small to hold even one padded pixel; nothing legal to draw
+			return path;
+		}
+		for (double[] p : path)
+		{
+			p[0] = Math.max(loX, Math.min(hiX, p[0]));
+			p[1] = Math.max(loY, Math.min(hiY, p[1]));
+		}
+		return path;
+	}
+
+	/**
+	 * Round a polyline to integer segments, dropping any that would cross text.
+	 *
+	 * <p>Rounded FIRST, then tested. Testing the unrounded point and storing the
+	 * rounded one lets the rounding move the ink up to half a pixel toward the
+	 * band after the check has already passed, which is exactly enough to put the
+	 * relief over the top of the rarity label on a small card.
+	 */
+	private static void emitSeam(List<int[]> out, double[][] path, float pad,
+		@Nullable Rectangle[] protect, int kind)
+	{
+		for (int s = 1; s < path.length; s++)
+		{
+			int ax = (int) Math.round(path[s - 1][0]);
+			int ay = (int) Math.round(path[s - 1][1]);
+			int bx = (int) Math.round(path[s][0]);
+			int by = (int) Math.round(path[s][1]);
+			if (!blocked(protect, ax, ay, bx, by, pad))
+			{
+				out.add(new int[]{ax, ay, bx, by, kind});
+			}
+		}
 	}
 
 	/** True when a stroked segment, padded, would touch anything protected. */
@@ -608,38 +842,352 @@ public final class CardRenderer
 		return false;
 	}
 
-	private static void drawWear(Graphics2D g2, Shape clip, int w, CardWear wear, List<int[]> segments)
+	/**
+	 * Handling dirt: a vignette that darkens toward the rim, plus a few soft
+	 * blotches. The vignette is transparent at its centre, which is where the
+	 * sprite sits, so the art dulls at its extremities and stays legible in the
+	 * middle without anything having to know where the art actually is.
+	 */
+	private static void drawWearGrime(Graphics2D g2, Shape clip, int x, int y, int w, int h,
+		CardWear wear, int seed)
+	{
+		int alpha = grimeAlpha(wear);
+		if (alpha <= 0 || w <= 0 || h <= 0)
+		{
+			return;
+		}
+		Graphics2D gg = (Graphics2D) g2.create();
+		gg.setClip(clip);
+		int r = WEAR_GRIME.getRed();
+		int gr = WEAR_GRIME.getGreen();
+		int b = WEAR_GRIME.getBlue();
+		// centred a little above the middle, on the sprite rather than on the
+		// card, so the clear window sits where the thing worth seeing is
+		gg.setPaint(new RadialGradientPaint(
+			new Point2D.Float(x + w / 2f, y + h * 0.42f),
+			Math.max(w, h) * 0.72f,
+			new float[]{0f, 0.50f, 1f},
+			new Color[]{
+				new Color(r, gr, b, 0),
+				new Color(r, gr, b, alpha / 3),
+				new Color(r, gr, b, alpha)
+			}));
+		gg.fill(clip);
+		// blotches: flat ovals stacked concentrically rather than one gradient
+		// each. drawFace runs every frame of a reveal, and a per-blotch
+		// RadialGradientPaint costs more than the softness is worth at this size.
+		//
+		// Six thin rings, not three fat ones. The same total opacity spread over
+		// twice as many steps costs nothing extra and is the difference between
+		// a soiled patch and a visible grey disc — with three rings the outermost
+		// step lands at a fifth of full grime in one jump, and the eye reads that
+		// jump as an outline.
+		int blotches = Math.max(1, edgeNicks(wear) / 4);
+		int rings = 6;
+		for (int i = 0; i < blotches; i++)
+		{
+			int bs = seed + i * 613;
+			int d = (int) (Math.min(w, h) * (0.34f + 0.40f * hash01(bs + 3)));
+			int bx = x + (int) (hash01(bs + 1) * w) - d / 2;
+			int by = y + (int) (hash01(bs + 2) * h) - d / 2;
+			gg.setColor(new Color(r, gr, b, Math.max(1, alpha / (rings * 2))));
+			for (int ring = rings; ring >= 1; ring--)
+			{
+				int rd = Math.max(1, d * ring / rings);
+				gg.fillOval(bx + (d - rd) / 2, by + (d - rd) / 2, rd, rd);
+			}
+		}
+		gg.dispose();
+	}
+
+	/**
+	 * Creases and scratches. Full passes over every segment of a kind rather than
+	 * a full stack per segment: with per-segment stacks the shadow of a later
+	 * segment paints over the lit ridge of an earlier one wherever two lines
+	 * cross, and a crossing is exactly where the relief matters most.
+	 *
+	 * <p>A crease is drawn as three things, in the order a fold actually presents
+	 * itself: a broad soft valley, a dark line in the bottom of it, and a pale
+	 * ridge along ONE side. The ridge is the whole trick. It is the colour of the
+	 * card stock because a fold cracks the printed ink and shows the board
+	 * underneath, and it is off-centre because relief is a direction — light from
+	 * somewhere, shadow on the other side. Centre it and the crease flattens back
+	 * into a drawn-on line.
+	 *
+	 * <p>A scratch gets none of that: one hairline, thin and faint, in the same
+	 * stock colour. A scuff is a shallow gouge with no depth to shade.
+	 *
+	 * <p>Every pass is inside {@link #wearInkReach} of the stored segment — the
+	 * broad valley by half its width, the ridge by its offset plus half of its
+	 * own — which is what {@link #blocked} reserves, so the paint that lands and
+	 * the clearance the tests assert cannot drift apart.
+	 */
+	private static void drawWearLines(Graphics2D g2, Shape clip, int w, CardWear wear,
+		List<int[]> segments)
 	{
 		if (segments.isEmpty())
 		{
 			return;
 		}
+		List<int[]> creases = ofKind(segments, KIND_CREASE);
+		List<int[]> scratches = ofKind(segments, KIND_SCRATCH);
 		Graphics2D gw = (Graphics2D) g2.create();
 		gw.setClip(clip);
-		float vein = wearStroke(w);
+		gw.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		float line = wearStroke(w);
 		int alpha = wearAlpha(wear);
-		Color shadow = new Color(WEAR_SHADOW.getRed(), WEAR_SHADOW.getGreen(),
-			WEAR_SHADOW.getBlue(), alpha);
-		Color gold = new Color(WEAR_GOLD.getRed(), WEAR_GOLD.getGreen(),
-			WEAR_GOLD.getBlue(), alpha);
-		// The relief is CENTRED on the same line, not offset a pixel: an offset
-		// would push the painted edge further from the stored endpoint than the
-		// routing reserved, and the pad has no room to spare at 90px. Width comes
-		// from wearInkReach so the promise and the paint cannot drift apart.
-		BasicStroke relief = new BasicStroke(wearInkReach(w) * 2f,
-			BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
-		BasicStroke fill = new BasicStroke(vein, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
+		if (!creases.isEmpty())
+		{
+			strokePass(gw, creases, new BasicStroke(wearInkReach(w) * 2f,
+				BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND), alpha(WEAR_SHADOW, alpha / 4));
+			// the dark side and the lit side sit either side of the fold line, half
+			// a stroke each way. Stacking both on the centre is what flattened the
+			// earlier pass into a drawn-on line: relief is two tones meeting, and
+			// they cannot meet if they are on top of each other.
+			ridgePass(gw, creases, new BasicStroke(line * 0.9f,
+				BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND), alpha(WEAR_SHADOW, alpha),
+				line * -0.5f);
+			ridgePass(gw, creases, new BasicStroke(line * 0.7f,
+				BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND), alpha(WEAR_STOCK, alpha),
+				line * 0.5f);
+		}
+		// A scratch is a groove, so it gets the same two-tone treatment as a crease
+		// at a tenth of the scale: a dark side and a lit side half a hairline
+		// apart. Sub-pixel at these widths, which is exactly right — antialiasing
+		// resolves it into a soft channel in the surface, where a single bright
+		// line sat on top of the card like a drawn stick.
+		float fine = Math.max(1f, line * 0.35f);
+		ridgePass(gw, scratches, new BasicStroke(fine, BasicStroke.CAP_ROUND,
+			BasicStroke.JOIN_ROUND), alpha(WEAR_SHADOW, alpha * 2 / 5), line * -0.45f);
+		ridgePass(gw, scratches, new BasicStroke(fine, BasicStroke.CAP_ROUND,
+			BasicStroke.JOIN_ROUND), alpha(WEAR_STOCK, alpha * 2 / 5), line * 0.45f);
+		gw.dispose();
+	}
+
+	private static List<int[]> ofKind(List<int[]> segments, int kind)
+	{
+		List<int[]> out = new ArrayList<>();
 		for (int[] seg : segments)
 		{
-			// dark relief underneath, so the gold reads as sitting IN a groove
-			gw.setStroke(relief);
-			gw.setColor(shadow);
-			gw.drawLine(seg[0], seg[1], seg[2], seg[3]);
-			gw.setStroke(fill);
-			gw.setColor(gold);
+			if (seg[4] == kind)
+			{
+				out.add(seg);
+			}
+		}
+		return out;
+	}
+
+	private static void strokePass(Graphics2D gw, List<int[]> segments, BasicStroke stroke,
+		Color color)
+	{
+		if (segments.isEmpty())
+		{
+			return;
+		}
+		gw.setStroke(stroke);
+		gw.setColor(color);
+		for (int[] seg : segments)
+		{
 			gw.drawLine(seg[0], seg[1], seg[2], seg[3]);
 		}
-		gw.dispose();
+	}
+
+	/**
+	 * A pass shifted {@code off} pixels perpendicular to each segment. The normal
+	 * comes from the segment's own direction, and the polyline is walked in a
+	 * consistent order, so the shift stays on one side for the whole length of a
+	 * crease instead of flipping about and crosshatching it.
+	 *
+	 * <p>Drawn through {@link Line2D.Double} rather than the int-coordinate
+	 * drawLine. Rounding the shifted endpoint could push it a further half pixel
+	 * out, and {@code off} plus half this stroke is already exactly
+	 * {@link #wearInkReach} — the budget the text-clearance check reserves. There
+	 * is no half pixel spare, so nothing may round.
+	 */
+	private static void ridgePass(Graphics2D gw, List<int[]> segments, BasicStroke stroke,
+		Color color, float off)
+	{
+		gw.setStroke(stroke);
+		gw.setColor(color);
+		for (int[] seg : segments)
+		{
+			double dx = seg[2] - seg[0];
+			double dy = seg[3] - seg[1];
+			double len = Math.hypot(dx, dy);
+			if (len < 1e-6)
+			{
+				continue;
+			}
+			double nx = -dy / len * off;
+			double ny = dx / len * off;
+			gw.draw(new Line2D.Double(seg[0] + nx, seg[1] + ny, seg[2] + nx, seg[3] + ny));
+		}
+	}
+
+	/**
+	 * Edge whitening — the single most recognisable thing about a played card,
+	 * and the reason this pass runs AFTER the border instead of before it.
+	 *
+	 * <p>The rim of a card is where the ink goes first: it is what rubs on every
+	 * other card in the deck, every sleeve, every box wall. What shows through is
+	 * the pale core of the board, so the marks here are drawn in
+	 * {@link #WEAR_STOCK} and they eat the gilt frame. An earlier pass drew dark
+	 * bites instead, which is the mental image of "damage" but the opposite of
+	 * what a worn card does — the edge gets LIGHTER, not darker.
+	 *
+	 * <p>Each mark is a dash lying ALONG the edge, not a dot on it. Dots read as
+	 * punched holes; overlapping tangential dashes of varying length and
+	 * thickness read as a continuous frayed fringe, which is why the counts in
+	 * {@link #edgeNicks} are so high. Two strokes per dash — a wide faint one and
+	 * a narrow bright one on the same line — feather it, so no mark has a hard
+	 * edge of its own.
+	 *
+	 * <p>Corners are worst, because a corner takes the whole force of a drop on
+	 * one point. Rather than a separate corner routine, every mark's length,
+	 * thickness and opacity scale by how close it is to a corner, and each corner
+	 * additionally gets a soft pale bloom centred exactly on its point — the clip
+	 * keeps only the quarter of that bloom inside the card, which is precisely
+	 * the shape of a rubbed-round corner.
+	 *
+	 * <p>Clipped to the card throughout. Marks straddle the boundary on purpose,
+	 * so without the clip a card drawn next to another would fray its neighbour.
+	 */
+	private static void drawWearEdge(Graphics2D g2, Shape clip, int x, int y, int w, int h,
+		CardWear wear, int seed)
+	{
+		int marks = edgeNicks(wear);
+		if (marks == 0 || w <= 0 || h <= 0)
+		{
+			return;
+		}
+		Graphics2D ge = (Graphics2D) g2.create();
+		ge.setClip(clip);
+		ge.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		int alpha = wearAlpha(wear);
+		double perimeter = 2.0 * (w + h);
+		// deliberately thin. An earlier pass used w/44 and the marks were so fat
+		// they merged into an inner glow — a lit border, which is the opposite
+		// read. The fringe has to be finer than the frame it is eating.
+		float base = Math.max(1f, w / 70f);
+		double cornerSpan = Math.min(w, h) * 0.30;
+		for (int i = 0; i < marks; i++)
+		{
+			int ns = seed + i * 401;
+			// walked round the perimeter in even steps with a jittered offset, so
+			// the fringe spreads over all four sides instead of clumping on one
+			double at = ((i + hash01(ns + 1) * 0.85) / marks) * perimeter;
+			double px;
+			double py;
+			double tx;
+			double ty;
+			double inx;
+			double iny;
+			if (at < w)
+			{
+				px = x + at;
+				py = y;
+				tx = 1;
+				ty = 0;
+				inx = 0;
+				iny = 1;
+			}
+			else if (at < w + h)
+			{
+				px = x + w;
+				py = y + (at - w);
+				tx = 0;
+				ty = 1;
+				inx = -1;
+				iny = 0;
+			}
+			else if (at < 2 * w + h)
+			{
+				px = x + w - (at - w - h);
+				py = y + h;
+				tx = -1;
+				ty = 0;
+				inx = 0;
+				iny = -1;
+			}
+			else
+			{
+				px = x;
+				py = y + h - (at - 2 * w - h);
+				tx = 0;
+				ty = -1;
+				inx = 1;
+				iny = 0;
+			}
+			double corner = Math.min(Math.min(at, Math.abs(at - w)),
+				Math.min(Math.abs(at - (w + h)),
+					Math.min(Math.abs(at - (2 * w + h)), perimeter - at)));
+			double boost = 1.0 + 1.6 * Math.max(0, 1 - corner / cornerSpan);
+			float th = (float) (base * (0.55 + 0.65 * hash01(ns + 3)) * Math.min(1.5, boost));
+			int a = (int) (alpha * (0.6 + 0.4 * hash01(ns + 5)));
+			// Roughly a third of the fringe bites INWARD across the rim instead of
+			// lying along it. A rim of pure tangential dashes reads as a drawn
+			// outline however ragged the lengths are; the perpendicular ones are
+			// what break the frame into teeth, and teeth are what a shelf-worn
+			// edge actually has.
+			boolean bite = hash01(ns + 6) < 0.34;
+			double len;
+			double dx;
+			double dy;
+			double depth;
+			if (bite)
+			{
+				len = base * (1.6 + 3.4 * hash01(ns + 2)) * boost;
+				dx = inx;
+				dy = iny;
+				// anchored just outside the rim so the bite starts in the frame and
+				// runs in, rather than floating in the middle of the border
+				depth = -base * 0.5;
+			}
+			else
+			{
+				len = base * (2.0 + 5.5 * hash01(ns + 2)) * boost;
+				dx = tx;
+				dy = ty;
+				// a little in or a little out: the ones sitting proud of the rim get
+				// halved by the clip, which is what stops the band looking ruled
+				depth = base * (hash01(ns + 4) * 0.9 - 0.3);
+			}
+			double ax = px + inx * depth - dx * len / 2 + (bite ? dx * len / 2 : 0);
+			double ay = py + iny * depth - dy * len / 2 + (bite ? dy * len / 2 : 0);
+			double bx = ax + dx * len;
+			double by = ay + dy * len;
+			ge.setStroke(new BasicStroke(th * 1.9f, BasicStroke.CAP_ROUND,
+				BasicStroke.JOIN_ROUND));
+			ge.setColor(alpha(WEAR_STOCK, a / 4));
+			ge.draw(new Line2D.Double(ax, ay, bx, by));
+			ge.setStroke(new BasicStroke(th, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+			ge.setColor(alpha(WEAR_STOCK, a));
+			ge.draw(new Line2D.Double(ax, ay, bx, by));
+		}
+		// The corner blooms, feathered outward-in so they have no rim of their own.
+		// Kept small and faint: this is the last touch, a corner gone soft, not a
+		// light source. Scaled by the stage through the mark count so a HAIRLINE
+		// card gets a hint of it and a SHATTERED one gets a rounded-off corner.
+		int d = Math.max(3, (int) (w * (0.035f + 0.045f * marks / 60f)));
+		int steps = 5;
+		for (int c = 0; c < 4; c++)
+		{
+			int cx = (c & 1) == 0 ? x : x + w;
+			int cy = (c & 2) == 0 ? y : y + h;
+			ge.setColor(alpha(WEAR_STOCK, Math.max(1, alpha / (steps * 6))));
+			for (int s = steps; s >= 1; s--)
+			{
+				int rd = Math.max(2, d * s / steps);
+				ge.fillOval(cx - rd / 2, cy - rd / 2, rd, rd);
+			}
+		}
+		ge.dispose();
+	}
+
+	private static Color alpha(Color base, int a)
+	{
+		return new Color(base.getRed(), base.getGreen(), base.getBlue(),
+			Math.max(0, Math.min(255, a)));
 	}
 
 	public static Color prismaticColor(long timeMs, int offsetDeg)

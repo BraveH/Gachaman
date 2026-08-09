@@ -140,12 +140,39 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 	private static final Color GOLD = new Color(230, 190, 80);
 	private static final Color PANEL_BG = new Color(24, 20, 14, 235);
 	private static final Color REDEMPTION_RED = new Color(120, 20, 20);
+	/** Warm dark the tier is pulled toward for rules and outlines. */
+	private static final Color PARCH_EDGE_DARK = new Color(104, 82, 52);
+	/** Side margin left bare either side of the difficulty heading. */
+	private static final int BAND_INSET = 14;
+	/** Extra px between letters of the heading; capitals need air to read as set type. */
+	private static final int HEAD_TRACKING = 2;
+	/** The light on the far wall of a pressed impression. */
+	private static final Color PARCH_EMBOSS = new Color(255, 250, 232);
+	/**
+	 * Bounds of the two-figure party mark, as drawn by
+	 * {@link #drawPartySilhouette}: the near figure spans x-1..x+8 and the far
+	 * one reaches x+15, over 15px of height. Named so the heading can reserve
+	 * room for it instead of the two guessing at each other's extent.
+	 */
+	private static final int PARTY_GLYPH_W = 17;
+	private static final int PARTY_GLYPH_H = 15;
 	private static final Color PARCH_TOP = new Color(236, 222, 186);
 	private static final Color PARCH_BOTTOM = new Color(213, 192, 151);
 	private static final Color PARCH_EDGE = new Color(146, 120, 80);
 	private static final Color PARCH_INK = new Color(58, 44, 26);
 	private static final Color PARCH_INK_SOFT = new Color(104, 86, 58);
 	private static final Color PARCH_REWARD = new Color(128, 94, 20);
+	/**
+	 * Side-bet ink: a deep ledger green, distinct from the gold the guaranteed
+	 * reward is written in.
+	 *
+	 * <p>Both used to be {@link #PARCH_REWARD}, which said the same thing about
+	 * two different promises — the GC line is what the contract pays, a side bet
+	 * is what it MIGHT pay. A second colour separates certain money from
+	 * conditional money, and green on warm paper is legible where more gold on
+	 * gold was not.
+	 */
+	private static final Color PARCH_BET = new Color(66, 92, 52);
 	private static final Color PARCH_EDGE_SOFT = new Color(146, 120, 80, 153);
 	/** The Ante's ink: dark red on parchment, the colour of a debt, not a prize. */
 	private static final Color PARCH_ANTE = new Color(132, 44, 34);
@@ -772,6 +799,27 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 	 * Force-close the active modal ceremony (safe-mode / shutdown). A pending
 	 * chest is STILL committed, with a one-line chat summary.
 	 */
+	/**
+	 * Plugin-wired: the live party vote picture, or null when no vote is open.
+	 *
+	 * <p>A supplier rather than an injected PartyRollService, matching the hooks
+	 * that service already takes from the plugin. The overlay asks while it
+	 * paints and never holds the answer, so a vote that resolves mid-ceremony is
+	 * reflected on the very next frame instead of going stale on the parchment.
+	 */
+	@Nullable
+	private java.util.function.Supplier<com.gachaman.party.PartyRollService.VoteView> partyVoteSupplier;
+
+	public void setPartyVoteSupplier(
+		@Nullable java.util.function.Supplier<com.gachaman.party.PartyRollService.VoteView> supplier)
+	{
+		this.partyVoteSupplier = supplier;
+	}
+
+	/** The vote snapshot for the frame being painted; see the offer render loop. */
+	@Nullable
+	private com.gachaman.party.PartyRollService.VoteView frameVotes;
+
 	public void abortActiveCeremony()
 	{
 		abortActiveCeremony(null);
@@ -2209,8 +2257,12 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		g.fillRect(bx - 10, by + 6, 10, bh - 12);
 		g.fillRect(bx + bw, by + 6, 10, bh - 12);
 
+		// pluralised: a Compactor can halve the remaining cycle down to one, and
+		// this banner is the ceremony's headline — "re-roll in 1 tasks" on the
+		// biggest text the plugin draws
+		int cycleTarget = styleResult.getCycleTarget();
 		String line = rolled.getDisplayName().toUpperCase() + " ALLOWED - re-roll in "
-			+ styleResult.getCycleTarget() + " tasks";
+			+ cycleTarget + (cycleTarget == 1 ? " contract" : " contracts");
 		g.setFont(FONT_TITLE);
 		FontMetrics fm = g.getFontMetrics();
 		Font lineFont = fm.stringWidth(line) > bw - 24 ? FONT_BODY : FONT_TITLE;
@@ -2269,6 +2321,11 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		float burnT = phase == PH_OFFERS_ACCEPTED
 			? (float) clamp01((now - phaseStartMs) / (double) OFFER_BURN_MS) : 0f;
 
+		// once per FRAME, not once per scroll: the snapshot allocates, and asking
+		// four times a frame would also let two scrolls disagree about the tally
+		// if a ballot landed between them
+		frameVotes = partyVoteSupplier == null ? null : partyVoteSupplier.get();
+
 		for (int i = 0; i < n; i++)
 		{
 			offerRect(i, n, cw, ch, rectScratch);
@@ -2276,10 +2333,11 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 
 			// scrolls unroll in place, staggered left to right
 			double u = 1.0;
+
 			if (phase == PH_OFFERS_UNROLL)
 			{
 				long t = el - i * OFFER_UNROLL_STAGGER_MS;
-				u = t <= 0 ? 0 : easeOutCubic(t / (double) OFFER_UNROLL_MS);
+				u = t <= 0 ? 0 : easeOutBack(t / (double) OFFER_UNROLL_MS);
 			}
 
 			boolean accepted = phase == PH_OFFERS_ACCEPTED && i == acceptedIndex;
@@ -2381,6 +2439,10 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		int parchX = r.x + ScrollPainter.PARCH_INSET;
 		int parchW = r.width - ScrollPainter.PARCH_INSET * 2;
 
+		// under everything: the scroll should sit ABOVE the scene, and nothing
+		// says "in front of" like something casting onto what is behind it
+		ScrollPainter.drawDropShadow(g, r, u);
+
 		if (revBot > revTop)
 		{
 			if (u >= 1.0)
@@ -2425,8 +2487,11 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		}
 
 		OfferScrollArt art = offerArt[i];
-		ScrollPainter.drawRoller(g, r, topCy, art.rollerHi, art.rollerLo);
-		ScrollPainter.drawRoller(g, r, botCy, art.rollerHi, art.rollerLo);
+		// the rods counter-rotate as the sheet pays out: the top one winds up,
+		// the bottom one down, which is what makes the paper look like it is
+		// coming OFF them rather than the two simply drifting apart
+		ScrollPainter.drawRoller(g, r, topCy, art.rollerHi, art.rollerLo, -u * 1.6);
+		ScrollPainter.drawRoller(g, r, botCy, art.rollerHi, art.rollerLo, u * 1.6);
 	}
 
 	/**
@@ -2444,92 +2509,405 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		int parchBot = parchTop + parchH;
 
 		ScrollPainter.drawParchment(g, parchX, parchTop, parchW, parchH,
-			art.parchTop, art.parchBottom, art.tier);
+			art.parchTop, art.parchBottom, art.edge);
 
-		// difficulty banner across the top of the sheet
+		// Difficulty band across the head of the sheet.
+		//
+		// A dusty wash with INK lettering, not a saturated fill with white text:
+		// a solid colour bar under white type is poster furniture, and it was the
+		// single loudest thing on the page — the parchment could be perfect and
+		// the scroll would still read as a cartoon while that sat on top of it.
+		// The tier still colours the band, just at the strength of a stamp rather
+		// than a highlighter.
+		// The difficulty, set as a heading ON the paper rather than a plate over it.
+		//
+		// No fill at all. A filled rectangle reads as an applied element however
+		// faint it is made — softening the colour only produced a translucent
+		// rectangle, still with four hard edges the paper does not have. What a
+		// title looks like on a real sheet is letterspaced capitals pressed into
+		// the fibre, flanked by rules that fade out before they reach the margin.
 		int ribH = 22;
 		int ribY = parchTop + 5;
-		g.setPaint(new GradientPaint(parchX, ribY, art.bannerHi, parchX, ribY + ribH, art.bannerLo));
-		g.fillRect(parchX, ribY, parchW, ribH);
-		g.setColor(BANNER_UNDERLINE);
-		g.drawLine(parchX, ribY + ribH, parchX + parchW, ribY + ribH);
-		drawCenteredText(g, art.label, parchX + parchW / 2, ribY + ribH / 2, FONT_BODY,
-			Color.WHITE, true);
+		g.setFont(FONT_BODY);
+		FontMetrics hfm = g.getFontMetrics();
+		int labelW = spacedWidth(hfm, art.label, HEAD_TRACKING);
+		int cxHead = parchX + parchW / 2;
+		int baseHead = ribY + ribH / 2 + hfm.getAscent() / 2 - 2;
+		int ruleY = baseHead - hfm.getAscent() / 2 - 1;
+
+		int outerL = parchX + BAND_INSET;
+		int innerL = cxHead - labelW / 2 - 9;
+		if (innerL - outerL > 6)
+		{
+			g.setPaint(new GradientPaint(outerL, 0, withAlpha(art.edge, 0f),
+				innerL, 0, withAlpha(art.edge, 0.75f)));
+			g.fillRect(outerL, ruleY, innerL - outerL, 1);
+		}
+		// the party mark occupies the end of the heading line, so the right rule
+		// stops short of it. It used to run underneath the glyph — a hairline
+		// through the middle of the one mark that changes what a click does.
+		int marginR = parchX + parchW - BAND_INSET;
+		int glyphX = marginR - PARTY_GLYPH_W;
+		int outerR = offer.isPartyRoll() ? glyphX - 7 : marginR;
+		int innerR = cxHead + labelW / 2 + 9;
+		if (outerR - innerR > 6)
+		{
+			g.setPaint(new GradientPaint(innerR, 0, withAlpha(art.edge, 0.75f),
+				outerR, 0, withAlpha(art.edge, 0f)));
+			g.fillRect(innerR, ruleY, outerR - innerR, 1);
+		}
+
+		// debossed: a pale ghost one pixel BELOW the ink is the light catching the
+		// far wall of an impression, which is what makes type look stamped in
+		drawSpaced(g, art.label, cxHead - labelW / 2, baseHead + 1, HEAD_TRACKING,
+			withAlpha(PARCH_EMBOSS, 0.55f));
+		drawSpaced(g, art.label, cxHead - labelW / 2, baseHead, HEAD_TRACKING, art.headInk);
+
 		if (offer.isPartyRoll())
 		{
-			// shared party contract: clicking VOTES rather than accepts
-			drawPartySilhouette(g, parchX + parchW - 20, ribY + 4);
+			// shared party contract: clicking VOTES rather than accepts. Centred on
+			// the heading's own band rather than offset from its top, so it sits
+			// level with the type instead of riding a couple of pixels high.
+			drawPartySilhouette(g, glyphX + 1,
+				ribY + (ribH - PARTY_GLYPH_H) / 2, art.edge);
 		}
 
 		int fieldX = parchX + 8;
 		int fieldW = parchW - 16;
-		int nameY = ribY + ribH + 20;
-		int killsY = nameY + 26;
-		int gcY = killsY + 22;
-		int cbY = gcY + 20;
 
-		// contract data, dark ink, clamped so nothing ever overlaps
-		if (nameY < parchBot - 8)
+		// Contract data, dark ink. A running cursor rather than four fixed
+		// offsets: a long quarry name ("Fremennik warband berserker") now takes
+		// the two lines it needs and pushes the rest down, instead of being cut
+		// off mid-word. Nothing on a contract should end in an ellipsis — the one
+		// thing a player must be able to read is what they are agreeing to kill.
+		int cbY = ribY + ribH + 20;
+		cbY = drawWrappedCentre(g, offer.getMonsterName(), parchX + parchW / 2, cbY,
+			FONT_NAME, PARCH_INK, fieldW, parchBot, 26);
+		cbY = drawWrappedCentre(g, art.killsLine, parchX + parchW / 2, cbY,
+			FONT_BODY, PARCH_INK_SOFT, fieldW, parchBot, 22);
+		cbY = drawWrappedCentre(g, art.rewardLine, parchX + parchW / 2, cbY,
+			FONT_SMALL, PARCH_REWARD, fieldW, parchBot, 20);
+		cbY = drawWrappedCentre(g, art.cbLine, parchX + parchW / 2, cbY,
+			FONT_SMALL, PARCH_INK_SOFT, fieldW, parchBot, 0);
+
+		// --- footer stack ---
+		// Every block below takes the TOP of its box and returns the next free
+		// top. Three conventions used to meet here — a centre for the ink lines,
+		// a baseline for the side-bet list, a top for the voter faces — and since
+		// the side-bet rule is drawn ABOVE its own y, the blocks laid out through
+		// one another. One convention, and each block owns its own leading.
+		int footerY = cbY + 12;
+
+		// Who has backed this contract, by face and name. Shown to members who
+		// have NOT voted yet as much as to those who have: the bar is a majority,
+		// so the balance is the thing being decided, and hiding it until you
+		// commit would make the deciding vote the only blind one. Names rather
+		// than a count, because on a board of four the useful question is not how
+		// close the vote is but who you would be siding with.
+		if (offer.isPartyRoll() && frameVotes != null && i < frameVotes.getVoters().size())
 		{
-			drawInkLine(g, offer.getMonsterName(), parchX + parchW / 2, nameY,
-				FONT_NAME, PARCH_INK, fieldW);
-		}
-		if (killsY < parchBot - 8)
-		{
-			drawInkLine(g, art.killsLine, parchX + parchW / 2, killsY,
-				FONT_BODY, PARCH_INK_SOFT, fieldW);
-		}
-		if (gcY < parchBot - 8)
-		{
-			drawInkLine(g, art.rewardLine, parchX + parchW / 2, gcY,
-				FONT_SMALL, PARCH_REWARD, fieldW);
-		}
-		if (cbY < parchBot - 10)
-		{
-			drawInkLine(g, art.cbLine, parchX + parchW / 2, cbY,
-				FONT_SMALL, PARCH_INK_SOFT, fieldW);
+			footerY = drawVoters(g, frameVotes.getVoters().get(i), fieldX, footerY,
+				fieldW, parchBot);
 		}
 
 		// The Ante, inked on the contract itself: an armed wager must be legible
 		// on the very thing the player is about to click, not only in a panel
-		// they may have scrolled away from. Clamped like every other line.
-		int footerY = cbY + 16;
+		// they may have scrolled away from.
 		if (TaskService.anteEligible(offer) && taskService.anteArmed())
 		{
 			int stake = taskService.previewAnteStake();
-			if (stake > 0 && footerY < parchBot - 8)
+			if (stake > 0 && footerY + 16 <= parchBot - 6)
 			{
-				drawInkLine(g, "ANTE ARMED — " + stake + " GC", parchX + parchW / 2, footerY,
-					FONT_SMALL, PARCH_ANTE, fieldW);
-				footerY += 14;
+				drawInkLine(g, "ANTE ARMED — " + stake + " GC", parchX + parchW / 2,
+					footerY + 8, FONT_SMALL, PARCH_ANTE, fieldW);
+				footerY += 18;
 			}
 		}
 
-		// side bets footer under an ink rule; skipped entirely when the
-		// scroll is too short (no overlapping text at any canvas size)
-		if (art.betLines.length > 0)
+		if (art.betConds.length > 0)
 		{
-			g.setFont(FONT_SMALL);
-			FontMetrics fm = g.getFontMetrics();
-			int by = footerY;
-			if (by + fm.getHeight() * 2 <= parchBot - 8)
+			drawSideBets(g, art.betConds, art.betRewards, fieldX, footerY, fieldW, parchBot);
+		}
+	}
+
+	/**
+	 * A hairline and a small caption introducing a footer block.
+	 *
+	 * @return the top of the block's first content row
+	 */
+	private static int drawFooterHeading(Graphics2D g, String label, int x, int y, int w)
+	{
+		g.setFont(FONT_SMALL);
+		FontMetrics fm = g.getFontMetrics();
+		g.setColor(PARCH_EDGE_SOFT);
+		g.drawLine(x, y, x + w, y);
+		g.setColor(PARCH_INK_SOFT);
+		g.drawString(label, x, y + 3 + fm.getAscent());
+		return y + 5 + fm.getHeight();
+	}
+
+	/**
+	 * The side-bet list, under its own rule. Returns the next free top.
+	 *
+	 * <p>Condition in bet ink, payout in reward gold. Running them together in
+	 * one colour made the number the hardest thing on the line to find, which is
+	 * backwards — the condition is what you read once, the payout is what you
+	 * compare between bets.
+	 */
+	private static int drawSideBets(Graphics2D g, String[] conds, String[] rewards,
+		int x, int y, int w, int parchBot)
+	{
+		g.setFont(FONT_SMALL);
+		FontMetrics fm = g.getFontMetrics();
+		if (y + fm.getHeight() * 2 + 6 > parchBot - 6)
+		{
+			return y; // too short to say anything useful; say nothing
+		}
+		y = drawFooterHeading(g, "Side bets", x, y, w);
+		int space = fm.stringWidth(" ");
+		for (int i = 0; i < conds.length; i++)
+		{
+			String reward = i < rewards.length ? rewards[i] : null;
+			int rewardW = reward == null ? 0 : fm.stringWidth(reward);
+			// wrapped, not clipped: a side bet cut to "A kill without taking dam…"
+			// has lost the one part that matters, which is the condition
+			java.util.List<String> parts = wrapText(fm, conds[i], w);
+			for (int p = 0; p < parts.size(); p++)
 			{
-				g.setColor(PARCH_EDGE_SOFT);
-				g.drawLine(fieldX, by - fm.getAscent() - 2, fieldX + fieldW, by - fm.getAscent() - 2);
-				g.setColor(PARCH_INK_SOFT);
-				g.drawString("Side bets:", fieldX, by);
-				by += fm.getHeight();
-				g.setColor(PARCH_REWARD);
-				for (String line : art.betLines)
+				if (y + fm.getHeight() > parchBot - 6)
 				{
-					if (by > parchBot - 8)
-					{
-						break;
-					}
-					g.drawString(clipText(fm, line, fieldW), fieldX, by);
-					by += fm.getHeight();
+					return y;
 				}
+				String part = parts.get(p);
+				g.setColor(PARCH_BET);
+				g.drawString(part, x, y + fm.getAscent());
+				if (p == parts.size() - 1 && reward != null)
+				{
+					int at = fm.stringWidth(part) + space;
+					if (at + rewardW <= w)
+					{
+						g.setColor(PARCH_REWARD);
+						g.drawString(reward, x + at, y + fm.getAscent());
+						reward = null;
+					}
+				}
+				y += fm.getHeight();
 			}
+			if (reward != null)
+			{
+				// no room on the condition's last line: give the payout its own,
+				// still in gold, rather than squeezing it past the margin
+				if (y + fm.getHeight() > parchBot - 6)
+				{
+					return y;
+				}
+				g.setColor(PARCH_REWARD);
+				g.drawString(reward, x, y + fm.getAscent());
+				y += fm.getHeight();
+			}
+		}
+		return y;
+	}
+
+	/** Party avatars are square on the wire; this is the edge they are drawn at. */
+	private static final int VOTER_FACE = 12;
+
+
+	/**
+	 * The voters backing one contract: avatar then name, one per line.
+	 *
+	 * <p>Clamped against the bottom of the parchment like every other block here,
+	 * so a short scroll drops lines rather than writing over its own border. A
+	 * member with no avatar still gets their name — the face is the decoration,
+	 * the name is the information.
+	 *
+	 * @return the next free y, so the caller's footer keeps stacking
+	 */
+	private static int drawVoters(Graphics2D g,
+		java.util.List<com.gachaman.party.PartyRollService.Voter> voters,
+		int x, int y, int maxWidth, int parchBot)
+	{
+		if (voters == null || voters.isEmpty())
+		{
+			return y;
+		}
+		g.setFont(FONT_SMALL);
+		FontMetrics fm = g.getFontMetrics();
+		int rowH = Math.max(VOTER_FACE, fm.getHeight()) + 3;
+		// heading plus one row, or the block says nothing and takes no space
+		if (y + 5 + fm.getHeight() + rowH > parchBot - 6)
+		{
+			return y;
+		}
+		y = drawFooterHeading(g, "Backed by", x, y, maxWidth);
+
+		// A wrapping flow, not a column. A party of five turned a stack of names
+		// into most of the scroll and pushed the side bets off the bottom; read
+		// as a sentence, the same five fit on two lines and the block stays a
+		// footnote rather than becoming the body of the contract.
+		int cx = x;
+		for (int v = 0; v < voters.size(); v++)
+		{
+			com.gachaman.party.PartyRollService.Voter voter = voters.get(v);
+			boolean last = v == voters.size() - 1;
+			String name = voter.getName() + (last ? "" : ",");
+			int faceW = voter.getAvatar() != null ? VOTER_FACE + 3 : 0;
+			int chipW = faceW + fm.stringWidth(name);
+
+			if (cx > x && cx + chipW > x + maxWidth)
+			{
+				cx = x;
+				y += rowH;
+			}
+			if (y + rowH > parchBot - 6)
+			{
+				// no room for another line: say how many went unnamed rather than
+				// trailing off, since a truncated list of allies is a misleading one
+				g.setColor(PARCH_INK_SOFT);
+				g.drawString("+" + (voters.size() - v) + " more", cx,
+					y - rowH + (rowH + fm.getAscent()) / 2 - 2);
+				return y + 2;
+			}
+			int baseline = y + (rowH + fm.getAscent()) / 2 - 2;
+			if (voter.getAvatar() != null)
+			{
+				drawVoterFace(g, voter.getAvatar(), cx, y + (rowH - VOTER_FACE) / 2);
+			}
+			g.setFont(FONT_SMALL);
+			g.setColor(voter.isSelf() ? PARCH_REWARD : PARCH_INK);
+			g.drawString(name, cx + faceW, baseline);
+			cx += chipW + VOTER_GAP;
+		}
+		return y + rowH + 2;
+	}
+
+	/** Space between one voter chip and the next on the same line. */
+	private static final int VOTER_GAP = 7;
+
+	/** Parchment-toned wash over a party avatar, so a blue UI face belongs on paper. */
+	private static final Color FACE_WASH = new Color(122, 84, 44, 96);
+
+	/**
+	 * One voter's avatar, toned to the page.
+	 *
+	 * <p>RuneLite's default avatar is a cool grey-blue UI glyph; dropped raw onto
+	 * warm parchment it reads as a screenshot pasted onto a letter. Drawn into a
+	 * scratch image, washed with a sepia tint through SRC_ATOP so only the avatar's
+	 * own pixels take the colour, then framed with the same hairline the rules use.
+	 */
+	private static void drawVoterFace(Graphics2D g, java.awt.image.BufferedImage src,
+		int x, int y)
+	{
+		java.awt.image.BufferedImage tinted = new java.awt.image.BufferedImage(
+			VOTER_FACE, VOTER_FACE, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+		Graphics2D tg = tinted.createGraphics();
+		try
+		{
+			tg.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+				RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+			tg.drawImage(src, 0, 0, VOTER_FACE, VOTER_FACE, null);
+			tg.setComposite(java.awt.AlphaComposite.SrcAtop);
+			tg.setColor(FACE_WASH);
+			tg.fillRect(0, 0, VOTER_FACE, VOTER_FACE);
+		}
+		finally
+		{
+			tg.dispose();
+		}
+		g.drawImage(tinted, x, y, null);
+		g.setColor(PARCH_EDGE_SOFT);
+		g.drawRect(x, y, VOTER_FACE - 1, VOTER_FACE - 1);
+	}
+
+	/**
+	 * Break {@code text} onto as many lines as it needs to fit {@code maxWidth}.
+	 *
+	 * <p>Breaks on spaces. A single word longer than the column is left whole and
+	 * allowed to overhang rather than being chopped mid-word — an item name split
+	 * across a line boundary is harder to read than one that runs slightly wide,
+	 * and this is a contract, not a newspaper column.
+	 */
+	private static java.util.List<String> wrapText(FontMetrics fm, String text, int maxWidth)
+	{
+		java.util.List<String> lines = new java.util.ArrayList<>();
+		if (text == null || text.isEmpty())
+		{
+			return lines;
+		}
+		StringBuilder line = new StringBuilder();
+		for (String word : text.split(" "))
+		{
+			if (line.length() == 0)
+			{
+				line.append(word);
+				continue;
+			}
+			if (fm.stringWidth(line + " " + word) <= maxWidth)
+			{
+				line.append(' ').append(word);
+			}
+			else
+			{
+				lines.add(line.toString());
+				line.setLength(0);
+				line.append(word);
+			}
+		}
+		if (line.length() > 0)
+		{
+			lines.add(line.toString());
+		}
+		return lines;
+	}
+
+	/**
+	 * A centred block of ink, wrapped to the column.
+	 *
+	 * @param y      centre of the FIRST line
+	 * @param gapAfter extra px to leave below the block
+	 * @return the centre y for the next block
+	 */
+	private static int drawWrappedCentre(Graphics2D g, String text, int cx, int y, Font font,
+		Color color, int maxWidth, int parchBot, int gapAfter)
+	{
+		g.setFont(font);
+		FontMetrics fm = g.getFontMetrics();
+		java.util.List<String> lines = wrapText(fm, text, maxWidth);
+		for (String line : lines)
+		{
+			if (y > parchBot - 8)
+			{
+				return y;
+			}
+			g.setColor(color);
+			g.drawString(line, cx - fm.stringWidth(line) / 2, y + fm.getAscent() / 2 - 2);
+			y += fm.getHeight();
+		}
+		return y + gapAfter - (lines.isEmpty() ? 0 : 0);
+	}
+
+	/** Width of {@code text} once {@code tracking} px are added between letters. */
+	private static int spacedWidth(FontMetrics fm, String text, int tracking)
+	{
+		if (text.isEmpty())
+		{
+			return 0;
+		}
+		return fm.stringWidth(text) + tracking * (text.length() - 1);
+	}
+
+	/** Draw {@code text} letter by letter with extra tracking, from a left baseline. */
+	private static void drawSpaced(Graphics2D g, String text, int x, int baseline,
+		int tracking, Color color)
+	{
+		FontMetrics fm = g.getFontMetrics();
+		g.setColor(color);
+		int cx = x;
+		for (int i = 0; i < text.length(); i++)
+		{
+			String ch = text.substring(i, i + 1);
+			g.drawString(ch, cx, baseline);
+			cx += fm.stringWidth(ch) + tracking;
 		}
 	}
 
@@ -2553,24 +2931,48 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		final Color tier;
 		final Color parchTop;
 		final Color parchBottom;
-		final Color bannerHi;
-		final Color bannerLo;
+		/** Tier-tinted ink for the difficulty heading. */
+		final Color headInk;
+		/** Muted rule/outline colour for this scroll. */
+		final Color edge;
 		final Color rollerHi;
 		final Color rollerLo;
 		final String label;
 		final String killsLine;
 		final String rewardLine;
 		final String cbLine;
-		final String[] betLines;
+		/**
+		 * Side bets kept as two parallel arrays rather than one joined string.
+		 *
+		 * <p>The payout is drawn in a different ink from the condition, and the
+		 * only robust way to know where one ends and the other begins is to never
+		 * have merged them: splitting on the last " +" works until a condition
+		 * describes something with a plus in it.
+		 */
+		final String[] betConds;
+		final String[] betRewards;
 
 		OfferScrollArt(TaskOffer offer)
 		{
 			tier = offer.isRedemption() ? REDEMPTION_RED : offer.getDifficulty().getColor();
-			// strongly desaturated, light tier wash over the warm paper base
-			parchTop = mixColor(PARCH_TOP, tier, 0.25f);
-			parchBottom = mixColor(PARCH_BOTTOM, tier, 0.25f);
-			bannerHi = tier.brighter();
-			bannerLo = tier.darker();
+			// A HINT of tier in the paper, not a wash of it. The comment here used
+			// to claim "strongly desaturated" while mixing a quarter of a fully
+			// saturated UI colour into the sheet, which stopped the parchment
+			// reading as paper at all and made the whole scroll look cartoonish.
+			// The tier's identity is carried by the banner and the rollers, which
+			// are meant to be colourful; the page only needs to agree with them.
+			Color muted = desaturate(tier, 0.6f);
+			parchTop = mixColor(PARCH_TOP, muted, 0.10f);
+			parchBottom = mixColor(PARCH_BOTTOM, muted, 0.10f);
+			// The heading is now type, not a plate, so the tier lives in the INK.
+			// Dark enough to be ink and not paint: pulled most of the way to the
+			// body colour, keeping just enough hue that INSANE reads red-black and
+			// EASY reads green-black at a glance.
+			headInk = mixColor(PARCH_INK, desaturate(tier, 0.15f), 0.42f);
+			// every rule and outline on the page: a warm dark with a memory of the
+			// tier in it, never the raw UI colour — a saturated hairline around a
+			// sheet of paper is the outline of a sticker
+			edge = mixColor(desaturate(tier, 0.5f), PARCH_EDGE_DARK, 0.62f);
 			rollerHi = ScrollPainter.rollerHi(tier);
 			rollerLo = ScrollPainter.rollerLo(tier);
 			label = offer.isRedemption()
@@ -2582,21 +2984,31 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 			cbLine = "cb " + offer.getMonsterCombatLevel();
 			List<SideBet> bets = offer.getSideBets();
 			int n = bets == null ? 0 : bets.size();
-			betLines = new String[n];
+			betConds = new String[n];
+			betRewards = new String[n];
 			for (int b = 0; b < n; b++)
 			{
 				SideBet bet = bets.get(b);
-				betLines[b] = TaskService.describeSideBet(bet) + " +" + bet.getPayoutGc();
+				betConds[b] = TaskService.describeSideBet(bet);
+				betRewards[b] = "+" + bet.getPayoutGc();
 			}
 		}
 	}
 
-	private void drawPartySilhouette(Graphics2D g, int x, int y)
+	/**
+	 * The two-figure mark that says this contract is voted on, not accepted.
+	 *
+	 * <p>Inked in the scroll's own rule colour rather than the cool grey-blue it
+	 * used to be: a UI-blue glyph on warm parchment reads as a foreign widget
+	 * pasted over the page, and against the band it was the least legible thing
+	 * on the scroll despite being the one mark that changes what a click does.
+	 */
+	private void drawPartySilhouette(Graphics2D g, int x, int y, Color ink)
 	{
-		g.setColor(new Color(150, 170, 200, 200));
+		g.setColor(ink);
 		g.fillOval(x, y, 7, 7);
 		g.fillRoundRect(x - 1, y + 7, 9, 8, 4, 4);
-		g.setColor(new Color(150, 170, 200, 130));
+		g.setColor(withAlpha(ink, 0.55f));
 		g.fillOval(x + 8, y + 2, 6, 6);
 		g.fillRoundRect(x + 7, y + 8, 8, 7, 4, 4);
 	}
@@ -3129,6 +3541,23 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		return 1 - u * u * u;
 	}
 
+	/**
+	 * Ease-out with a small overshoot, for the unroll.
+	 *
+	 * <p>A cubic ease glides to a halt, which is how a menu slides, not how a
+	 * sheet of paper behaves: it pays out, overruns, and is pulled taut. The
+	 * overshoot is deliberately gentle — 1.1 rather than the usual 1.70158 —
+	 * because the rollers travel only a few dozen pixels and a full back-ease at
+	 * that distance reads as a bounce rather than tension.
+	 */
+	private static double easeOutBack(double t)
+	{
+		t = clamp01(t);
+		double u = t - 1;
+		final double c = 1.1;
+		return 1 + (c + 1) * u * u * u + c * u * u;
+	}
+
 	private static double easeInCubic(double t)
 	{
 		t = clamp01(t);
@@ -3162,6 +3591,21 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 			(int) (a.getRed() + (b.getRed() - a.getRed()) * u),
 			(int) (a.getGreen() + (b.getGreen() - a.getGreen()) * u),
 			(int) (a.getBlue() + (b.getBlue() - a.getBlue()) * u));
+	}
+
+	/**
+	 * Pull a colour toward its own brightness, keeping the hue but dropping the
+	 * chroma. Used before tinting paper: mixing a UI-saturated colour into a
+	 * parchment base carries the saturation across with it, and a little of a
+	 * very saturated colour still looks like paint rather than staining.
+	 *
+	 * @param amount 0 = untouched, 1 = fully grey
+	 */
+	private static Color desaturate(Color c, float amount)
+	{
+		int lum = (int) Math.round(0.299 * c.getRed() + 0.587 * c.getGreen()
+			+ 0.114 * c.getBlue());
+		return mixColor(c, new Color(lum, lum, lum), amount);
 	}
 
 	private static String capitalize(String s)

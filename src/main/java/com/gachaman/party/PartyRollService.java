@@ -5,16 +5,20 @@ import com.gachaman.data.MonsterTable;
 import com.gachaman.model.ActiveTask;
 import com.gachaman.model.AttackStyle;
 import com.gachaman.model.GachaState;
+import com.gachaman.model.PatronRecord;
 import com.gachaman.model.SideBet;
 import com.gachaman.model.TaskOffer;
+import com.gachaman.service.AccountKey;
 import com.gachaman.service.GachaRng;
 import com.gachaman.service.GachaStateService;
 import com.gachaman.service.PatronMark;
 import com.gachaman.service.TaskGenerator;
 import com.gachaman.service.TaskService;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -43,8 +47,9 @@ import net.runelite.client.party.PartyService;
  * participants roll with the seed candidate of the participant with the
  * LOWEST member id, the pool restricted to free-to-play when ANY participant
  * is free (membership is exchanged in this handshake, nowhere else), sized to
- * the party's AVERAGE combat level and gated by its LOWEST slayer level.
- * Identical offers appear on every screen; clicking one casts a VOTE.
+ * the combat level the HOST's {@link PartySizing} setting picks — the party's
+ * average or its lowest — and gated by its LOWEST slayer level. Identical
+ * offers appear on every screen; clicking one casts a VOTE.
  *
  * Votes are settled by MAJORITY, and only by the host (see
  * {@link PartyRollResolveMessage}). A strict majority signs the contract for
@@ -67,6 +72,18 @@ public class PartyRollService implements TaskService.Listener
 	private static final int VOTE_TTL_TICKS = 200;
 
 	/**
+	 * Extra ticks a non-host waits past the host's deadline before giving up on
+	 * its own — 15s of slack for a start or cancel message that is merely late.
+	 *
+	 * <p>Enforcement only: it must NEVER reach a countdown. Showing it made the
+	 * host's screen read 60s while everyone else read 75s for the same deadline,
+	 * which is not a rounding disagreement — it invites a member to sit on a
+	 * decision for fifteen seconds that the host has already timed out. The
+	 * clock the party is racing is the host's; see {@link #displayTicksLeft}.
+	 */
+	private static final int NON_HOST_GRACE_TICKS = 25;
+
+	/**
 	 * Roll-rule version. Bumped ONLY when a change would make two clients
 	 * generate different offers from the same seed — here, sizing by the
 	 * party's average rather than its lowest combat level. The mixed-version
@@ -74,7 +91,26 @@ public class PartyRollService implements TaskService.Listener
 	 * at a time, because half a party on each is exactly the split it prevents.
 	 */
 	static final int ROLL_PROTOCOL_FIGHTING_WEIGHT = 1;
-	static final int ROLL_PROTOCOL = ROLL_PROTOCOL_FIGHTING_WEIGHT;
+	/**
+	 * Second bump: the host may now choose Weakest Man instead of Fighting
+	 * Weight ({@link PartySizing}). A protocol-1 client never reads the choice
+	 * off the wire and would size to the average regardless, so a party that
+	 * contains one CANNOT honour a Weakest Man host — it falls back to the
+	 * average, which is the rule every build from 1 up already agrees on.
+	 * Nothing here changes what protocol 1 does on its own.
+	 */
+	static final int ROLL_PROTOCOL_SIZING_CHOICE = 2;
+	/**
+	 * Third bump: monsters behind unfinished quests are cut from the pool, using
+	 * the INTERSECTION of what every agreeing member has finished. A protocol-2
+	 * client sends no quest list and does no such filtering, so a party with one
+	 * in it rolls the unfiltered pool — the board every build from 1 up agrees
+	 * on. That is worse for the players (a contract can land on a monster
+	 * someone cannot reach) but it is the only answer that keeps one seed
+	 * producing one board, and the roll says so out loud before the vote.
+	 */
+	static final int ROLL_PROTOCOL_QUEST_GATE = 3;
+	static final int ROLL_PROTOCOL = ROLL_PROTOCOL_QUEST_GATE;
 
 	@Value
 	private static class Stance
@@ -86,6 +122,89 @@ public class PartyRollService implements TaskService.Listener
 		int slayerLevel;
 		String allowedStyle; // AttackStyle name; null from a pre-clash-bonus client
 		int rollProtocol;    // 0 from a client that predates Fighting Weight
+		/** Finished gating quests; null from a client that predates quest gating. */
+		List<String> completedQuests;
+		/**
+		 * The member's AccountKey; null from an older client or one not logged
+		 * in. Read by nothing that decides the board — see the propose message.
+		 */
+		String accountKey;
+	}
+
+	/**
+	 * A proposal this client has HEARD but not joined.
+	 *
+	 * <p>Deliberately separate from the committed proposal above rather than
+	 * making that state plural: the seeded roll, the majority vote and the ante
+	 * all assume exactly one board, and turning them into maps would put every
+	 * determinism guarantee in play to solve a display problem. An inbox entry
+	 * carries only what a card needs and what joining it costs — promote one and
+	 * the committed path runs exactly as it always has.
+	 */
+	private static class Inbox
+	{
+		long proposalId;
+		long proposerId;
+		String sizingMode;
+		int expiresAtTick;
+		/** Answers heard for THIS proposal, including the host's implicit AGREE. */
+		final Map<Long, Stance> stances = new HashMap<>();
+		/** True once this client has excused itself, so the card stops offering Join. */
+		boolean answered;
+	}
+
+	/**
+	 * Proposal id -> the proposal, in arrival order. Linked so the cards do not
+	 * reshuffle under the pointer between rebuilds.
+	 */
+	private final Map<Long, Inbox> inbox = new LinkedHashMap<>();
+
+	/** One member's line on a proposal card. */
+	@lombok.Value
+	public static class ProposalMember
+	{
+		String name;
+		int combatLevel;
+		/** {@link PartyRollResponseMessage} AGREE / DECLINE / BUSY, or -1 for silent. */
+		int response;
+		boolean host;
+		boolean self;
+		/** Offer index this member voted for, or -1 when no vote is open or cast. */
+		int vote;
+		/** That contract, named — null when they have not voted. */
+		@Nullable
+		String voteLabel;
+	}
+
+	/**
+	 * One roll group inside the RuneLite party: who is hosting, under what rule,
+	 * and who is in it.
+	 *
+	 * <p>Several can be live at once — a RuneLite party of six can hold two or
+	 * three independent rolls — so this is always a LIST, and the client's own
+	 * group is one of them rather than a special case rendered elsewhere.
+	 */
+	@lombok.Value
+	public static class PendingProposal
+	{
+		long proposalId;
+		String hostName;
+		int hostCombatLevel;
+		/** The rule this roll would ACTUALLY use — see effectiveSizingLabel. */
+		String sizingLabel;
+		int agreed;
+		int ticksLeft;
+		/** True when this client cannot join (busy, or contracts disabled). */
+		boolean blocked;
+		/**
+		 * True when this is the group the client belongs to — joined or hosting.
+		 * Such a group is never joinable, and is the only one shown once the
+		 * client is committed.
+		 */
+		boolean mine;
+		/** True once the group is voting rather than collecting answers. */
+		boolean voting;
+		List<ProposalMember> members;
 	}
 
 	private final Client client;
@@ -95,6 +214,8 @@ public class PartyRollService implements TaskService.Listener
 	private final GachaStateService stateService;
 	private final ChatMessageManager chatMessageManager;
 	private final MonsterTable monsterTable;
+	private final com.gachaman.service.QuestUnlockService questUnlockService;
+	private final com.gachaman.service.AccountKeyService accountKeyService;
 	private final com.gachaman.GachamanConfig config;
 
 	// --- proposal / vote / task state (transient; one proposal at a time) ---
@@ -103,6 +224,19 @@ public class PartyRollService implements TaskService.Listener
 	private int proposalExpiresAtTick;
 	/** The proposal's authority: the client that fixes the participant set. */
 	private long proposerId;
+	/**
+	 * The host's sizing rule for the live proposal ({@link PartySizing} name),
+	 * or null when nobody has proposed one.
+	 *
+	 * Kept beside {@link #proposerId} rather than inside a {@link Stance},
+	 * because it is a property of the PROPOSAL and not of a member: only the
+	 * host's answer to it is ever read, so storing one per member would leave a
+	 * field that is authoritative in exactly one map entry and dead in the
+	 * rest. Set from local config when this client proposes, and from the
+	 * propose message otherwise — identical on every client by construction,
+	 * which is what the seeded roll needs.
+	 */
+	private String hostSizingMode;
 	private final Map<Long, Stance> stances = new HashMap<>();
 
 	private boolean votingLive;
@@ -177,6 +311,14 @@ public class PartyRollService implements TaskService.Listener
 	 * earned it. Transient: it dies with the session, like partyKills.
 	 */
 	private final Map<Long, String> partnerNameCache = new HashMap<>();
+	/**
+	 * Participant id -> account key, snapshotted off the propose/response
+	 * handshake. Separate from the name cache because the two have different
+	 * SOURCES: a name can be re-read from the live roster at any moment, but a
+	 * key exists only in the message that carried it, so missing it once means
+	 * missing it for the whole contract. Transient, for the same reason.
+	 */
+	private final Map<Long, String> partnerKeyCache = new HashMap<>();
 
 	/** Plugin-wired: pokes the sidebar so host/status widgets track proposals. */
 	@Nullable
@@ -230,6 +372,8 @@ public class PartyRollService implements TaskService.Listener
 	public PartyRollService(Client client, ClientThread clientThread, PartyService partyService,
 		TaskService taskService, GachaStateService stateService,
 		ChatMessageManager chatMessageManager, MonsterTable monsterTable,
+		com.gachaman.service.QuestUnlockService questUnlockService,
+		com.gachaman.service.AccountKeyService accountKeyService,
 		com.gachaman.GachamanConfig config)
 	{
 		this.client = client;
@@ -239,6 +383,8 @@ public class PartyRollService implements TaskService.Listener
 		this.stateService = stateService;
 		this.chatMessageManager = chatMessageManager;
 		this.monsterTable = monsterTable;
+		this.questUnlockService = questUnlockService;
+		this.accountKeyService = accountKeyService;
 		this.config = config;
 	}
 
@@ -281,13 +427,19 @@ public class PartyRollService implements TaskService.Listener
 			mySeedCandidate = ThreadLocalRandom.current().nextLong();
 			proposalLive = true;
 			proposerId = safeMemberIdOrZero();
+			// YOUR setting, because you are the host — read once, here, and
+			// broadcast, so every client sizes this roll off one value rather
+			// than each consulting its own config and dealing its own board
+			hostSizingMode = config.partySizing().name();
 			proposalExpiresAtTick = client.getTickCount() + PROPOSAL_TTL_TICKS;
 			Stance mine = localStance(PartyRollResponseMessage.AGREE);
 			stances.put(safeLocalMember().getMemberId(), mine);
 			safeSend(new PartyRollProposeMessage(proposalId, mine.getSeedCandidate(),
 				mine.isMembers(), mine.getCombatLevel(), mine.getSlayerLevel(),
-				mine.getAllowedStyle(), mine.getRollProtocol()));
-			chat("Party roll proposed — ::gachaparty to join. It starts once everyone answers"
+				mine.getAllowedStyle(), mine.getRollProtocol(), hostSizingMode,
+				mine.getCompletedQuests(), mine.getAccountKey()));
+			chat("Party roll proposed, sizing to " + config.partySizing()
+				+ " — ::gachaparty to join. It starts once everyone answers"
 				+ " (or in ~60s) with whoever agreed, minimum 2. As host you can Start Roll"
 				+ " early from the Overview tab.");
 			evaluateProposal();
@@ -301,6 +453,22 @@ public class PartyRollService implements TaskService.Listener
 		clientThread.invokeLater(() -> {
 			if (!proposalLive)
 			{
+				// a heard-but-unjoined proposal is what this command means now;
+				// only propose when there is genuinely nothing to join, or the
+				// command would start a rival roll instead of answering the one
+				// the player just read in chat
+				List<Inbox> open = joinableInbox();
+				if (open.size() == 1)
+				{
+					joinProposal(open.get(0).proposalId);
+					return;
+				}
+				if (open.size() > 1)
+				{
+					chat("More than one party roll is on offer — join one from the"
+						+ " Contract panel.");
+					return;
+				}
 				propose();
 				return;
 			}
@@ -338,13 +506,276 @@ public class PartyRollService implements TaskService.Listener
 		clientThread.invokeLater(() -> {
 			if (!proposalLive || safeLocalMember() == null)
 			{
-				chat("No party roll to decline.");
+				// not committed to one: the command still has an obvious target
+				// while exactly one card is on offer, and is ambiguous past that
+				List<Inbox> open = joinableInbox();
+				if (open.size() == 1)
+				{
+					declineProposalNow(open.get(0).proposalId);
+					return;
+				}
+				chat(open.isEmpty()
+					? "No party roll to decline."
+					: "More than one party roll is on offer — decline one from the Contract panel.");
 				return;
 			}
 			sendResponse(PartyRollResponseMessage.DECLINE);
-			chat("You sit this party roll out — the others may still task up.");
+			chat("You sit this party roll out — the others may still take a contract.");
 			evaluateProposal();
 		});
+	}
+
+	// --- Multi-proposal inbox: cards, joining, and the one-at-a-time rule ---
+
+	/** Inbox entries this client could still join. */
+	private List<Inbox> joinableInbox()
+	{
+		List<Inbox> open = new ArrayList<>();
+		for (Inbox entry : inbox.values())
+		{
+			if (!entry.answered)
+			{
+				open.add(entry);
+			}
+		}
+		return open;
+	}
+
+	/**
+	 * Is this client already spoken for — committed to a roll, hosting one, or
+	 * working a contract? While it is, no other proposal is offered.
+	 */
+	public boolean isCommittedElsewhere()
+	{
+		return spokenFor(proposalLive, votingLive, taskLive);
+	}
+
+	/**
+	 * The one-party-at-a-time rule, by itself.
+	 *
+	 * <p>A player is spoken for once they have joined a proposal, once a vote is
+	 * running, or once a contract is signed — and a HOST is covered by the first
+	 * of those, because proposing commits this client to its own roll. Static and
+	 * argument-only so the rule can be tested without a Client.
+	 */
+	static boolean spokenFor(boolean proposalLive, boolean votingLive, boolean taskLive)
+	{
+		return proposalLive || votingLive || taskLive;
+	}
+
+	/**
+	 * The roll groups to show in the Contract section, newest last.
+	 *
+	 * <p>Committed or hosting, this is exactly ONE group: the client's own, with
+	 * its roster and — once voting opens — everyone's vote. Uncommitted, it is
+	 * every group on offer. So "one party at a time" hides the OTHERS; it never
+	 * hides the one you are in, which is the group you most need to watch while
+	 * a majority is being counted.
+	 */
+	public List<PendingProposal> proposalGroups()
+	{
+		if (proposalLive || votingLive)
+		{
+			PendingProposal mine = describeCommitted();
+			return mine == null
+				? java.util.Collections.emptyList()
+				: java.util.Collections.singletonList(mine);
+		}
+		if (taskLive)
+		{
+			// the contract itself owns the section from here; the roster lives on
+			// the Party page, grouped by the shared contract
+			return java.util.Collections.emptyList();
+		}
+		List<PendingProposal> out = new ArrayList<>(inbox.size());
+		for (Inbox entry : inbox.values())
+		{
+			out.add(describe(entry));
+		}
+		return out;
+	}
+
+	/**
+	 * The client's own group, during answer collection or voting.
+	 *
+	 * <p>Built from {@link #participants} once a vote is open and from
+	 * {@link #stances} before that: the participant set is what the host's start
+	 * message froze, so after the roll it is the authority on who is actually in
+	 * — a member who answered but was not included would otherwise show as part
+	 * of a vote they cannot cast.
+	 */
+	@Nullable
+	private PendingProposal describeCommitted()
+	{
+		long self = safeMemberIdOrZero();
+		Set<Long> roster = votingLive ? participants : stances.keySet();
+		if (roster.isEmpty())
+		{
+			return null;
+		}
+		List<ProposalMember> members = new ArrayList<>(roster.size());
+		int agreed = 0;
+		for (Long id : roster)
+		{
+			Stance stance = stances.get(id);
+			int response = stance == null ? PartyRollResponseMessage.AGREE : stance.getResponse();
+			if (response == PartyRollResponseMessage.AGREE)
+			{
+				agreed++;
+			}
+			Integer vote = votingLive ? votes.get(id) : null;
+			members.add(new ProposalMember(memberName(id),
+				stance == null ? 0 : stance.getCombatLevel(), response,
+				id == proposerId, id == self, vote == null ? -1 : vote,
+				vote == null ? null : voteLabelFor(id, vote)));
+		}
+		members.sort((a, b) -> Boolean.compare(b.isHost(), a.isHost()));
+		Stance host = stances.get(proposerId);
+		return new PendingProposal(proposalId, memberName(proposerId),
+			host == null ? 0 : host.getCombatLevel(),
+			PartySizing.fromWire(hostSizingMode).toString(), agreed,
+			votingLive
+				? displayTicksLeft(voteExpiresAtTick, self == proposerId)
+				: displayTicksLeft(proposalExpiresAtTick, self == proposerId),
+			true, true, votingLive, members);
+	}
+
+	/** Join one proposal, and excuse this client from every other one on offer. */
+	public void joinProposal(long id)
+	{
+		clientThread.invokeLater(() -> {
+			Inbox entry = inbox.get(id);
+			if (entry == null || entry.answered)
+			{
+				chat("That party roll is no longer on offer.");
+				refreshPanel();
+				return;
+			}
+			if (isCommittedElsewhere())
+			{
+				chat("You are already committed to a party roll.");
+				return;
+			}
+			if (!config.partyRollsEnabled())
+			{
+				chat("Party contracts are disabled in your Gachaman settings.");
+				return;
+			}
+			if (localBusy())
+			{
+				chat("You have a contract or undecided rolls — you cannot join a party roll.");
+				return;
+			}
+			// promote: from here the committed path is byte-for-byte the one that
+			// has always run, so nothing about the seeded roll changes
+			resetAll();
+			proposalId = entry.proposalId;
+			proposerId = entry.proposerId;
+			hostSizingMode = entry.sizingMode;
+			mySeedCandidate = ThreadLocalRandom.current().nextLong();
+			proposalLive = true;
+			proposalExpiresAtTick = entry.expiresAtTick;
+			stances.putAll(entry.stances);
+			stances.remove(safeMemberIdOrZero()); // answered fresh, below
+			inbox.remove(id);
+
+			sendResponse(PartyRollResponseMessage.AGREE);
+			chat("You joined " + memberName(proposerId) + "'s party roll.");
+			// every other host is waiting on an answer they will now never get
+			// from a player who is spoken for; tell them rather than time out
+			for (Inbox other : new ArrayList<>(inbox.values()))
+			{
+				if (!other.answered)
+				{
+					excuse(other, PartyRollResponseMessage.BUSY);
+				}
+			}
+			evaluateProposal();
+			refreshPanel();
+		});
+	}
+
+	/** Decline one proposal outright; the rest of the inbox is untouched. */
+	public void declineProposal(long id)
+	{
+		clientThread.invokeLater(() -> declineProposalNow(id));
+	}
+
+	private void declineProposalNow(long id)
+	{
+		Inbox entry = inbox.get(id);
+		if (entry == null)
+		{
+			chat("That party roll is no longer on offer.");
+			refreshPanel();
+			return;
+		}
+		if (!entry.answered)
+		{
+			excuse(entry, PartyRollResponseMessage.DECLINE);
+		}
+		inbox.remove(id);
+		chat("You sit " + memberName(entry.proposerId) + "'s party roll out"
+			+ " — the others may still take a contract.");
+		refreshPanel();
+	}
+
+	/** Snapshot one inbox entry for the panel. */
+	private PendingProposal describe(Inbox entry)
+	{
+		List<ProposalMember> members = new ArrayList<>();
+		int agreed = 0;
+		long self = safeMemberIdOrZero();
+		for (Map.Entry<Long, Stance> e : entry.stances.entrySet())
+		{
+			Stance stance = e.getValue();
+			if (stance.getResponse() == PartyRollResponseMessage.AGREE)
+			{
+				agreed++;
+			}
+			// no vote column on a group this client has not joined: the votes are
+			// only broadcast to participants, so any number here would be a guess
+			members.add(new ProposalMember(memberName(e.getKey()), stance.getCombatLevel(),
+				stance.getResponse(), e.getKey() == entry.proposerId, e.getKey() == self,
+				-1, null));
+		}
+		// host first, then the rest as heard — a card whose first line is not the
+		// host reads as a member list with a stray name on top
+		members.sort((a, b) -> Boolean.compare(b.isHost(), a.isHost()));
+		Stance host = entry.stances.get(entry.proposerId);
+		boolean blocked = entry.answered || localBusy() || !config.partyRollsEnabled();
+		return new PendingProposal(entry.proposalId, memberName(entry.proposerId),
+			host == null ? 0 : host.getCombatLevel(), effectiveSizingLabel(entry), agreed,
+			// never hosting: an inbox entry is by definition someone else's roll
+			displayTicksLeft(entry.expiresAtTick, false), blocked, false, false, members);
+	}
+
+	/**
+	 * The sizing rule this roll would ACTUALLY use, not the one the host set.
+	 *
+	 * <p>The rule is an all-or-nothing gate over every participant: one member on
+	 * an older build drops the whole party down a rung regardless of what the
+	 * host chose. Showing the declared rule would make the card lie to exactly
+	 * the player it is trying to inform. Computed over the answers heard so far,
+	 * so it can only get more pessimistic as more members join — never less.
+	 */
+	private String effectiveSizingLabel(Inbox entry)
+	{
+		List<Integer> protocols = new ArrayList<>();
+		for (Stance stance : entry.stances.values())
+		{
+			protocols.add(stance.getRollProtocol());
+		}
+		protocols.add(ROLL_PROTOCOL); // this client would be joining it
+		if (!meanSizingAgreed(protocols))
+		{
+			return PartySizing.WEAKEST_MAN + " (a member's build is too old to average)";
+		}
+		if (!sizingChoiceAgreed(protocols))
+		{
+			return PartySizing.FIGHTING_WEIGHT + " (a member's build cannot read the host's rule)";
+		}
+		return PartySizing.fromWire(entry.sizingMode).toString();
 	}
 
 	@Subscribe
@@ -355,44 +786,72 @@ public class PartyRollService implements TaskService.Listener
 			return;
 		}
 		clientThread.invokeLater(() -> {
-			if (proposalLive || votingLive)
+			// Recorded, never dropped. This used to return early whenever anything
+			// was already live, which silently binned a second member's roll — the
+			// proposer waited out their whole TTL for an answer nobody's client had
+			// even been told to give.
+			Inbox entry = inbox.get(msg.getProposalId());
+			if (entry == null)
 			{
-				return; // one at a time; the stale side expires on its own
+				entry = new Inbox();
+				entry.proposalId = msg.getProposalId();
+				inbox.put(msg.getProposalId(), entry);
 			}
-			resetAll();
-			proposalId = msg.getProposalId();
-			mySeedCandidate = ThreadLocalRandom.current().nextLong();
-			proposalLive = true;
-			proposerId = msg.getMemberId();
+			entry.proposerId = msg.getMemberId();
+			// the HOST's rule, taken as sent and never reconciled against local
+			// config — this client's own preference applies to rolls it proposes
+			entry.sizingMode = msg.getSizingMode();
 			// small grace past the proposer's deadline: the proposer decides,
 			// this client only times out when no start message ever arrives
-			proposalExpiresAtTick = client.getTickCount() + PROPOSAL_TTL_TICKS + 25;
-			stances.put(msg.getMemberId(), new Stance(PartyRollResponseMessage.AGREE,
+			entry.expiresAtTick = client.getTickCount() + PROPOSAL_TTL_TICKS + NON_HOST_GRACE_TICKS;
+			entry.stances.put(msg.getMemberId(), new Stance(PartyRollResponseMessage.AGREE,
 				msg.getSeedCandidate(), msg.isMembers(), msg.getCombatLevel(), msg.getSlayerLevel(),
-				msg.getAllowedStyle(), msg.getRollProtocol()));
+				msg.getAllowedStyle(), msg.getRollProtocol(), msg.getCompletedQuests(),
+				msg.getAccountKey()));
+			rememberPartner(msg.getMemberId(), msg.getAccountKey());
 			String name = memberName(msg.getMemberId());
 			if (!config.partyRollsEnabled())
 			{
 				// setting-off members count as ineligible: excuse immediately so
 				// the proposer never waits on them
-				sendResponse(PartyRollResponseMessage.BUSY);
-				stances.put(safeMemberIdOrZero(), localStance(PartyRollResponseMessage.BUSY));
+				excuse(entry, PartyRollResponseMessage.BUSY);
 				chat(name + " proposed a party roll — party contracts are disabled in your"
 					+ " Gachaman settings, so you sit out.");
 			}
-			else if (localBusy())
+			else if (localBusy() || proposalLive || votingLive || taskLive)
 			{
-				sendResponse(PartyRollResponseMessage.BUSY);
-				stances.put(safeMemberIdOrZero(), localStance(PartyRollResponseMessage.BUSY));
-				chat(name + " proposed a party roll — you have a contract or undecided rolls"
-					+ " and sit out.");
+				// already committed elsewhere, or ineligible: excuse THIS proposal
+				// so its host stops waiting, and leave the rest of the inbox alone
+				excuse(entry, PartyRollResponseMessage.BUSY);
+				chat(name + " proposed a party roll — you are already committed and sit out.");
 			}
 			else
 			{
-				chat(name + " proposed a party roll — ::gachaparty to join, ::gachaparty no to sit out.");
+				chat(name + " proposed a party roll, sizing to "
+					+ effectiveSizingLabel(entry)
+					+ " — join it from the Contract panel, or ::gachaparty.");
 			}
 			refreshPanel();
 		});
+	}
+
+	/**
+	 * Answer one inbox proposal without joining it, and stop offering it.
+	 *
+	 * <p>BUSY rather than DECLINE for the auto-answers: both leave the roll to
+	 * proceed without this client, but BUSY is the true one — a player already
+	 * committed to another party is not declining on the merits, and the hosts'
+	 * chat lines read differently for the two.
+	 */
+	private void excuse(Inbox entry, int response)
+	{
+		entry.answered = true;
+		Stance mine = localStance(response);
+		entry.stances.put(safeMemberIdOrZero(), mine);
+		safeSend(new PartyRollResponseMessage(entry.proposalId, response, mine.getSeedCandidate(),
+			mine.isMembers(), mine.getCombatLevel(), mine.getSlayerLevel(),
+			mine.getAllowedStyle(), mine.getRollProtocol(), mine.getCompletedQuests(),
+			mine.getAccountKey()));
 	}
 
 	@Subscribe
@@ -405,11 +864,25 @@ public class PartyRollService implements TaskService.Listener
 		clientThread.invokeLater(() -> {
 			if (!proposalLive || msg.getProposalId() != proposalId)
 			{
+				// not the committed one — but it may well be a card on screen, and
+				// a card with no roster on it is the thing the player is trying to
+				// judge. Route it to the inbox instead of dropping it.
+				Inbox entry = inbox.get(msg.getProposalId());
+				if (entry != null)
+				{
+					entry.stances.put(msg.getMemberId(), new Stance(msg.getResponse(),
+						msg.getSeedCandidate(), msg.isMembers(), msg.getCombatLevel(),
+						msg.getSlayerLevel(), msg.getAllowedStyle(), msg.getRollProtocol(),
+						msg.getCompletedQuests(), msg.getAccountKey()));
+					rememberPartner(msg.getMemberId(), msg.getAccountKey());
+					refreshPanel();
+				}
 				return;
 			}
 			stances.put(msg.getMemberId(), new Stance(msg.getResponse(), msg.getSeedCandidate(),
 				msg.isMembers(), msg.getCombatLevel(), msg.getSlayerLevel(), msg.getAllowedStyle(),
-				msg.getRollProtocol()));
+				msg.getRollProtocol(), msg.getCompletedQuests(), msg.getAccountKey()));
+			rememberPartner(msg.getMemberId(), msg.getAccountKey());
 			if (msg.getResponse() == PartyRollResponseMessage.DECLINE)
 			{
 				chat(memberName(msg.getMemberId()) + " sits this party roll out.");
@@ -480,6 +953,52 @@ public class PartyRollService implements TaskService.Listener
 	}
 
 	// --- Host controls / UI state ---
+
+	/** Game ticks are 0.6s; countdowns are shown in whole seconds. */
+	public static int ticksToSeconds(int ticks)
+	{
+		return Math.max(0, ticks) * 3 / 5;
+	}
+
+	/**
+	 * Ticks until the HOST's deadline — the only clock worth putting on screen.
+	 *
+	 * <p>A non-host's stored deadline carries {@link #NON_HOST_GRACE_TICKS} of
+	 * slack so it does not give up on a merely late message. That slack is not
+	 * time to decide in: the host stops collecting at its own deadline, so a
+	 * member shown the padded figure would be told they had fifteen seconds that
+	 * had, in fact, already gone. Subtracting it here leaves every screen in the
+	 * party counting down the same number, while the timeout keeps its margin.
+	 *
+	 * @param hosting whether the local client owns the deadline being shown
+	 */
+	private int displayTicksLeft(int expiresAtTick, boolean hosting)
+	{
+		int deadline = hosting ? expiresAtTick : expiresAtTick - NON_HOST_GRACE_TICKS;
+		return Math.max(0, deadline - client.getTickCount());
+	}
+
+	/**
+	 * Ticks left on the proposal this client is committed to, or 0.
+	 *
+	 * <p>Read live rather than snapshotted with the rest of the status, because
+	 * it is the one number on the panel that changes without any event to hang a
+	 * refresh on — see the redraw in {@link #onGameTick}.
+	 */
+	public int committedProposalTicksLeft()
+	{
+		return proposalLive
+			? displayTicksLeft(proposalExpiresAtTick, safeMemberIdOrZero() == proposerId)
+			: 0;
+	}
+
+	/** Ticks left to vote, or 0 when no vote is running. */
+	public int voteTicksLeft()
+	{
+		return votingLive
+			? displayTicksLeft(voteExpiresAtTick, safeMemberIdOrZero() == proposerId)
+			: 0;
+	}
 
 	/** Is a proposal currently collecting answers? (any member's view) */
 	public boolean isProposalLive()
@@ -580,6 +1099,18 @@ public class PartyRollService implements TaskService.Listener
 			return;
 		}
 		clientThread.invokeLater(() -> {
+			// A cancel for a proposal this client only ever HEARD about used to be
+			// dropped here, because the guard compared against the committed one.
+			// The card then sat there offering Join on a roll nobody was collecting
+			// until its TTL ran out. Clear it on the message, like a member would.
+			Inbox heard = inbox.get(msg.getProposalId());
+			if (heard != null && heard.proposerId == msg.getMemberId())
+			{
+				inbox.remove(msg.getProposalId());
+				chat(memberName(msg.getMemberId()) + " cancelled their party roll.");
+				refreshPanel();
+				return;
+			}
 			// only the proposal's host may cancel it remotely
 			if (msg.getProposalId() != proposalId || msg.getMemberId() != proposerId)
 			{
@@ -658,10 +1189,10 @@ public class PartyRollService implements TaskService.Listener
 		Stance anchor = stances.get(anchorId);
 		anchorSeed = anchor.getSeedCandidate();
 		boolean members = true;
-		int weakest = Integer.MAX_VALUE;
 		int slayer = Integer.MAX_VALUE;
 		List<Integer> combatLevels = new ArrayList<>(agreed.size());
 		List<Integer> protocols = new ArrayList<>(agreed.size());
+		List<List<String>> questSets = new ArrayList<>(agreed.size());
 		for (long id : agreed)
 		{
 			Stance stance = stances.get(id);
@@ -669,17 +1200,19 @@ public class PartyRollService implements TaskService.Listener
 			// A slayer requirement is a GATE, not a difficulty knob: a monster
 			// you lack the level for cannot be damaged at all, so averaging here
 			// would roll contracts some members literally cannot start. Combat
-			// level is the knob, and combat level is what gets averaged.
+			// level is the knob, and combat level is what gets sized on.
 			slayer = Math.min(slayer, stance.getSlayerLevel());
-			// unclamped on purpose: the legacy branch below has to reproduce the
-			// old arithmetic EXACTLY or a mixed-version party still splits
-			weakest = Math.min(weakest, stance.getCombatLevel());
 			combatLevels.add(stance.getCombatLevel());
 			protocols.add(stance.getRollProtocol());
+			questSets.add(stance.getCompletedQuests());
 		}
-		int cb = meanSizingAgreed(protocols) ? fightingWeight(combatLevels) : weakest;
+		int cb = sizingLevel(combatLevels, protocols, hostSizingMode);
+		// A quest lock is a gate like the slayer level above, so it intersects
+		// rather than averaging: a monster the party's least-questful member
+		// cannot reach is a contract nobody in the party can finish.
+		Set<String> quests = agreedQuests(questSets, protocols);
 		List<TaskOffer> raw = TaskGenerator.generateOffers(monsterTable.getMonsters(),
-			cb, slayer, members, false, new GachaRng(anchor.getSeedCandidate()));
+			cb, slayer, members, quests, false, new GachaRng(anchor.getSeedCandidate()));
 		List<TaskOffer> offers = new ArrayList<>(raw.size());
 		for (TaskOffer offer : raw)
 		{
@@ -691,7 +1224,7 @@ public class PartyRollService implements TaskService.Listener
 		{
 			// local slot occupied after all (race) — sit out quietly
 			resetAll();
-			chat("The party roll could not be presented (you have offers or a task).");
+			chat("The party roll could not be presented (you have offers or a contract).");
 			return;
 		}
 		votingLive = true;
@@ -700,7 +1233,7 @@ public class PartyRollService implements TaskService.Listener
 		// host's broadcast cancel never arrived (host left, host not updated).
 		// Anything closer would let two clients disagree about a late vote.
 		voteExpiresAtTick = client.getTickCount() + VOTE_TTL_TICKS
-			+ (safeMemberIdOrZero() == proposerId ? 0 : 25);
+			+ (safeMemberIdOrZero() == proposerId ? 0 : NON_HOST_GRACE_TICKS);
 		participants = new HashSet<>(agreed);
 		partyOffers = offers;
 		// Freeze the styles here, with the offers, and NOT at accept time: this
@@ -722,11 +1255,31 @@ public class PartyRollService implements TaskService.Listener
 		// The sizing level is disclosed BEFORE the vote on purpose: a shared
 		// contract can outclass the party's lowest member, and there is no
 		// abandoning one once it is signed, so he has to be able to see what he
-		// is voting on rather than find out at the first kill.
+		// is voting on rather than find out at the first kill. The RULE is named
+		// alongside it, because the level alone cannot tell him whether the host
+		// sized on the party's average or on him.
 		chat("Party roll ready (" + agreed.size() + " members, contracts sized to combat "
-			+ cb + ") — click a contract to VOTE; a majority ("
+			+ cb + " — " + sizingRuleLabel(protocols, hostSizingMode)
+			+ ") — click a contract to VOTE; a majority ("
 			+ majorityThreshold(agreed.size()) + " of " + agreed.size()
 			+ ") signs it for the party.");
+		if (meanSizingAgreed(protocols) && !sizingChoiceAgreed(protocols)
+			&& PartySizing.fromWire(hostSizingMode) == PartySizing.WEAKEST_MAN)
+		{
+			// said out loud rather than swallowed: the host set a rule and did not
+			// get it, and the members it would have protected are the ones voting
+			chat("The host asked for Weakest Man, but a member's build predates that"
+				+ " choice — the whole party falls back to Fighting Weight so every"
+				+ " client deals the same board.");
+		}
+		if (quests == null)
+		{
+			// The one fallback that can put an unfinishable contract on the
+			// board, so it is stated plainly and BEFORE the vote — a party
+			// contract cannot be handed back once a majority signs it.
+			chat("A member's build predates quest gating, so this board was dealt from the"
+				+ " whole table — check you can all reach a monster before voting for it.");
+		}
 		if (anteOffered())
 		{
 			for (TaskOffer offer : offers)
@@ -849,6 +1402,115 @@ public class PartyRollService implements TaskService.Listener
 			}
 		}
 		return counts;
+	}
+
+	/**
+	 * The live vote picture, for the offer scrolls and the party page.
+	 *
+	 * <p>Read by the overlay while it paints, so it is a SNAPSHOT: the counts
+	 * array is freshly allocated by {@link #tally()} and the rest are values, so
+	 * a caller cannot hold a window onto this service's mutable state. Both this
+	 * and every mutation of {@link #votes} run on the client thread, so the
+	 * snapshot is never torn.
+	 */
+	/** One name on a contract: who backed it, ready to draw. */
+	@lombok.Value
+	public static class Voter
+	{
+		String name;
+		/** The party avatar, or null for a member who has none. */
+		@Nullable
+		java.awt.image.BufferedImage avatar;
+		boolean self;
+	}
+
+	@lombok.Value
+	public static class VoteView
+	{
+		/** Votes per offer index, in offer order. */
+		int[] counts;
+		/** Votes that settle it for everyone. */
+		int needed;
+		/** Offer index this client voted for, or -1 if it has not voted yet. */
+		int myVote;
+		/** Member id -> offer index, for the panel's per-member column. */
+		java.util.Map<Long, Integer> byMember;
+		/**
+		 * Member id -> the contract they backed, named. The panel shows this
+		 * rather than the index: "vote 2" means nothing beside a player's name
+		 * once the board is off screen.
+		 */
+		java.util.Map<Long, String> labelByMember;
+		/**
+		 * Who voted for each offer, indexed by offer.
+		 *
+		 * <p>Names and faces rather than a count: on a board of four contracts a
+		 * bare "2 votes" tells a player how close the vote is but not who they
+		 * would be siding with, which is the actual question when the contract
+		 * binds the whole party. Resolved here because this service holds the
+		 * PartyService the avatars come from.
+		 */
+		List<List<Voter>> voters;
+	}
+
+	/**
+	 * The vote picture while a party vote is open, or null when none is.
+	 *
+	 * <p>Deliberately readable by members who have NOT voted yet: seeing the
+	 * balance is the whole point of a majority vote, and hiding it until you
+	 * commit would make the last voter guess at what they are deciding.
+	 */
+	@Nullable
+	public VoteView voteView()
+	{
+		if (!votingLive || partyOffers == null)
+		{
+			return null;
+		}
+		long self = safeMemberIdOrZero();
+		Integer mine = votes.get(self);
+		List<List<Voter>> voters = new ArrayList<>(partyOffers.size());
+		for (int i = 0; i < partyOffers.size(); i++)
+		{
+			voters.add(new ArrayList<>());
+		}
+		for (Map.Entry<Long, Integer> entry : votes.entrySet())
+		{
+			int index = entry.getValue() == null ? -1 : entry.getValue();
+			if (index < 0 || index >= voters.size())
+			{
+				continue; // a vote for an offer this client never saw
+			}
+			voters.get(index).add(new Voter(memberName(entry.getKey()),
+				avatarOf(entry.getKey()), entry.getKey() == self));
+		}
+		Map<Long, String> labels = new HashMap<>();
+		for (Map.Entry<Long, Integer> entry : votes.entrySet())
+		{
+			String label = entry.getValue() == null
+				? null : voteLabelFor(entry.getKey(), entry.getValue());
+			if (label != null)
+			{
+				labels.put(entry.getKey(), label);
+			}
+		}
+		return new VoteView(tally(), majorityThreshold(participants.size()),
+			mine == null ? -1 : mine, new HashMap<>(votes), labels, voters);
+	}
+
+	/** A member's party avatar, or null — absent member, no avatar, or no party. */
+	@Nullable
+	private java.awt.image.BufferedImage avatarOf(long memberId)
+	{
+		try
+		{
+			PartyMember member = partyService.getMemberById(memberId);
+			return member == null ? null : member.getAvatar();
+		}
+		catch (Exception e)
+		{
+			return null;
+		}
 	}
 
 	/**
@@ -1293,11 +1955,30 @@ public class PartyRollService implements TaskService.Listener
 		try
 		{
 			long self = safeMemberIdOrZero();
-			List<String> partners = new ArrayList<>();
+			String selfKey = accountKeyService.key();
+			// keyed by ACCOUNT KEY, so one account in the party from two clients
+			// under two member ids collapses to one mark before credit() ever
+			// sees it — the dedupe is structural rather than a pass
+			Map<String, String> partners = new LinkedHashMap<>();
 			for (long id : participants)
 			{
 				if (id == self)
 				{
+					continue;
+				}
+				String key = AccountKey.normalize(partnerKeyCache.get(id));
+				if (key == null)
+				{
+					// no identity, no mark. An older client that never sent one
+					// is simply uncounted: crediting it under its display name
+					// would put a second, un-mergeable row in a keyed ledger.
+					continue;
+				}
+				if (AccountKey.same(key, selfKey))
+				{
+					// the member id guard above only catches one CLIENT; the same
+					// account dual-logged into the party arrives under a second id
+					// and would otherwise make you your own patron
 					continue;
 				}
 				// live roster first (it tracks a mid-contract rename), the
@@ -1307,10 +1988,7 @@ public class PartyRollService implements TaskService.Listener
 				{
 					name = PatronMark.normalizeName(partnerNameCache.get(id));
 				}
-				if (name != null)
-				{
-					partners.add(name);
-				}
+				partners.put(key, name);
 			}
 			if (partners.isEmpty())
 			{
@@ -1321,24 +1999,30 @@ public class PartyRollService implements TaskService.Listener
 			{
 				return;
 			}
-			Map<String, Integer> was = before.getPartnerContracts();
+			Map<String, PatronRecord> was = before.getPatrons();
+			long now = System.currentTimeMillis();
 			GachaState after = stateService.mutate(s -> {
-				Map<String, Integer> next = PatronMark.credit(s.getPartnerContracts(),
-					partners, Tuning.PATRON_MAX_PARTNERS);
+				Map<String, PatronRecord> next = PatronMark.credit(s.getPatrons(),
+					partners, Tuning.PATRON_MAX_PARTNERS, now);
 				// handing back the SAME instance makes mutate short-circuit,
 				// so a completion with nothing to credit pays for no encode
-				return next == s.getPartnerContracts() ? s : s.withPartnerContracts(next);
+				return next == s.getPatrons() ? s : s.withPatrons(next);
 			});
 			if (after == null)
 			{
 				return;
 			}
-			for (String name : partners)
+			for (Map.Entry<String, String> partner : partners.entrySet())
 			{
-				int from = PatronMark.countFor(was, name);
-				int to = PatronMark.countFor(after.getPartnerContracts(), name);
+				int from = PatronMark.countFor(was, partner.getKey());
+				int to = PatronMark.countFor(after.getPatrons(), partner.getKey());
 				if (PatronMark.crossedTier(from, to))
 				{
+					// the LEDGER's name, not the loop's: at the cap the newcomer
+					// may have been turned away, and the stored label is the one
+					// that actually belongs to the count being announced
+					String name = PatronMark.displayName(
+						PatronMark.recordFor(after.getPatrons(), partner.getKey()));
 					chat(name + " has stood with you " + to + " times — "
 						+ PatronMark.tierLabel(to) + ".");
 				}
@@ -1360,6 +2044,24 @@ public class PartyRollService implements TaskService.Listener
 			{
 				partnerNameCache.put(id, name);
 			}
+		}
+	}
+
+	/**
+	 * Snapshot a member's account key off the handshake.
+	 *
+	 * The wire is the ONLY source for it — nothing in the RuneLite API maps
+	 * another player to their account — so it is captured when their propose or
+	 * response arrives and kept for the whole contract. By completion the
+	 * stances map has long been reset and the member may have logged out
+	 * entirely; the credit still has to know who they were.
+	 */
+	private void rememberPartner(long memberId, @Nullable String accountKey)
+	{
+		String key = AccountKey.normalize(accountKey);
+		if (key != null)
+		{
+			partnerKeyCache.put(memberId, key);
 		}
 	}
 
@@ -1401,13 +2103,49 @@ public class PartyRollService implements TaskService.Listener
 		// vote. Nothing legitimate is ever further out than its own TTL plus the
 		// non-host grace, so anything beyond that is a restarted clock, not patience.
 		// Subtraction rather than `>` for the same reason as voteExpired().
-		if (proposalLive && proposalExpiresAtTick - now > PROPOSAL_TTL_TICKS + 25)
+		if (proposalLive && proposalExpiresAtTick - now > PROPOSAL_TTL_TICKS + NON_HOST_GRACE_TICKS)
 		{
-			proposalExpiresAtTick = now + PROPOSAL_TTL_TICKS + 25;
+			proposalExpiresAtTick = now + PROPOSAL_TTL_TICKS + NON_HOST_GRACE_TICKS;
 		}
-		if (votingLive && voteExpiresAtTick - now > VOTE_TTL_TICKS + 25)
+		if (votingLive && voteExpiresAtTick - now > VOTE_TTL_TICKS + NON_HOST_GRACE_TICKS)
 		{
-			voteExpiresAtTick = now + VOTE_TTL_TICKS + 25;
+			voteExpiresAtTick = now + VOTE_TTL_TICKS + NON_HOST_GRACE_TICKS;
+		}
+		// inbox cards carry their own deadline: without this a host who logs off
+		// leaves a Join button on screen forever, and clicking it would answer a
+		// proposal nobody is collecting. Same clock-jump guard as the committed
+		// one above — a hostile or restarted client must not pin a card open.
+		if (!inbox.isEmpty())
+		{
+			boolean dropped = false;
+			for (java.util.Iterator<Inbox> it = inbox.values().iterator(); it.hasNext(); )
+			{
+				Inbox entry = it.next();
+				if (entry.expiresAtTick - now > PROPOSAL_TTL_TICKS + NON_HOST_GRACE_TICKS)
+				{
+					entry.expiresAtTick = now + PROPOSAL_TTL_TICKS + NON_HOST_GRACE_TICKS;
+				}
+				if (now >= entry.expiresAtTick)
+				{
+					it.remove();
+					dropped = true;
+				}
+			}
+			if (dropped)
+			{
+				refreshPanel();
+			}
+		}
+		// Redraw while anything is counting down. Every countdown on the panel —
+		// the cards, the pending line, the vote clock — is derived from the tick
+		// counter, and nothing else on those screens changes while a proposal
+		// sits collecting answers, so without this the numbers freeze at whatever
+		// they read when the last unrelated event happened to fire. Every other
+		// tick rather than every one: a whole-panel rebuild under the pointer is
+		// the thing the player is about to click Join on.
+		if ((proposalLive || votingLive || !inbox.isEmpty()) && now % 2 == 0)
+		{
+			refreshPanel();
 		}
 		if (proposalLive && now >= proposalExpiresAtTick)
 		{
@@ -1575,7 +2313,11 @@ public class PartyRollService implements TaskService.Listener
 		rollOrder = null;
 		anchorSeed = 0;
 		mySeedCandidate = 0;
+		// null and not the local default: a stale host choice surviving into the
+		// next proposal would size someone else's roll by the last host's setting
+		hostSizingMode = null;
 		partnerNameCache.clear();
+		partnerKeyCache.clear();
 	}
 
 	/**
@@ -1585,6 +2327,9 @@ public class PartyRollService implements TaskService.Listener
 	public void resetForDebug()
 	{
 		resetAll();
+		// resetAll clears the COMMITTED proposal only; the inbox is a separate
+		// list of other people's offers, and a debug reset means all of it
+		inbox.clear();
 	}
 
 	/**
@@ -1781,6 +2526,106 @@ public class PartyRollService implements TaskService.Listener
 	}
 
 	/**
+	 * The party's weakest man: the LOWEST of its members' combat levels.
+	 *
+	 * The host's alternative to {@link #fightingWeight}, for a party that would
+	 * rather every contract be one its smallest member could have taken alone
+	 * than one worth the party's weight. Nothing else about a shared contract
+	 * changes: the quota is still pooled, per-kill GC still runs on each
+	 * member's own combat level, and the roll is still opt-in and majority-voted.
+	 *
+	 * Clamped per level exactly as {@link #fightingWeight} is, and for the same
+	 * reason — a 0 collapses TaskGenerator's cap to max(2, 0) and rolls a
+	 * degenerate board of the two lowest monsters in the table. That makes it
+	 * deliberately NOT identical to {@link #legacyLowest}, which must stay
+	 * unclamped; the two never apply to the same roll.
+	 */
+	static int weakestMan(@Nullable List<Integer> combatLevels)
+	{
+		if (combatLevels == null || combatLevels.isEmpty())
+		{
+			return Tuning.COMBAT_LEVEL_MIN;
+		}
+		int lowest = Tuning.COMBAT_LEVEL_MAX;
+		for (int level : combatLevels)
+		{
+			lowest = Math.min(lowest,
+				Math.max(Tuning.COMBAT_LEVEL_MIN, Math.min(Tuning.COMBAT_LEVEL_MAX, level)));
+		}
+		return lowest;
+	}
+
+	/**
+	 * The pre-Fighting-Weight rule: the raw, UNCLAMPED lowest transmitted level.
+	 *
+	 * Reproduces the old arithmetic exactly, bug-for-bug, because a party that
+	 * falls back to it contains a client running that very code — and "nearly
+	 * the same level" deals a different board. Under this rule a broken or
+	 * hostile combat level could only ever make contracts EASIER, which is why
+	 * it was self-limiting without a clamp and why every rule after it needs one.
+	 *
+	 * The empty case is unreachable (a roll needs 2 agreed participants) and
+	 * answers with the floor rather than Integer.MAX_VALUE, which is the one
+	 * place this deviates from the original.
+	 */
+	static int legacyLowest(@Nullable List<Integer> combatLevels)
+	{
+		if (combatLevels == null || combatLevels.isEmpty())
+		{
+			return Tuning.COMBAT_LEVEL_MIN;
+		}
+		int lowest = Integer.MAX_VALUE;
+		for (int level : combatLevels)
+		{
+			lowest = Math.min(lowest, level);
+		}
+		return lowest;
+	}
+
+	/**
+	 * The combat level this roll sizes to — the ONLY place the three rules are
+	 * chosen between, and a pure function of the TRANSMITTED stances plus the
+	 * host's transmitted choice. Nothing local feeds it, which is what lets two
+	 * clients claim they computed the same number.
+	 */
+	static int sizingLevel(@Nullable List<Integer> combatLevels,
+		@Nullable List<Integer> rollProtocols, @Nullable String hostSizingMode)
+	{
+		if (!meanSizingAgreed(rollProtocols))
+		{
+			return legacyLowest(combatLevels);
+		}
+		return resolvedSizing(rollProtocols, hostSizingMode) == PartySizing.WEAKEST_MAN
+			? weakestMan(combatLevels)
+			: fightingWeight(combatLevels);
+	}
+
+	/**
+	 * The rule the party can actually run, given the host's choice and what its
+	 * members' builds understand. Weakest Man needs EVERY client to be reading
+	 * the choice off the wire; one that is not would size to the average and
+	 * deal a different board, so the whole party takes the average instead.
+	 * Falling back to the host's own preference is not an option — the fallback
+	 * has to be the value an unaware client would have picked.
+	 */
+	static PartySizing resolvedSizing(@Nullable List<Integer> rollProtocols,
+		@Nullable String hostSizingMode)
+	{
+		return sizingChoiceAgreed(rollProtocols)
+			? PartySizing.fromWire(hostSizingMode)
+			: PartySizing.FIGHTING_WEIGHT;
+	}
+
+	/** What the pre-vote disclosure calls the rule it just applied. */
+	static String sizingRuleLabel(@Nullable List<Integer> rollProtocols,
+		@Nullable String hostSizingMode)
+	{
+		return meanSizingAgreed(rollProtocols)
+			? resolvedSizing(rollProtocols, hostSizingMode).toString()
+			: "lowest level, a member is on a pre-Fighting Weight build";
+	}
+
+	/**
 	 * All-or-nothing: one participant on an older build puts the WHOLE party
 	 * back on the lowest-level rule. Sizing changes the eligible pool, the pool
 	 * changes the bound that rng.pick draws against, and a different bound
@@ -1791,14 +2636,84 @@ public class PartyRollService implements TaskService.Listener
 	 */
 	static boolean meanSizingAgreed(@Nullable List<Integer> rollProtocols)
 	{
+		return everyoneAtLeast(rollProtocols, ROLL_PROTOCOL_FIGHTING_WEIGHT);
+	}
+
+	/**
+	 * The same all-or-nothing gate one rung up: can every participant read the
+	 * host's sizing choice off the wire? A protocol-1 client cannot, and sizes
+	 * to the average no matter what the host set.
+	 */
+	static boolean sizingChoiceAgreed(@Nullable List<Integer> rollProtocols)
+	{
+		return everyoneAtLeast(rollProtocols, ROLL_PROTOCOL_SIZING_CHOICE);
+	}
+
+	/**
+	 * The same all-or-nothing gate one rung up again: does every participant
+	 * filter quest-locked monsters out of the pool? A protocol-2 client does
+	 * not, and would deal from the whole table.
+	 */
+	static boolean questGateAgreed(@Nullable List<Integer> rollProtocols)
+	{
+		return everyoneAtLeast(rollProtocols, ROLL_PROTOCOL_QUEST_GATE);
+	}
+
+	/**
+	 * The quests the WHOLE party has finished — the intersection of what each
+	 * agreeing member transmitted, or null when a member's build cannot filter
+	 * on them at all and the party must roll the unfiltered pool to stay in
+	 * step. Pure: nothing local feeds it, so two clients handed the same
+	 * stances compute the same set.
+	 *
+	 * <p>A member who is on the current protocol but sent nothing is read as
+	 * having finished nothing, not as "ignore me". That withholds monsters
+	 * rather than offering them, which is the direction a bad answer should
+	 * fail in — the party is never dealt a contract on the strength of a null.
+	 *
+	 * <p>Set semantics throughout: members answer in whatever order the roster
+	 * happens to iterate in, and the pool filter is a {@code containsAll}, so
+	 * two clients that walked the same members in different orders still agree
+	 * monster for monster.
+	 */
+	@Nullable
+	static Set<String> agreedQuests(@Nullable List<List<String>> perMember,
+		@Nullable List<Integer> rollProtocols)
+	{
+		if (!questGateAgreed(rollProtocols) || perMember == null || perMember.isEmpty())
+		{
+			return null;
+		}
+		Set<String> shared = null;
+		for (List<String> theirs : perMember)
+		{
+			if (theirs == null)
+			{
+				return Collections.emptySet();
+			}
+			if (shared == null)
+			{
+				shared = new HashSet<>(theirs);
+			}
+			else
+			{
+				shared.retainAll(theirs);
+			}
+		}
+		return Collections.unmodifiableSet(shared == null ? new HashSet<>() : shared);
+	}
+
+	private static boolean everyoneAtLeast(@Nullable List<Integer> rollProtocols, int required)
+	{
 		if (rollProtocols == null || rollProtocols.isEmpty())
 		{
+			// no answer is not a yes: an unknown roster never assumes the newer rule
 			return false;
 		}
 		for (int protocol : rollProtocols)
 		{
 			// >= and not ==, so a FUTURE protocol is never misread as legacy
-			if (protocol < ROLL_PROTOCOL_FIGHTING_WEIGHT)
+			if (protocol < required)
 			{
 				return false;
 			}
@@ -1816,7 +2731,8 @@ public class PartyRollService implements TaskService.Listener
 		}
 		safeSend(new PartyRollResponseMessage(proposalId, response, mine.getSeedCandidate(),
 			mine.isMembers(), mine.getCombatLevel(), mine.getSlayerLevel(),
-			mine.getAllowedStyle(), mine.getRollProtocol()));
+			mine.getAllowedStyle(), mine.getRollProtocol(), mine.getCompletedQuests(),
+			mine.getAccountKey()));
 	}
 
 	private Stance localStance(int response)
@@ -1825,7 +2741,11 @@ public class PartyRollService implements TaskService.Listener
 		return new Stance(response, mySeedCandidate,
 			taskService.localIsMembers(), taskService.playerCombatLevel(),
 			client.getRealSkillLevel(net.runelite.api.Skill.SLAYER),
-			state == null ? null : state.getAllowedStyle(), ROLL_PROTOCOL);
+			state == null ? null : state.getAllowedStyle(), ROLL_PROTOCOL,
+			// only the gating quests, sorted — the full 195 would be most of a
+			// kilobyte of wire per member to say nothing the pool filter reads
+			questUnlockService.completedQuestsForWire(),
+			accountKeyService.key());
 	}
 
 	private boolean localBusy()
@@ -1874,6 +2794,49 @@ public class PartyRollService implements TaskService.Listener
 	{
 		return offer.getKillsRequired() + "x " + offer.getMonsterName()
 			+ " (" + offer.getDifficulty().getDisplayName() + ")";
+	}
+
+	/**
+	 * A vote, named rather than numbered: "Goblin [EASY]".
+	 *
+	 * <p>Shorter than {@link #describeOffer} because this one sits beside a
+	 * player's name in a fixed-width column, not in a chat line. The kill count
+	 * is dropped for the same reason — what a reader wants off a vote list is
+	 * WHICH contract someone backed, and an index into a board they may have
+	 * scrolled away from answers that only if they can still see the board.
+	 */
+	private String offerLabel(int index)
+	{
+		if (partyOffers == null || index < 0 || index >= partyOffers.size())
+		{
+			return null;
+		}
+		TaskOffer offer = partyOffers.get(index);
+		String tier = offer.isRedemption()
+			? "REDEMPTION"
+			: offer.getDifficulty().getDisplayName().toUpperCase(java.util.Locale.ROOT);
+		return offer.getMonsterName() + " [" + tier + "]";
+	}
+
+	/**
+	 * One member's vote as the panels print it: the contract they backed, and
+	 * whether they staked on it.
+	 *
+	 * <p>The Ante rides along because it binds by UNANIMITY, not majority. A
+	 * member reading the list needs to know that the wager is one refusal away
+	 * from being off — a column that showed only the contract would have the
+	 * party agreeing on the work while silently disagreeing about the money.
+	 */
+	@Nullable
+	private String voteLabelFor(long memberId, int index)
+	{
+		String label = offerLabel(index);
+		if (label == null)
+		{
+			return null;
+		}
+		Boolean ante = anteVotes.get(memberId);
+		return ante != null && ante ? label + "  +ante" : label;
 	}
 
 	private String memberName(long memberId)

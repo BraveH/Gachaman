@@ -163,6 +163,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	private final CeremonyBus ceremonyBus;
 	private final GachaRng rng;
 	private final MonsterTable monsterTable;
+	private final QuestUnlockService questUnlockService;
 
 	private final List<Listener> listeners = new ArrayList<>();
 	/** Optional hook the plugin wires for the party layer. */
@@ -208,7 +209,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	@Inject
 	public TaskService(Client client, GachaStateService stateService, CreditSink creditSink,
 		ComplianceService complianceService, StyleService styleService, CeremonyBus ceremonyBus,
-		GachaRng rng, MonsterTable monsterTable)
+		GachaRng rng, MonsterTable monsterTable, QuestUnlockService questUnlockService)
 	{
 		this.client = client;
 		this.stateService = stateService;
@@ -218,6 +219,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		this.ceremonyBus = ceremonyBus;
 		this.rng = rng;
 		this.monsterTable = monsterTable;
+		this.questUnlockService = questUnlockService;
 	}
 
 	public void addListener(Listener listener)
@@ -402,7 +404,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		int cb = playerCombatLevel();
 		List<TaskOffer> offers = TaskGenerator.generateOffers(
 			monsterTable.getMonsters(), cb, client.getRealSkillLevel(Skill.SLAYER),
-			localIsMembers(), state.getTaint() > 0, rng);
+			localIsMembers(), questUnlockService.completedQuests(), state.getTaint() > 0, rng);
 		antePercentArmed = 0; // a new board is a new decision
 		stateService.mutate(s -> s.withPendingOffers(offers));
 		ceremonyBus.submit(CeremonyBus.Type.TASK_OFFERS, offers);

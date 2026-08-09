@@ -17,10 +17,12 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.FontMetrics;
 import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridLayout;
+import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.event.MouseEvent;
@@ -194,7 +196,18 @@ public class AlbumTab extends JPanel
 		sortOrderButton.setBackground(ColorScheme.DARKER_GRAY_COLOR.darker());
 		sortOrderButton.setForeground(Color.WHITE);
 		sortOrderButton.setToolTipText("Toggle rarity sort order");
-		Dimension sortSize = new Dimension(94, 24);
+		// Sized to the LONGER of the two captions it toggles between, measured
+		// rather than guessed: the button is pinned to a fixed width so the
+		// search field beside it can take the rest, and the hardcoded 94 was
+		// narrower than "Legendary first" plus the look-and-feel's own insets —
+		// so the button ellipsised the moment you pressed it.
+		Insets buttonInsets = sortOrderButton.getInsets();
+		FontMetrics sortMetrics =
+			sortOrderButton.getFontMetrics(FontManager.getRunescapeSmallFont());
+		int sortWidth = Math.max(sortMetrics.stringWidth("Common first"),
+			sortMetrics.stringWidth("Legendary first"))
+			+ buttonInsets.left + buttonInsets.right + 8;
+		Dimension sortSize = new Dimension(sortWidth, 24);
 		sortOrderButton.setPreferredSize(sortSize);
 		sortOrderButton.setMinimumSize(sortSize);
 		sortOrderButton.setMaximumSize(sortSize);
@@ -341,7 +354,8 @@ public class AlbumTab extends JPanel
 				ownedByRarity.merge(card.getRarity(), 1, Integer::sum);
 			}
 		}
-		collectedLabel.setText("Collected: " + ownedCount + " / " + total);
+		collectedLabel.setText("Collected: " + QuantityFormatter.formatNumber(ownedCount)
+			+ " / " + QuantityFormatter.formatNumber(total));
 
 		GachaState stardustState = stateService.get();
 		int dust = stardustState == null ? 0 : stardustState.getStardust();
@@ -403,19 +417,36 @@ public class AlbumTab extends JPanel
 			HologramDefinition def = cardDatabase.holograms().get(owned.getTierKey());
 			String name = def != null ? def.getName() : "Hologram (" + owned.getTierKey() + ")";
 			GearSlot assigned = assignedSlotOf(state, owned);
-			// holograms never enter the grid, so this label list is their only
-			// album surface for the Service Record
-			String text = name + " — tier " + owned.getTierKey()
+			int served = owned.getKillsServed();
+			// Holograms never enter the grid, so this list is their only album
+			// surface for the Service Record — and on one line the whole row ran
+			// to ~345px in a 230px column, so the Service Record, the last thing
+			// on it, was always the thing that got cut. Name, then the facts
+			// indented under it; the tooltip carries the lot.
+			String full = name + " — tier " + owned.getTierKey()
 				+ (assigned != null ? " — " + assigned.getDisplayName() : "")
-				+ (owned.getKillsServed() > 0
-					? " — present for " + QuantityFormatter.formatNumber(owned.getKillsServed())
-						+ " kills"
-					: "");
-			JLabel label = new JLabel(text);
-			label.setFont(FontManager.getRunescapeSmallFont());
-			label.setForeground(def != null ? def.getRarity().getColor() : ColorScheme.LIGHT_GRAY_COLOR);
-			label.setAlignmentX(Component.LEFT_ALIGNMENT);
+				+ (served > 0 ? " — present for " + QuantityFormatter.formatNumber(served)
+					+ (served == 1 ? " kill" : " kills") : "");
+			JLabel label = GachamanPanel.line(name,
+				def != null ? def.getRarity().getColor() : ColorScheme.LIGHT_GRAY_COLOR,
+				FontManager.getRunescapeSmallFont());
+			label.setToolTipText(full);
 			holoPanel.add(label);
+
+			JLabel detail = GachamanPanel.smallLine("    tier " + owned.getTierKey()
+					+ (assigned != null ? "  ·  " + assigned.getDisplayName() : ""),
+				ColorScheme.MEDIUM_GRAY_COLOR);
+			detail.setToolTipText(full);
+			holoPanel.add(detail);
+
+			if (served > 0)
+			{
+				JLabel service = GachamanPanel.smallLine("    present for "
+						+ QuantityFormatter.formatNumber(served) + (served == 1 ? " kill" : " kills"),
+					ColorScheme.MEDIUM_GRAY_COLOR);
+				service.setToolTipText(full);
+				holoPanel.add(service);
+			}
 		}
 		holoPanel.add(Box.createVerticalStrut(4));
 	}
@@ -1132,7 +1163,8 @@ public class AlbumTab extends JPanel
 			// "present for", never "killed": the record counts kills the card was
 			// ASSIGNED TO THE LOADOUT for, on-task or not, tainted or not
 			String service = entry.serviceKills > 0
-				? " — present for " + QuantityFormatter.formatNumber(entry.serviceKills) + " kills"
+				? " — present for " + QuantityFormatter.formatNumber(entry.serviceKills)
+					+ (entry.serviceKills == 1 ? " kill" : " kills")
 				: "";
 			return entry.card.getName() + " — " + entry.card.getRarity().getDisplayName()
 				+ variantText + " — " + entry.card.getSlot().getDisplayName() + service;

@@ -12,6 +12,7 @@ import java.awt.Color;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -39,7 +40,15 @@ import net.runelite.client.util.QuantityFormatter;
 @Singleton
 public class DossierTab extends JPanel
 {
-	private static final SimpleDateFormat LINE_FORMAT = new SimpleDateFormat("MMM d HH:mm");
+	/**
+	 * Year included: the log retains {@link Tuning#DOSSIER_MAX_RECORDS} contracts,
+	 * which for a slow player spans well over a year, and a bare "Aug 9" on a
+	 * record filed two years ago is a lie. Locale pinned to ENGLISH so the month
+	 * abbreviation matches the rest of the panel's copy on a non-English JVM
+	 * rather than appearing alone in the system language.
+	 */
+	private static final SimpleDateFormat LINE_FORMAT =
+		new SimpleDateFormat("d MMM yy HH:mm", Locale.ENGLISH);
 
 	private static final Color CLEAN_GREEN = new Color(110, 200, 110);
 	private static final Color BAD_RED = new Color(229, 90, 80);
@@ -85,7 +94,7 @@ public class DossierTab extends JPanel
 		GachaState state = stateService.get();
 		if (state == null)
 		{
-			list.setText(htmlWrap("<font color='#909090'>Log in to open your dossier.</font>"));
+			list.setText(htmlWrap("<font color='#909090'>Log in to view your dossier.</font>"));
 			header.revalidate();
 			header.repaint();
 			return;
@@ -123,13 +132,16 @@ public class DossierTab extends JPanel
 		section.add(new GachamanPanel.MeterBar(summary.cleanFraction(), CLEAN_GREEN,
 			summary.getCleanContracts() + " / " + summary.getContracts() + " clean"));
 		section.add(Box.createVerticalStrut(4));
+		// Both GC figures on the pay line and both counts on the next: "best" is a
+		// GC number and reading it off a line labelled "Kills:" made it look like a
+		// kill count.
 		section.add(GachamanPanel.smallLine(
 			"Pay: " + QuantityFormatter.formatNumber(summary.getTotalGc()) + " GC  ·  avg "
-				+ QuantityFormatter.formatNumber(summary.averageGc()),
+				+ QuantityFormatter.formatNumber(summary.averageGc()) + " GC",
 			ColorScheme.LIGHT_GRAY_COLOR));
 		section.add(GachamanPanel.smallLine(
-			"Kills: " + QuantityFormatter.formatNumber(summary.getTotalKills()) + "  ·  best "
-				+ QuantityFormatter.formatNumber(summary.getBestGc()) + " GC",
+			"Best: " + QuantityFormatter.formatNumber(summary.getBestGc()) + " GC  ·  "
+				+ QuantityFormatter.formatNumber(summary.getTotalKills()) + " kills",
 			ColorScheme.LIGHT_GRAY_COLOR));
 		section.add(GachamanPanel.smallLine(
 			"Time: " + formatDuration(summary.getTotalDurationMs()) + "  ·  avg "
@@ -171,36 +183,39 @@ public class DossierTab extends JPanel
 			}
 			shown++;
 			html.append("<font color='").append(hex(difficultyColor(record.getDifficulty())))
-				.append("'>").append(escape(nameOf(record.getMonsterName()))).append("</font>")
-				.append("<font color='").append(hex(BODY_GRAY)).append("'>  ·  ")
-				.append(record.getKills()).append(" kills  ·  ")
+				.append("'>").append(GachamanPanel.escape(nameOf(record.getMonsterName()))).append("</font>")
+				.append("<font color='").append(hex(BODY_GRAY)).append("'>").append(GachamanPanel.DOT)
+				.append(QuantityFormatter.formatNumber(record.getKills()))
+				.append(record.getKills() == 1 ? " kill" : " kills").append(GachamanPanel.DOT)
 				.append(QuantityFormatter.formatNumber(record.getGc())).append(" GC</font><br/>");
 
 			html.append("<font color='").append(hex(DETAIL_GRAY)).append("'>")
 				.append(LINE_FORMAT.format(new Date(record.getAt())))
-				.append("  ·  ").append(formatDuration(record.getDurationMs()));
+				.append(GachamanPanel.DOT).append(formatDuration(record.getDurationMs()));
 			Color styleColor = styleColor(record.getStyle());
 			if (styleColor != null)
 			{
-				html.append("  ·  <font color='").append(hex(styleColor)).append("'>")
-					.append(escape(styleName(record.getStyle()))).append("</font>");
+				html.append(GachamanPanel.DOT).append("<font color='").append(hex(styleColor)).append("'>")
+					.append(GachamanPanel.escape(styleName(record.getStyle()))).append("</font>");
 			}
 			if (record.isParty())
 			{
-				html.append("  ·  <font color='").append(hex(PARTY_BLUE)).append("'>")
-					.append(escape(record.getParty())).append("</font>");
+				html.append(GachamanPanel.DOT).append("<font color='").append(hex(PARTY_BLUE)).append("'>")
+					.append(GachamanPanel.escape(record.getParty())).append("</font>");
 			}
 			if (record.isCarried())
 			{
-				html.append("  ·  carried");
+				html.append(GachamanPanel.DOT).append("carried");
 			}
 			if (record.isRedemption())
 			{
-				html.append("  ·  redemption");
+				html.append(GachamanPanel.DOT).append("redemption");
 			}
-			html.append("  ·  <font color='")
+			html.append(GachamanPanel.DOT).append("<font color='")
 				.append(hex(record.isClean() ? CLEAN_GREEN : BAD_RED)).append("'>")
-				.append(record.isClean() ? "clean" : record.getTaintedKills() + " off-style")
+				.append(record.isClean() ? "clean"
+					: record.getTaintedKills() + (record.getTaintedKills() == 1
+						? " off-style kill" : " off-style kills"))
 				.append("</font></font><br/><br/>");
 		}
 		if (shown == 0)
@@ -274,11 +289,6 @@ public class DossierTab extends JPanel
 	private static String hex(Color color)
 	{
 		return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
-	}
-
-	private static String escape(String text)
-	{
-		return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
 	}
 
 	static String formatDuration(long ms)

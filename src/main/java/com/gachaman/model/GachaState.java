@@ -133,12 +133,21 @@ public class GachaState
 	List<TimelineEvent> timeline;
 	/**
 	 * The Patron's Mark: shared party contracts finished with each partner,
-	 * keyed by DISPLAY NAME. Not by member id — RuneLite draws a party
-	 * memberId from a fresh Random on every process start AND again inside
-	 * changeParty(), so an id-keyed tally would restart at zero every login
-	 * and could never reach the higher tiers. Cosmetic only; see PatronMark.
+	 * keyed by ACCOUNT KEY (see AccountKey) with the display name demoted to a
+	 * refreshable label inside the record. Not by member id — RuneLite draws a
+	 * party memberId from a fresh Random on every process start AND again
+	 * inside changeParty(), so an id-keyed tally would restart at zero every
+	 * login and could never reach the higher tiers; and not by display name,
+	 * which forks a partner's history in half the day they rename.
+	 *
+	 * Deliberately NOT the old {@code partnerContracts} field name. That one
+	 * held a Map&lt;String,Integer&gt;, and reusing the name would hand Gson a
+	 * bare number where it now expects an object — a parse failure that takes
+	 * the WHOLE save with it, not just this field. A new name means Gson drops
+	 * the old key as unknown and starts this ledger empty, which is what a
+	 * pre-release rename should cost. Cosmetic only; see PatronMark.
 	 */
-	Map<String, Integer> partnerContracts;
+	Map<String, PatronRecord> patrons;
 	/**
 	 * The Contract Dossier: one compact record per completed contract, oldest
 	 * dropped past Tuning.DOSSIER_MAX_RECORDS. Capped separately from and far
@@ -201,7 +210,7 @@ public class GachaState
 			.tutorialStripDone(false)
 			.tutorialStripPending(false)
 			.timeline(new ArrayList<>())
-			.partnerContracts(new HashMap<>())
+			.patrons(new HashMap<>())
 			.contractLog(new ArrayList<>())
 			.build();
 	}
@@ -278,9 +287,9 @@ public class GachaState
 		{
 			b.timeline(new ArrayList<>());
 		}
-		if (partnerContracts == null)
+		if (patrons == null)
 		{
-			b.partnerContracts(new HashMap<>());
+			b.patrons(new HashMap<>());
 		}
 		if (contractLog == null)
 		{

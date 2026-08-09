@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -146,6 +147,21 @@ public class ServiceRecordService implements KillTracker.KillListener, TaskServi
 		return pending.getOrDefault(ownedCardUuid, 0);
 	}
 
+	/**
+	 * Debug only (::gachawear), for staging a screenshot of a worn card face
+	 * without grinding a thousand kills. Flushes first: a banked tally left
+	 * unwritten would land on top of the number afterwards and the card would
+	 * quietly drift off the stage the player set.
+	 */
+	public synchronized void debugSetServed(Set<String> uuids, int killsServed)
+	{
+		flush();
+		stateService.mutate(s -> {
+			List<OwnedCard> updated = setServed(s.getOwnedCards(), uuids, killsServed);
+			return updated == null ? s : s.withOwnedCards(updated);
+		});
+	}
+
 	// --- pure rules ---
 
 	/**
@@ -188,6 +204,45 @@ public class ServiceRecordService implements KillTracker.KillListener, TaskServi
 			if (add > 0)
 			{
 				out.add(card.withKillsServed(card.getKillsServed() + add));
+				changed = true;
+			}
+			else
+			{
+				out.add(card);
+			}
+		}
+		return changed ? out : null;
+	}
+
+	/**
+	 * Overwrite the record on an exact set of copies, preserving list order.
+	 * Returns null when nothing changed, on the same contract as
+	 * {@link #applyTally}.
+	 *
+	 * <p>SET, not add, and it is the only thing in the plugin that can make a
+	 * service record go DOWN — which is why nothing but the ::gachawear debug
+	 * command may call it. The record is documented as permanent and monotonic
+	 * and every other path honours that.
+	 *
+	 * <p>Takes uuids rather than a predicate so the selection is made once,
+	 * against the snapshot the player was shown, and cannot silently re-run
+	 * against a different list inside mutate().
+	 */
+	@Nullable
+	static List<OwnedCard> setServed(@Nullable List<OwnedCard> cards, Set<String> uuids,
+		int killsServed)
+	{
+		if (cards == null || cards.isEmpty() || uuids.isEmpty())
+		{
+			return null;
+		}
+		List<OwnedCard> out = new ArrayList<>(cards.size());
+		boolean changed = false;
+		for (OwnedCard card : cards)
+		{
+			if (uuids.contains(card.getUuid()) && card.getKillsServed() != killsServed)
+			{
+				out.add(card.withKillsServed(killsServed));
 				changed = true;
 			}
 			else

@@ -48,4 +48,38 @@ public class GachaPresenceMessage extends PartyMemberMessage
 	private int killsDone;
 	private int killsRequired;
 	private boolean tainted;
+	/**
+	 * The sender's {@link com.gachaman.service.AccountKey}: a stable identity
+	 * for the Patron's Mark, null from an older client or one not logged in.
+	 * Self-reported and unauthenticated, exactly like the display name — the
+	 * page draws it and the cosmetic ledger keys on it, and nothing else.
+	 */
+	private String accountKey;
+	/**
+	 * The sender has a board dealt but has signed nothing off it yet.
+	 *
+	 * Which makes them INELIGIBLE for a shared roll: a party roll is only for
+	 * members with a clean slate, and undecided offers are not a clean slate.
+	 * Broadcast so the page can say so before someone proposes and watches
+	 * them get auto-excused for no visible reason.
+	 *
+	 * A boolean rather than the offer count: the count is a roll input's
+	 * shape and this message must never look like one. Eligibility is the only
+	 * question the page asks.
+	 */
+	private boolean undecidedOffers;
+	/**
+	 * The party proposal id of the sender's SHARED contract, or null when they
+	 * are solo, idle, or on a contract that has carried to solo.
+	 *
+	 * Boxed on purpose. A proposal id is {@code nextLong()}, so zero is a legal
+	 * value; a primitive would leave an older client's omission indistinguishable
+	 * from a real id of 0 and could merge two unrelated members into one group.
+	 * Null means "makes no claim", which is what an omission actually is.
+	 *
+	 * DISPLAY ONLY, like everything else here — it groups rows on a page. It is
+	 * not how a shared contract is identified anywhere that matters; the pooled
+	 * quota still moves on {@link PartyKillsMessage} alone.
+	 */
+	private Long partyContractId;
 }

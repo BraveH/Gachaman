@@ -13,6 +13,7 @@ import java.awt.Dimension;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.Box;
@@ -39,8 +40,22 @@ import net.runelite.client.ui.FontManager;
 public class TimelineTab extends JPanel
 {
 	private static final int SLIDER_MAX = 1000;
-	private static final SimpleDateFormat RANGE_FORMAT = new SimpleDateFormat("MMM d HH:mm");
-	private static final SimpleDateFormat LINE_FORMAT = new SimpleDateFormat("MM-dd HH:mm:ss");
+	/**
+	 * The window controls carry the year; the rows do not. A player can scrub the
+	 * from/to spinners anywhere, so the boundary the caption and the spinner
+	 * editors report has to say which year it landed in — but repeating it on
+	 * every row inside a window the player just chose is noise.
+	 *
+	 * <p>Both pinned to ENGLISH: month names left to the default locale render in
+	 * the system language alone among English copy, and the old numeric
+	 * {@code MM-dd} was worse still — unreadable to anyone who writes dates the
+	 * other way round.
+	 */
+	private static final String RANGE_PATTERN = "d MMM yy HH:mm";
+	private static final SimpleDateFormat RANGE_FORMAT =
+		new SimpleDateFormat(RANGE_PATTERN, Locale.ENGLISH);
+	private static final SimpleDateFormat LINE_FORMAT =
+		new SimpleDateFormat("d MMM HH:mm:ss", Locale.ENGLISH);
 
 	private static final Color CHEST_ORANGE = new Color(226, 148, 62);
 	private static final Color LUCK_GOLD = new Color(230, 190, 80);
@@ -72,8 +87,8 @@ public class TimelineTab extends JPanel
 		controls.setLayout(new BoxLayout(controls, BoxLayout.Y_AXIS));
 		controls.setOpaque(false);
 
-		fromSpinner.setEditor(new JSpinner.DateEditor(fromSpinner, "MMM d HH:mm"));
-		toSpinner.setEditor(new JSpinner.DateEditor(toSpinner, "MMM d HH:mm"));
+		fromSpinner.setEditor(new JSpinner.DateEditor(fromSpinner, RANGE_PATTERN));
+		toSpinner.setEditor(new JSpinner.DateEditor(toSpinner, RANGE_PATTERN));
 		GachamanPanel.styleSpinner(fromSpinner);
 		GachamanPanel.styleSpinner(toSpinner);
 		controls.add(spinnerRow("From", fromSpinner));
@@ -246,7 +261,7 @@ public class TimelineTab extends JPanel
 				}
 			}
 		}
-		scrubLabel.setText("Up to " + RANGE_FORMAT.format(new Date(scrub)) + "  (" + shown + " events)");
+		scrubLabel.setText(scrubCaption(scrub, shown));
 	}
 
 	private void refreshList()
@@ -272,7 +287,7 @@ public class TimelineTab extends JPanel
 			shown++;
 			html.append("<font color='").append(hex(colorFor(event))).append("'>[")
 				.append(LINE_FORMAT.format(new Date(event.getAt()))).append("] ")
-				.append(escape(event.getText()))
+				.append(GachamanPanel.escape(event.getText()))
 				.append("</font><br/>");
 		}
 		if (shown == 0)
@@ -281,7 +296,18 @@ public class TimelineTab extends JPanel
 		}
 		list.setText(htmlWrap(html.toString()));
 		list.setCaretPosition(list.getDocument().getLength()); // newest visible
-		scrubLabel.setText("Up to " + RANGE_FORMAT.format(new Date(scrub)) + "  (" + shown + " events)");
+		scrubLabel.setText(scrubCaption(scrub, shown));
+	}
+
+	/**
+	 * The scrubber caption. One place, because the live-drag path and the rebuild
+	 * path both write it and a copy of the string in each drifted — one of them
+	 * still said "1 events".
+	 */
+	static String scrubCaption(long scrub, int shown)
+	{
+		return "Up to " + RANGE_FORMAT.format(new Date(scrub))
+			+ "  (" + shown + (shown == 1 ? " event)" : " events)");
 	}
 
 	private static String htmlWrap(String body)
@@ -337,10 +363,5 @@ public class TimelineTab extends JPanel
 	private static String hex(Color color)
 	{
 		return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
-	}
-
-	private static String escape(String text)
-	{
-		return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
 	}
 }

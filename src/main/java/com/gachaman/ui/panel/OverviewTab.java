@@ -9,12 +9,15 @@ import com.gachaman.service.GachaStateService;
 import com.gachaman.service.TaskService;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.util.function.BooleanSupplier;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
@@ -156,7 +159,7 @@ public class OverviewTab extends JPanel
 		section.add(Box.createVerticalStrut(5));
 		int target = Math.max(1, state.getCycleTarget());
 		double progress = state.getCycleProgress();
-		String barLabel = trimDouble(progress) + " / " + target + " tasks";
+		String barLabel = trimDouble(progress) + " / " + target + " contracts";
 		section.add(new GachamanPanel.MeterBar(progress / target, style.getColor(), barLabel));
 		section.add(Box.createVerticalStrut(3));
 		section.add(GachamanPanel.smallLine("Style re-rolls when the cycle completes.",
@@ -164,9 +167,119 @@ public class OverviewTab extends JPanel
 		return section;
 	}
 
+	/**
+	 * One card per party roll on offer, host first.
+	 *
+	 * <p>Adds nothing at all when there is nothing to answer — including while
+	 * this client is committed to a roll or hosting one, which the SERVICE
+	 * enforces rather than the panel, so the rule holds for the chat commands
+	 * too. A player can be offered several rolls at once and can take exactly
+	 * one; joining answers the rest for them.
+	 */
+	private void addProposalCards(JPanel section)
+	{
+		java.util.List<com.gachaman.party.PartyRollService.PendingProposal> offers =
+			partyRollService.proposalGroups();
+		for (com.gachaman.party.PartyRollService.PendingProposal offer : offers)
+		{
+			section.add(buildProposalCard(offer));
+			section.add(Box.createVerticalStrut(6));
+		}
+	}
+
+	private JComponent buildProposalCard(
+		com.gachaman.party.PartyRollService.PendingProposal offer)
+	{
+		JPanel card = new JPanel();
+		card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+		card.setOpaque(false);
+		card.setAlignmentX(Component.LEFT_ALIGNMENT);
+		card.setBorder(BorderFactory.createCompoundBorder(
+			BorderFactory.createLineBorder(new Color(90, 82, 60)),
+			new EmptyBorder(5, 6, 6, 6)));
+		card.setMaximumSize(new Dimension(GachamanPanel.SECTION_WIDTH, Integer.MAX_VALUE));
+
+		String host = offer.getHostName()
+			+ (offer.getHostCombatLevel() > 0 ? "  lvl " + offer.getHostCombatLevel() : "");
+		card.add(GachamanPanel.line(host + "'s roll" + (offer.isMine() ? "  (yours)" : ""),
+			new Color(230, 190, 80), FontManager.getRunescapeBoldFont()));
+		card.add(Box.createVerticalStrut(2));
+
+		// the rule the roll would ACTUALLY use, and how long the offer stands.
+		// Seconds, not ticks: a countdown nobody can convert is not a countdown.
+		card.add(GachamanPanel.wrapped("Sizing: " + GachamanPanel.escape(offer.getSizingLabel()),
+			ColorScheme.LIGHT_GRAY_COLOR));
+		card.add(GachamanPanel.smallLine((offer.isVoting() ? "voting  ·  " : offer.getAgreed() + " in  ·  ")
+				+ com.gachaman.party.PartyRollService.ticksToSeconds(offer.getTicksLeft())
+				+ "s left",
+			ColorScheme.MEDIUM_GRAY_COLOR));
+		card.add(Box.createVerticalStrut(3));
+
+		for (com.gachaman.party.PartyRollService.ProposalMember member : offer.getMembers())
+		{
+			// once voting opens the useful fact about a member is which contract
+			// they backed, not that they agreed to roll — everyone here agreed
+			// the contract they backed, by name — an index is meaningless next to
+			// a player once the board is off screen
+			String state = offer.isVoting()
+				? (member.getVoteLabel() == null ? "no vote" : member.getVoteLabel())
+				: stanceLabel(member.getResponse());
+			boolean settled = offer.isVoting()
+				? member.getVote() >= 0
+				: member.getResponse() == com.gachaman.party.PartyRollResponseMessage.AGREE;
+			card.add(GachamanPanel.smallLine(
+				"  " + member.getName() + (member.isSelf() ? " (you)" : "")
+					+ (member.isHost() ? " — host" : "")
+					+ "  ·  " + state,
+				settled ? ColorScheme.LIGHT_GRAY_COLOR : MUTED_MEMBER));
+		}
+
+		if (offer.isMine())
+		{
+			// your own group is a roster, not an offer: there is nothing left to
+			// answer, and the host's Start/Cancel controls live below the section
+			return card;
+		}
+
+		card.add(Box.createVerticalStrut(4));
+		final long id = offer.getProposalId();
+		JButton join = GachamanPanel.button("Join");
+		join.setEnabled(!offer.isBlocked());
+		join.setToolTipText(offer.isBlocked()
+			? "You cannot join this roll — you have a contract, undecided rolls, or party"
+				+ " contracts are off in your settings."
+			: "Join this roll. Any other roll you have been offered is answered for you.");
+		join.addActionListener(e -> partyRollService.joinProposal(id));
+		card.add(join);
+		card.add(Box.createVerticalStrut(3));
+		JButton pass = GachamanPanel.button("Decline");
+		pass.setToolTipText("Sit this one out. The rest of that party may still take a contract.");
+		pass.addActionListener(e -> partyRollService.declineProposal(id));
+		card.add(pass);
+		return card;
+	}
+
+	private static final Color MUTED_MEMBER = new Color(140, 140, 140);
+
+	/** How one member has answered a proposal, in words. */
+	private static String stanceLabel(int response)
+	{
+		switch (response)
+		{
+			case com.gachaman.party.PartyRollResponseMessage.AGREE:
+				return "in";
+			case com.gachaman.party.PartyRollResponseMessage.DECLINE:
+				return "sitting out";
+			case com.gachaman.party.PartyRollResponseMessage.BUSY:
+				return "busy";
+			default:
+				return "no answer";
+		}
+	}
+
 	private JPanel buildTaskSection(GachaState state)
 	{
-		JPanel section = GachamanPanel.section("Task");
+		JPanel section = GachamanPanel.section("Contract");
 		ActiveTask task = state.getActiveTask();
 		if (task == null)
 		{
@@ -179,7 +292,12 @@ public class OverviewTab extends JPanel
 						: "Contracts rolled — view them and pick one.",
 					ColorScheme.LIGHT_GRAY_COLOR));
 				section.add(Box.createVerticalStrut(4));
-				JButton view = GachamanPanel.button("View Rolled Tasks");
+				// the group, through the vote: who is in it and how each of them
+				// has voted. This branch used to return before the cards were
+				// added, so the roster disappeared at the exact moment a majority
+				// was being counted — which is when it matters most
+				addProposalCards(section);
+				JButton view = GachamanPanel.button("View Rolled Contracts");
 				view.addActionListener(e -> clientThread.invokeLater(taskService::presentOffers));
 				section.add(view);
 				if (partyVote && partyRollService.canCancelRoll())
@@ -195,9 +313,12 @@ public class OverviewTab extends JPanel
 				addCharterControls(section, state, partyVote);
 				return section;
 			}
-			section.add(GachamanPanel.smallLine("No active task.", ColorScheme.LIGHT_GRAY_COLOR));
+			section.add(GachamanPanel.smallLine("No active contract.", ColorScheme.LIGHT_GRAY_COLOR));
 			section.add(Box.createVerticalStrut(4));
-			JButton roll = GachamanPanel.button("Roll Tasks");
+			// every roll on offer, before the buttons that would start a rival one:
+			// the whole point of a card is that answering it is the cheaper move
+			addProposalCards(section);
+			JButton roll = GachamanPanel.button("Roll Contracts");
 			roll.setEnabled(taskService.canRollOffers());
 			roll.addActionListener(e -> clientThread.invokeLater(taskService::rollOffers));
 			section.add(roll);
@@ -206,9 +327,9 @@ public class OverviewTab extends JPanel
 				section.add(Box.createVerticalStrut(4));
 				if (partyRollService.isProposalLive())
 				{
-					section.add(GachamanPanel.smallLine(
-						"Party roll pending — " + partyRollService.agreedCount() + " agreed",
-						new Color(230, 190, 80)));
+					// no status line here any more: the group card above already
+					// carries the host, the roster, the count and the countdown,
+					// and two copies of one clock is one copy too many
 					if (partyRollService.canForceStart())
 					{
 						section.add(Box.createVerticalStrut(3));
@@ -229,7 +350,7 @@ public class OverviewTab extends JPanel
 				else
 				{
 					JButton party = GachamanPanel.button("Propose Party Roll");
-					party.setToolTipText("Task-less party members join with ::gachaparty;"
+					party.setToolTipText("Party members without a contract join with ::gachaparty;"
 						+ " the roll starts with whoever agrees (minimum 2), identical offers"
 						+ " appear for everyone, and a majority vote picks the shared contract.");
 					party.setEnabled(taskService.canRollOffers());
@@ -240,8 +361,14 @@ public class OverviewTab extends JPanel
 			return section;
 		}
 
-		JLabel monster = GachamanPanel.line(task.getMonsterName() + "  (lvl " + task.getMonsterCombatLevel() + ")",
+		// Name only. The CENTER cell is ~161px once the Wiki button and the 6px gap
+		// are taken out, and bold runs ~7px/char — "General Graardor  (lvl 624)"
+		// measures 176px, so Swing ellipsised away the exact thing the suffix was
+		// there to show. The level moves down to the difficulty line, which has the
+		// full 205px to itself.
+		JLabel monster = GachamanPanel.line(task.getMonsterName(),
 			Color.WHITE, FontManager.getRunescapeBoldFont());
+		monster.setToolTipText(task.getMonsterName() + " (level " + task.getMonsterCombatLevel() + ")");
 		JPanel headerRow = new JPanel(new java.awt.BorderLayout(6, 0));
 		headerRow.setOpaque(false);
 		headerRow.setAlignmentX(java.awt.Component.LEFT_ALIGNMENT);
@@ -261,9 +388,17 @@ public class OverviewTab extends JPanel
 			Math.max(monster.getPreferredSize().height, wiki.getPreferredSize().height)));
 		section.add(headerRow);
 		section.add(GachamanPanel.smallLine(task.getDifficulty().getDisplayName()
-				+ (task.isRedemption() ? " — REDEMPTION" : "")
-				+ (task.isParty() ? " — SHARED: " + task.getPartyLabel() : ""),
+				+ "  ·  lvl " + task.getMonsterCombatLevel()
+				+ (task.isRedemption() ? " — REDEMPTION" : ""),
 			task.getDifficulty().getColor()));
+		if (task.isParty())
+		{
+			// Its own line: appended to the difficulty it ran to 237px in a 205px
+			// column, and the horizontal scrollbar is disabled, so the party label
+			// was simply cut off.
+			section.add(GachamanPanel.smallLine("SHARED: " + task.getPartyLabel(),
+				task.getDifficulty().getColor()));
+		}
 		section.add(Box.createVerticalStrut(5));
 		// shared contracts pool every participant's kills into the quota
 		int pooled = task.getKillsDone() + (task.isParty() ? task.getPartyOtherKills() : 0);
@@ -276,7 +411,8 @@ public class OverviewTab extends JPanel
 				+ (task.isParty() ? " (yours: " + task.getKillsDone() + ")" : "")));
 		section.add(Box.createVerticalStrut(4));
 		section.add(GachamanPanel.smallLine(
-			task.getPerKillGc() + " GC / kill  ·  " + task.getCompletionGc() + " GC completion",
+			QuantityFormatter.formatNumber(task.getPerKillGc()) + " GC / kill  ·  "
+				+ QuantityFormatter.formatNumber(task.getCompletionGc()) + " GC completion",
 			ColorScheme.LIGHT_GRAY_COLOR));
 		if (task.getAppliedCharge() != null)
 		{
@@ -304,11 +440,11 @@ public class OverviewTab extends JPanel
 		// not getting it. The tooltip carries the exact when-is-it-fixed rule.
 		JLabel docket = GachamanPanel.smallLine(
 			task.isSlayerAligned()
-				? "Double Docket: ACTIVE — x" + Tuning.DOUBLE_DOCKET_MULT + " completion"
+				? "Double Docket: ACTIVE (x" + trimDouble(Tuning.DOUBLE_DOCKET_MULT) + ")"
 				: "Double Docket: not your Slayer task",
 			task.isSlayerAligned() ? DOCKET_GREEN : ColorScheme.LIGHT_GRAY_COLOR);
 		docket.setToolTipText("Kill your Slayer assignment on contract and completion pays x"
-			+ Tuning.DOUBLE_DOCKET_MULT + ". Checked when you accept AND on every kill, so"
+			+ trimDouble(Tuning.DOUBLE_DOCKET_MULT) + ". Checked when you accept AND on every kill, so"
 			+ " picking up the matching task mid-contract still counts — and once it locks in it"
 			+ " stays, even if you finish the Slayer task first. Contracts are never rolled to"
 			+ " match your Slayer task; grouped assignments such as Metal dragons name no single"
@@ -324,11 +460,12 @@ public class OverviewTab extends JPanel
 				String text;
 				if (bet.isSealed() && !bet.isCompleted())
 				{
-					text = "??? — " + bet.getPayoutGc() + " GC";
+					text = "??? — " + QuantityFormatter.formatNumber(bet.getPayoutGc()) + " GC";
 				}
 				else
 				{
-					text = TaskService.describeSideBet(bet) + " — " + bet.getPayoutGc() + " GC";
+					text = TaskService.describeSideBet(bet) + " — "
+						+ QuantityFormatter.formatNumber(bet.getPayoutGc()) + " GC";
 				}
 				if (bet.isCompleted())
 				{
@@ -341,7 +478,7 @@ public class OverviewTab extends JPanel
 
 		section.add(Box.createVerticalStrut(4));
 		section.add(GachamanPanel.wrapped(
-			"A contract is a contract — tasks cannot be abandoned.",
+			"A contract is a contract — it cannot be abandoned.",
 			ColorScheme.MEDIUM_GRAY_COLOR));
 		return section;
 	}
@@ -504,7 +641,8 @@ public class OverviewTab extends JPanel
 		{
 			section.add(Box.createVerticalStrut(6));
 			section.add(GachamanPanel.smallLine("The Charter Office", ColorScheme.BRAND_ORANGE));
-			section.add(GachamanPanel.wrapped("Deed held on <b>" + escape(hold.getMonsterName())
+			section.add(GachamanPanel.wrapped("Deed held on <b>"
+				+ GachamanPanel.escape(hold.getMonsterName())
 				+ "</b> — " + QuantityFormatter.formatNumber(hold.getPriceGc())
 				+ " GC. Accept that contract off the board within "
 				+ charterService.holdTicksRemaining() + " ticks, or the GC is refunded.",
@@ -556,8 +694,14 @@ public class OverviewTab extends JPanel
 		picker.setSelectedIndex(0);
 		GachamanPanel.styleCombo(picker);
 		picker.setAlignmentX(Component.LEFT_ALIGNMENT);
-		picker.setMaximumSize(new java.awt.Dimension(Integer.MAX_VALUE,
-			picker.getPreferredSize().height));
+		// A combo asks for whatever its widest ITEM needs, and the widest here is a
+		// 27-character monster name plus a price — past the 205px column, which in a
+		// tab that never scrolls sideways clips every row, not just this one. Pinned
+		// to the column instead: the renderer is a JLabel, so it ellipsizes itself,
+		// and the popup list is free to be wider because it floats.
+		int pickerHeight = picker.getPreferredSize().height;
+		picker.setPreferredSize(new java.awt.Dimension(GachamanPanel.SECTION_WIDTH, pickerHeight));
+		picker.setMaximumSize(new java.awt.Dimension(GachamanPanel.SECTION_WIDTH, pickerHeight));
 		section.add(picker);
 		section.add(Box.createVerticalStrut(3));
 
@@ -584,11 +728,12 @@ public class OverviewTab extends JPanel
 			{
 				GachamanPanel.info(this, "That deed costs "
 					+ QuantityFormatter.formatNumber(target.getPriceGc())
-					+ " GC and you have " + QuantityFormatter.formatNumber(state.getGc()) + ".");
+					+ " GC and you have " + QuantityFormatter.formatNumber(state.getGc()) + " GC.");
 				return;
 			}
 			if (!GachamanPanel.confirm(this, "Charter this deed?",
-				"Pay " + QuantityFormatter.formatNumber(target.getPriceGc()) + " GC for a "
+				"Pay " + QuantityFormatter.formatNumber(target.getPriceGc()) + " GC for "
+					+ GachamanPanel.article(target.getDifficulty().getDisplayName()) + " "
 					+ target.getDifficulty().getDisplayName() + " contract on "
 					+ target.getMonsterName() + "?\n\nIt joins the board as an extra offer."
 					+ " Accepting it is binding like any other contract. This is your one deed"
@@ -602,12 +747,6 @@ public class OverviewTab extends JPanel
 		section.add(buy);
 	}
 
-	/** Swing HTML labels interpret their text; monster names come from data. */
-	private static String escape(String text)
-	{
-		return text == null ? "" : text.replace("&", "&amp;").replace("<", "&lt;");
-	}
-
 	private JPanel buildTaintSection(GachaState state)
 	{
 		JPanel section = GachamanPanel.section(null);
@@ -618,7 +757,7 @@ public class OverviewTab extends JPanel
 		section.add(Box.createVerticalStrut(3));
 		section.add(GachamanPanel.wrapped(
 			"Forbidden gear or style has stained your record. All GC income is halved"
-				+" until the taint is worked off with clean kills (or a Redemption task).",
+				+ " until the taint is worked off with clean kills (or a Redemption contract).",
 			new Color(230, 170, 160)));
 		return section;
 	}
@@ -633,7 +772,7 @@ public class OverviewTab extends JPanel
 		int tasksLeft = Tuning.FRAGMENT_WINDOW_TASKS - state.getTotalTasksCompleted();
 		section.add(GachamanPanel.wrapped(
 			"Medium+ contracts drop fragments during your first "
-				+ Tuning.FRAGMENT_WINDOW_TASKS + " tasks (" + tasksLeft + " left). Collect "
+				+ Tuning.FRAGMENT_WINDOW_TASKS + " contracts (" + tasksLeft + " left). Collect "
 				+ Tuning.FRAGMENTS_REQUIRED + " to forge a bonus Slot Deed.",
 			ColorScheme.MEDIUM_GRAY_COLOR));
 		return section;

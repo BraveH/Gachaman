@@ -6,6 +6,7 @@ import com.gachaman.model.ContractRecord;
 import com.gachaman.model.DossierSummary;
 import com.gachaman.model.GachaState;
 import com.gachaman.model.OwnedCard;
+import com.gachaman.model.PatronRecord;
 import com.gachaman.model.TaskDifficulty;
 import com.gachaman.model.TaskOffer;
 import com.gachaman.model.Variant;
@@ -94,39 +95,58 @@ public class StateCodecTest
 	}
 
 	@Test
-	public void legacyPayloadWithoutPartnerContractsNormalizesToEmpty()
+	public void legacyPayloadWithoutPatronsNormalizesToEmpty()
 	{
 		// The Patron's Mark ledger did not exist when this save was written, so
 		// zero shared contracts is not a lossy default — it is the only honest
-		// one. It is also inert: an empty map means no top partner, no tier and
-		// no mark, and nothing anywhere gates on the field.
+		// one. It is also inert: an empty map means no top patron, no tier and
+		// no mark, no Patrons tab, and nothing anywhere gates on the field.
 		GachaState legacy = new Gson().fromJson("{\"gc\":5}", GachaState.class);
-		Assert.assertNull(legacy.getPartnerContracts());
+		Assert.assertNull(legacy.getPatrons());
 		GachaState normalized = legacy.normalized();
-		Assert.assertNotNull(normalized.getPartnerContracts());
-		Assert.assertTrue(normalized.getPartnerContracts().isEmpty());
-		Assert.assertNull(PatronMark.topPartner(normalized.getPartnerContracts()));
+		Assert.assertNotNull(normalized.getPatrons());
+		Assert.assertTrue(normalized.getPatrons().isEmpty());
+		Assert.assertNull(PatronMark.topKey(normalized.getPatrons()));
 	}
 
 	@Test
-	public void partnerContractsSurvivesARoundTrip()
+	public void aPreRenameLedgerIsDroppedRatherThanFailingTheWholeSave()
 	{
-		Map<String, Integer> patrons = new LinkedHashMap<>();
-		patrons.put("Zezima", 3);
-		patrons.put("B0aty", 41);
-		GachaState state = GachaState.fresh(42).withPartnerContracts(patrons);
+		// the field was renamed rather than re-typed on purpose: the old
+		// "partnerContracts" held a Map<String,Integer>, and a bare number where
+		// Gson now expects an object throws and takes the ENTIRE save with it,
+		// not just this one ledger. Under the new name Gson drops the old key as
+		// unknown, which costs a cosmetic tally and nothing else.
+		GachaState legacy = new Gson().fromJson(
+			"{\"gc\":5,\"partnerContracts\":{\"Zezima\":3}}", GachaState.class);
+		Assert.assertEquals(5, legacy.getGc());
+		Assert.assertNull(legacy.getPatrons());
+		Assert.assertTrue(legacy.normalized().getPatrons().isEmpty());
+	}
+
+	@Test
+	public void patronsSurviveARoundTrip()
+	{
+		Map<String, PatronRecord> patrons = new LinkedHashMap<>();
+		patrons.put("00112233445566aa", new PatronRecord("Zezima", 3, 1_700_000_000_000L));
+		patrons.put("00112233445566bb", new PatronRecord("B0aty", 41, 1_700_000_005_000L));
+		GachaState state = GachaState.fresh(42).withPatrons(patrons);
 
 		GachaState decoded = codec.decode(codec.encode(state));
 		Assert.assertNotNull(decoded);
-		Map<String, Integer> back = decoded.getPartnerContracts();
+		Map<String, PatronRecord> back = decoded.getPatrons();
 		Assert.assertEquals(2, back.size());
-		Assert.assertEquals(Integer.valueOf(3), back.get("Zezima"));
-		Assert.assertEquals("key casing is the displayed name — it must survive",
-			Integer.valueOf(41), back.get("B0aty"));
+		Assert.assertEquals(3, back.get("00112233445566aa").getCount());
+		Assert.assertEquals("the label is persisted, not re-derived — a partner who"
+			+ " never joins again still draws with a name",
+			"B0aty", back.get("00112233445566bb").getName());
+		Assert.assertEquals(1_700_000_005_000L,
+			back.get("00112233445566bb").getLastSharedAt());
 		// Gson rebuilds this as a LinkedTreeMap, so pin that the reader still
 		// answers correctly against whatever map type comes back off disk
-		Assert.assertEquals("B0aty", PatronMark.topPartner(back));
-		Assert.assertEquals(41, PatronMark.countFor(back, "b0aty"));
+		Assert.assertEquals("00112233445566bb", PatronMark.topKey(back));
+		Assert.assertEquals("a received key is normalized before lookup",
+			41, PatronMark.countFor(back, "00112233445566BB"));
 	}
 
 	@Test

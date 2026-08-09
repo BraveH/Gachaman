@@ -38,6 +38,18 @@ public final class RollOdds
 		boolean wieldableNow;
 	}
 
+	/**
+	 * The row one card falls in. Public so the disclosure can collect the card
+	 * names behind each row from the same key {@link #tierShares} counts them
+	 * under — two independent derivations of "which row is this?" would be free
+	 * to disagree, and the tooltip would then name cards from the wrong band.
+	 */
+	public static TierBand bandOf(CardDefinition card, boolean wieldableNow)
+	{
+		String key = card.getTierKey() == null ? UNTIERED : card.getTierKey();
+		return new TierBand(key, wieldableNow);
+	}
+
 	private RollOdds()
 	{
 	}
@@ -140,9 +152,8 @@ public final class RollOdds
 		}
 		for (int i = 0; i < candidates.size(); i++)
 		{
-			CardDefinition card = candidates.get(i);
-			String key = card.getTierKey() == null ? UNTIERED : card.getTierKey();
-			shares.merge(new TierBand(key, wieldableNow[i]), weights[i] / total, Double::sum);
+			shares.merge(bandOf(candidates.get(i), wieldableNow[i]), weights[i] / total,
+				Double::sum);
 		}
 		return shares;
 	}

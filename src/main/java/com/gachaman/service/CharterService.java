@@ -82,6 +82,7 @@ public class CharterService
 
 	private final GachaStateService stateService;
 	private final MonsterTable monsterTable;
+	private final QuestUnlockService questUnlockService;
 	private final TaskService taskService;
 	private final CeremonyBus ceremonyBus;
 	private final TimelineService timelineService;
@@ -102,6 +103,13 @@ public class CharterService
 	private volatile int playerCb = 3;
 	private volatile int slayerLevel = 1;
 	private volatile boolean membersWorld;
+	/**
+	 * Snapshot of the finished gating quests, refreshed alongside the other
+	 * scalars. Starts EMPTY rather than null: until the client thread has read
+	 * the real thing, the office offers nothing quest-locked instead of
+	 * offering everything.
+	 */
+	private volatile Set<String> completedQuests = Collections.emptySet();
 
 	@Nullable
 	private Runnable refreshHook;
@@ -110,11 +118,13 @@ public class CharterService
 
 	@Inject
 	public CharterService(GachaStateService stateService, MonsterTable monsterTable,
-		TaskService taskService, CeremonyBus ceremonyBus, TimelineService timelineService,
-		ChatMessageManager chatMessageManager, ConfigManager configManager, Client client)
+		QuestUnlockService questUnlockService, TaskService taskService, CeremonyBus ceremonyBus,
+		TimelineService timelineService, ChatMessageManager chatMessageManager,
+		ConfigManager configManager, Client client)
 	{
 		this.stateService = stateService;
 		this.monsterTable = monsterTable;
+		this.questUnlockService = questUnlockService;
 		this.taskService = taskService;
 		this.ceremonyBus = ceremonyBus;
 		this.timelineService = timelineService;
@@ -196,9 +206,17 @@ public class CharterService
 	 * would put the same monster on two offers, which no rolled board ever does,
 	 * and would make "was the deed signed?" ambiguous at resolution time.
 	 */
+	/** Quest gating disabled — see the {@code completedQuests} overload. */
 	public static List<Target> targets(@Nullable Map<String, MonsterStats> monsterStats,
 		List<MonsterTable.Monster> pool, int playerCb, int playerSlayerLevel, boolean membersWorld,
 		Set<String> excludeNames)
+	{
+		return targets(monsterStats, pool, playerCb, playerSlayerLevel, membersWorld, null, excludeNames);
+	}
+
+	public static List<Target> targets(@Nullable Map<String, MonsterStats> monsterStats,
+		List<MonsterTable.Monster> pool, int playerCb, int playerSlayerLevel, boolean membersWorld,
+		@Nullable Set<String> completedQuests, Set<String> excludeNames)
 	{
 		Map<String, Long> kills = killsByName(monsterStats);
 		Set<String> excluded = new HashSet<>();
@@ -215,7 +233,8 @@ public class CharterService
 			String folded = monster.getName().toLowerCase(Locale.ROOT);
 			if (excluded.contains(folded)
 				|| kills.getOrDefault(folded, 0L) < Tuning.CHARTER_KILLS_REQUIRED
-				|| !TaskGenerator.charterEligible(monster, playerCb, playerSlayerLevel, membersWorld))
+				|| !TaskGenerator.charterEligible(monster, playerCb, playerSlayerLevel, membersWorld,
+					completedQuests))
 			{
 				continue;
 			}
@@ -386,7 +405,7 @@ public class CharterService
 			return Collections.emptyList();
 		}
 		return targets(state.getMonsterStats(), monsterTable.getMonsters(), playerCb, slayerLevel,
-			membersWorld, boardNames(state));
+			membersWorld, completedQuests, boardNames(state));
 	}
 
 	// --- Purchase -------------------------------------------------------------
@@ -573,6 +592,7 @@ public class CharterService
 			playerCb = taskService.playerCombatLevel();
 			slayerLevel = client.getRealSkillLevel(Skill.SLAYER);
 			membersWorld = taskService.localIsMembers();
+			completedQuests = questUnlockService.completedQuests();
 		}
 		catch (Exception e)
 		{

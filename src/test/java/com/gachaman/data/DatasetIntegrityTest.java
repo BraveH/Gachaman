@@ -88,6 +88,54 @@ public class DatasetIntegrityTest
 		}
 	}
 
+	/**
+	 * Every quest gate must name a real {@link net.runelite.api.Quest} constant.
+	 *
+	 * A typo here does not throw at runtime — it produces a requirement no
+	 * account can ever satisfy, so the monster silently vanishes from the pool
+	 * for everyone and nothing in the logs says why. The build is the only place
+	 * that can catch it, so it catches it here.
+	 */
+	@Test
+	public void everyMonsterQuestGateNamesARealQuest()
+	{
+		JsonArray monsters = load("monsters.json").getAsJsonArray("monsters");
+		Set<String> gatingQuests = new HashSet<>();
+		int gated = 0;
+		for (JsonElement monsterEl : monsters)
+		{
+			JsonObject monster = monsterEl.getAsJsonObject();
+			JsonElement quests = monster.get("quests");
+			if (quests == null)
+			{
+				continue;
+			}
+			String name = monster.get("name").getAsString();
+			JsonArray required = quests.getAsJsonArray();
+			Assert.assertTrue("empty quests array on " + name + " — omit the key instead",
+				required.size() > 0);
+			gated++;
+			for (JsonElement questEl : required)
+			{
+				String quest = questEl.getAsString();
+				gatingQuests.add(quest);
+				try
+				{
+					net.runelite.api.Quest.valueOf(quest);
+				}
+				catch (IllegalArgumentException e)
+				{
+					Assert.fail("monster " + name + " is gated on " + quest
+						+ ", which is not a Quest constant");
+				}
+			}
+		}
+		// a merge that dropped the key would leave a table that still parses and
+		// still passes every other check, so the count is asserted too
+		Assert.assertTrue("no monster carries a quest gate", gated >= 100);
+		Assert.assertTrue("suspiciously few distinct gating quests", gatingQuests.size() >= 20);
+	}
+
 	@Test
 	public void bossesParseWithMilestones()
 	{

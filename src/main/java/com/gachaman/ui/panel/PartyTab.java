@@ -1,7 +1,9 @@
 package com.gachaman.ui.panel;
 
 import com.gachaman.model.GachaState;
+import com.gachaman.model.PatronRecord;
 import com.gachaman.party.PartyPresenceService;
+import com.gachaman.service.AccountKey;
 import com.gachaman.service.GachaStateService;
 import com.gachaman.service.PatronMark;
 import java.awt.BorderLayout;
@@ -64,14 +66,34 @@ public class PartyTab extends JPanel
 	/** Side of the drawn Patron's Mark pip. */
 	private static final int PIP = 9;
 	/**
-	 * The Patron's Mark by tier, index 0 unused (no pip is drawn below the
-	 * first threshold). Bronze, silver, gold — the last is JournalTab's earned
-	 * colour, so a maxed mark reads the same as every other earned thing.
+	 * The Patron's Mark by tier. Index 0 is drawn too — a partner you have one
+	 * contract with is below the first threshold but is still someone you have
+	 * a history with, and that is exactly what the pip says. Bronze, silver,
+	 * gold — the last is JournalTab's earned colour, so a maxed mark reads the
+	 * same as every other earned thing.
 	 */
 	private static final Color[] PATRON_COLORS = {
 		ColorScheme.LIGHT_GRAY_COLOR, new Color(170, 130, 90),
 		new Color(200, 200, 210), new Color(230, 190, 80),
 	};
+	/**
+	 * The outline on your TOP patron's pip. Every partner with a history now
+	 * wears a pip, so without this the mark would stop having an owner; a
+	 * near-white outline separates one pip from its neighbours at 9px in a way
+	 * a tier colour cannot, since the top patron is often the top tier as well.
+	 */
+	private static final Color MARK_OWNER = new Color(245, 245, 245);
+
+	/**
+	 * The mark's colour for a count, clamped so a fourth entry in
+	 * Tuning.PATRON_TIERS cannot throw. Shared with the Patrons page rather
+	 * than copied: a pip beside a name and that name's row on the other tab
+	 * describe the same mark, and two palettes would eventually disagree.
+	 */
+	static Color patronColor(int count)
+	{
+		return PATRON_COLORS[Math.min(PatronMark.tierFor(count), PATRON_COLORS.length - 1)];
+	}
 
 	private final PartyPresenceService presenceService;
 	private final GachaStateService stateService;
@@ -80,6 +102,20 @@ public class PartyTab extends JPanel
 	/** Wrap width the current content was built for; -1 = never built. */
 	private int builtWidth = -1;
 	private boolean viewportHooked;
+
+	/**
+	 * Plugin-wired: the live party vote, or a supplier answering null when none
+	 * is open. Nullable rather than a no-op default so an unwired panel shows no
+	 * vote column at all instead of an empty one on every row.
+	 */
+	@Nullable
+	private java.util.function.Supplier<com.gachaman.party.PartyRollService.VoteView> voteViewSupplier;
+
+	public void setVoteViewSupplier(
+		@Nullable java.util.function.Supplier<com.gachaman.party.PartyRollService.VoteView> supplier)
+	{
+		this.voteViewSupplier = supplier;
+	}
 
 	@Inject
 	public PartyTab(PartyPresenceService presenceService, GachaStateService stateService,
@@ -123,6 +159,9 @@ public class PartyTab extends JPanel
 			}
 			else
 			{
+				// counted over ROWS, not over a group's members: a group is on
+				// contract when its quota is, and saying so about a member whose
+				// own line reports nothing would be inventing their state
 				int onContract = 0;
 				for (PartyPresenceService.Row row : rows)
 				{
@@ -131,16 +170,42 @@ public class PartyTab extends JPanel
 						onContract++;
 					}
 				}
-				section.add(GachamanPanel.smallLine(rows.size() + " members · " + onContract
-					+ " on contract", ColorScheme.LIGHT_GRAY_COLOR));
-				section.add(Box.createVerticalStrut(6));
-				// resolved ONCE per rebuild, not per row: the ledger is one map
-				// and the mark belongs to a single member of the party
-				Patron patron = topPatron();
-				for (PartyPresenceService.Row row : rows)
+				List<PartyPresenceService.Group> groups = PartyPresenceService.group(rows);
+				int shared = 0;
+				for (PartyPresenceService.Group group : groups)
 				{
-					section.add(buildRow(row, inner, patron));
-					section.add(Box.createVerticalStrut(6));
+					if (group.isShared())
+					{
+						shared++;
+					}
+				}
+				// Two lines rather than three facts on one: at double digits the
+				// combined string ran past the 205px section and the tail was cut.
+				// A party of one is reachable — buildRows always emits a self row.
+				section.add(GachamanPanel.smallLine(rows.size()
+						+ (rows.size() == 1 ? " member · " : " members · ")
+						+ onContract + " on contract",
+					ColorScheme.LIGHT_GRAY_COLOR));
+				if (shared > 0)
+				{
+					section.add(GachamanPanel.smallLine(shared
+							+ (shared == 1 ? " shared contract" : " shared contracts"),
+						ColorScheme.LIGHT_GRAY_COLOR));
+				}
+				section.add(Box.createVerticalStrut(6));
+				// resolved ONCE per rebuild, not per row: the ledger is one map,
+				// read from one state snapshot, so no two pips on the page can
+				// disagree about who the mark's owner is
+				Marks marks = marks();
+				// likewise once per rebuild: every row on the page must be reading
+				// the same instant of the tally, or two names could show votes from
+				// either side of an incoming ballot
+				com.gachaman.party.PartyRollService.VoteView votes =
+					voteViewSupplier == null ? null : voteViewSupplier.get();
+				for (PartyPresenceService.Group group : groups)
+				{
+					section.add(buildGroup(group, inner, marks, votes));
+					section.add(Box.createVerticalStrut(8));
 				}
 				section.add(textBlock("Every line is self-reported by that member's own client"
 					+ " and taken on trust.", MUTED, inner));
@@ -153,13 +218,18 @@ public class PartyTab extends JPanel
 		repaint();
 	}
 
-	private JComponent buildRow(PartyPresenceService.Row row, int w, @Nullable Patron patron)
+	/**
+	 * One block: every member sharing a contract, then the one pooled meter
+	 * they are all filling.
+	 *
+	 * A shared contract is drawn ONCE, not once per member, because there is
+	 * one quota — repeating "Goblin 12/20" under three names reads as three
+	 * jobs of twenty and makes a party of four look like eighty kills of work.
+	 * The names stack; the meter does not.
+	 */
+	private JComponent buildGroup(PartyPresenceService.Group group, int w, Marks marks,
+		@Nullable com.gachaman.party.PartyRollService.VoteView votes)
 	{
-		boolean live = row.isHeard() && row.isLoggedIn();
-		Color nameColor = live ? Color.WHITE : MUTED;
-		Color styleColor = row.getStyle() == null ? MUTED : row.getStyle().getColor();
-		Color barColor = row.getStyle() == null ? ColorScheme.BRAND_ORANGE : row.getStyle().getColor();
-
 		JPanel outer = new JPanel()
 		{
 			@Override
@@ -172,6 +242,65 @@ public class PartyTab extends JPanel
 		outer.setOpaque(false);
 		outer.setAlignmentX(Component.LEFT_ALIGNMENT);
 
+		List<PartyPresenceService.Row> members = group.getMembers();
+		boolean live = false;
+		for (int i = 0; i < members.size(); i++)
+		{
+			PartyPresenceService.Row row = members.get(i);
+			if (i > 0)
+			{
+				outer.add(Box.createVerticalStrut(2));
+			}
+			outer.add(memberHeader(row, w, marks, votes));
+			live |= row.isHeard() && row.isLoggedIn();
+			if (!group.isOnContract())
+			{
+				// a group with no quota is a single member by construction —
+				// only a contract collapses rows together — but writing it
+				// per-member means the page degrades to one line each rather
+				// than silently dropping lines if that ever stops holding
+				outer.add(statusLine(row));
+			}
+		}
+
+		if (group.isOnContract())
+		{
+			// a null task name alongside a real quota only reaches us from a
+			// malformed or hostile client, and the block still has to lay out
+			String quarry = group.getTaskName() == null ? "A contract" : group.getTaskName();
+			outer.add(GachamanPanel.smallLine(group.isShared() ? "Shared · " + quarry : quarry,
+				live ? ColorScheme.LIGHT_GRAY_COLOR : MUTED));
+			outer.add(Box.createVerticalStrut(2));
+			GachamanPanel.MeterBar meter = new GachamanPanel.MeterBar(
+				PartyPresenceService.progressFraction(group.getKillsDone(), group.getKillsRequired()),
+				barColor(group), group.getKillsDone() + " / " + group.getKillsRequired());
+			meter.setMaximumSize(new Dimension(w, 15));
+			outer.add(meter);
+		}
+		return outer;
+	}
+
+	/**
+	 * A shared meter takes the brand colour, never a member's style colour: the
+	 * members of one contract can be on three different styles — that is what
+	 * the clash bonus pays for — so colouring the pooled bar after whichever
+	 * row happened to be first would credit the quota to one of them.
+	 */
+	private static Color barColor(PartyPresenceService.Group group)
+	{
+		if (group.isShared())
+		{
+			return ColorScheme.BRAND_ORANGE;
+		}
+		PartyPresenceService.Row only = group.getMembers().get(0);
+		return only.getStyle() == null ? ColorScheme.BRAND_ORANGE : only.getStyle().getColor();
+	}
+
+	/** One member's line: style chip, name and level, their vote, then their badges. */
+	private static JComponent memberHeader(PartyPresenceService.Row row, int w, Marks marks,
+		@Nullable com.gachaman.party.PartyRollService.VoteView votes)
+	{
+		boolean live = row.isHeard() && row.isLoggedIn();
 		JPanel header = new JPanel(new BorderLayout(6, 0))
 		{
 			@Override
@@ -182,35 +311,77 @@ public class PartyTab extends JPanel
 		};
 		header.setOpaque(false);
 		header.setAlignmentX(Component.LEFT_ALIGNMENT);
-		header.add(new Swatch(styleColor), BorderLayout.WEST);
-		String label = row.getName() + (row.isSelf() ? " (you)" : "")
-			+ (row.getCombatLevel() > 0 ? "  lvl " + row.getCombatLevel() : "");
-		header.add(GachamanPanel.line(label, nameColor, FontManager.getRunescapeSmallFont()),
-			BorderLayout.CENTER);
-		header.add(badges(row, patron), BorderLayout.EAST);
-		outer.add(header);
-
-		if (row.getKillsRequired() > 0)
+		// style swatch and party face together on the left: the swatch says what
+		// they swing, the face says who they are, and neither substitutes for the
+		// other in a party where two members can share a style
+		JPanel left = new JPanel(new BorderLayout(3, 0));
+		left.setOpaque(false);
+		left.add(new Swatch(row.getStyle() == null ? MUTED : row.getStyle().getColor()),
+			BorderLayout.WEST);
+		if (row.getAvatar() != null)
 		{
-			// a null task name alongside a real quota only reaches us from a
-			// malformed or hostile client, and the row still has to lay out
-			outer.add(GachamanPanel.smallLine(
-				row.getTaskName() == null ? "A contract" : row.getTaskName(),
-				live ? ColorScheme.LIGHT_GRAY_COLOR : MUTED));
-			outer.add(Box.createVerticalStrut(2));
-			GachamanPanel.MeterBar meter = new GachamanPanel.MeterBar(
-				PartyPresenceService.progressFraction(row.getKillsDone(), row.getKillsRequired()),
-				barColor, row.getKillsDone() + " / " + row.getKillsRequired());
-			meter.setMaximumSize(new Dimension(w, 15));
-			outer.add(meter);
+			left.add(new Face(row.getAvatar(), live), BorderLayout.EAST);
 		}
-		else
+		header.add(left, BorderLayout.WEST);
+		String label = row.getName() + (row.isSelf() ? " (you)" : "")
+			+ (row.getCombatLevel() > 0 ? "  lvl " + row.getCombatLevel() : "")
+			+ voteSuffix(row, votes);
+		header.add(GachamanPanel.line(label, live ? Color.WHITE : MUTED,
+			FontManager.getRunescapeSmallFont()), BorderLayout.CENTER);
+		header.add(badges(row, marks), BorderLayout.EAST);
+		return header;
+	}
+
+	/**
+	 * How this member has voted, appended to their name while a vote is open.
+	 *
+	 * <p>Members who have NOT voted are named as such rather than left blank: a
+	 * majority vote stalls on the people who have not answered, and a row that
+	 * simply says nothing is indistinguishable from one the panel forgot. Empty
+	 * outside a vote, so the line does not carry a dead column the rest of the
+	 * time.
+	 *
+	 * <p>The contract is NAMED, not numbered. "vote 2" is an index into a board
+	 * the reader may well have scrolled away from, and this column exists so a
+	 * member can see what the party is converging on without reopening it.
+	 */
+	private static String voteSuffix(PartyPresenceService.Row row,
+		@Nullable com.gachaman.party.PartyRollService.VoteView votes)
+	{
+		if (votes == null)
+		{
+			return "";
+		}
+		String label = votes.getLabelByMember().get(row.getMemberId());
+		return label == null ? "  · no vote" : "  · " + label;
+	}
+
+	/**
+	 * What a member with no contract is doing. A dealt-but-unsigned board is
+	 * called out by name because it is the one state that silently EXCLUDES
+	 * someone from a party roll: without this the party proposes, that member
+	 * is auto-excused, and nothing on the page ever said why.
+	 */
+	private static JLabel statusLine(PartyPresenceService.Row row)
+	{
+		if (!row.isHeard())
 		{
 			// "- " marker only: the RuneScape TTFs have no bullet glyph
-			outer.add(GachamanPanel.smallLine(row.isHeard() ? "- No contract" : "- No signal",
-				MUTED));
+			return GachamanPanel.smallLine("- No signal", MUTED);
 		}
-		return outer;
+		if (row.isUndecidedOffers())
+		{
+			JLabel line = GachamanPanel.smallLine("- Undecided board", TAINT_RED);
+			// your own row is on this page too, and third-person copy pointed at
+			// yourself reads as a bug rather than as a description of you
+			line.setToolTipText(row.isSelf()
+				? "You have offers dealt and have signed none of them, so you cannot"
+					+ " join a shared roll until you sign one or clear the board."
+				: "They have offers dealt and have signed none of them, so they"
+					+ " cannot join a shared roll until they sign one or clear the board.");
+			return line;
+		}
+		return GachamanPanel.smallLine("- No contract", MUTED);
 	}
 
 	/**
@@ -219,23 +390,27 @@ public class PartyTab extends JPanel
 	 * field on GachaPresenceMessage) rather than adding a column, so every row
 	 * keeps one layout however many features land.
 	 */
-	private static JPanel badges(PartyPresenceService.Row row, @Nullable Patron patron)
+	private static JPanel badges(PartyPresenceService.Row row, Marks marks)
 	{
 		JPanel strip = new JPanel(new FlowLayout(FlowLayout.RIGHT, 3, 0));
 		strip.setOpaque(false);
 		if (row.isTainted())
 		{
 			JLabel taint = GachamanPanel.line("*", TAINT_RED, FontManager.getRunescapeSmallFont());
-			taint.setToolTipText("Tainted — their income is halved until they work it off.");
+			taint.setToolTipText(row.isSelf()
+				? "Tainted — your income is halved until you work it off."
+				: "Tainted — their income is halved until they work it off.");
 			strip.add(taint);
 		}
-		if (patron != null && patron.matches(row))
+		PatronRecord record = marks.recordFor(row);
+		if (record != null)
 		{
-			int tier = PatronMark.tierFor(patron.count);
-			Pip pip = new Pip(PATRON_COLORS[Math.min(tier, PATRON_COLORS.length - 1)]);
-			pip.setToolTipText(PatronMark.tierLabel(patron.count) + " — you have finished "
-				+ patron.count + " shared contract" + (patron.count == 1 ? "" : "s")
-				+ " with " + patron.name + ", more than with anyone else."
+			int count = record.getCount();
+			boolean top = marks.isTop(row);
+			Pip pip = new Pip(patronColor(count), top);
+			pip.setToolTipText(PatronMark.tierLabel(count) + " — you have finished "
+				+ count + " shared contract" + (count == 1 ? "" : "s") + " with them"
+				+ (top ? ", more than with anyone else." : ".")
 				+ " The mark is cosmetic: it pays nothing and unlocks nothing.");
 			strip.add(pip);
 		}
@@ -243,44 +418,49 @@ public class PartyTab extends JPanel
 	}
 
 	/**
-	 * The Patron's Mark holder: the partner you have finished the most shared
-	 * contracts with, and how many. Read once per rebuild.
+	 * The Patron's Mark ledger as the page needs it, read once per rebuild.
+	 *
+	 * Both halves come from ONE state snapshot on purpose: re-reading the state
+	 * per row would let a shared contract complete mid-rebuild and hand two
+	 * rows two different owners of a mark that only has one.
 	 */
-	private static final class Patron
+	private static final class Marks
 	{
-		private final String name;
-		private final int count;
+		@Nullable
+		private final Map<String, PatronRecord> ledger;
+		@Nullable
+		private final String topKey;
 
-		Patron(String name, int count)
+		Marks(@Nullable Map<String, PatronRecord> ledger)
 		{
-			this.name = name;
-			this.count = count;
+			this.ledger = ledger;
+			this.topKey = PatronMark.topKey(ledger);
 		}
 
 		/**
-		 * The match rule lives in PatronMark.sameName so it is unit-testable:
-		 * both sides are normalized there, which is what stops the presence
-		 * layer's "A party member" fallback row — or a member still reading as
-		 * "&lt;unknown&gt;" — from wearing somebody else's mark.
+		 * Matched on ACCOUNT KEY, never on the name: the name a member
+		 * broadcasts is a label they can change, and the presence layer's
+		 * "A party member" fallback would otherwise let every unnamed row in
+		 * the party wear the same person's mark.
 		 */
-		boolean matches(PartyPresenceService.Row row)
+		@Nullable
+		PatronRecord recordFor(PartyPresenceService.Row row)
 		{
-			return PatronMark.sameName(row.getName(), name);
+			return PatronMark.recordFor(ledger, row.getAccountKey());
+		}
+
+		/** False whenever either side is unknown — see {@link AccountKey#same}. */
+		boolean isTop(PartyPresenceService.Row row)
+		{
+			return AccountKey.same(row.getAccountKey(), topKey);
 		}
 	}
 
-	/** The mark's owner as of now, or null when nobody has earned one yet. */
-	@Nullable
-	private Patron topPatron()
+	/** The ledger as of now; empty when the save has not loaded yet. */
+	private Marks marks()
 	{
 		GachaState state = stateService.get();
-		if (state == null)
-		{
-			return null; // not loaded yet: no mark rather than a wrong one
-		}
-		Map<String, Integer> counts = state.getPartnerContracts();
-		String name = PatronMark.topPartner(counts);
-		return name == null ? null : new Patron(name, PatronMark.countFor(counts, name));
+		return new Marks(state == null ? null : state.getPatrons());
 	}
 
 	// --- Layout plumbing ---
@@ -350,6 +530,57 @@ public class PartyTab extends JPanel
 		}
 	}
 
+	/** Edge the party avatar is drawn at; matches the swatch's visual weight. */
+	private static final int FACE = 14;
+
+	/**
+	 * A member's RuneLite party avatar.
+	 *
+	 * <p>Scaled on paint rather than pre-scaled once: the image arrives from
+	 * RuneLite's party layer and can be replaced when a member changes it, so
+	 * caching a resized copy here would pin the old face until the next rebuild.
+	 * A member who is not currently heard is drawn faded, matching how their text
+	 * greys out — the face should not be the one part of a stale row that still
+	 * looks live.
+	 */
+	private static final class Face extends JComponent
+	{
+		private final java.awt.image.BufferedImage image;
+		private final boolean live;
+
+		Face(java.awt.image.BufferedImage image, boolean live)
+		{
+			this.image = image;
+			this.live = live;
+			Dimension d = new Dimension(FACE, FACE);
+			setPreferredSize(d);
+			setMinimumSize(d);
+			setMaximumSize(d);
+		}
+
+		@Override
+		protected void paintComponent(Graphics g)
+		{
+			Graphics2D g2 = (Graphics2D) g.create();
+			try
+			{
+				g2.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
+					java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+				if (!live)
+				{
+					g2.setComposite(java.awt.AlphaComposite.getInstance(
+						java.awt.AlphaComposite.SRC_OVER, 0.45f));
+				}
+				int y = Math.max(0, getHeight() / 2 - FACE / 2);
+				g2.drawImage(image, 0, y, FACE, FACE, null);
+			}
+			finally
+			{
+				g2.dispose();
+			}
+		}
+	}
+
 	/**
 	 * The Patron's Mark, drawn rather than typed for the same reason as
 	 * {@link Swatch}: the RuneScape TTFs carry no medal, crown, star or bullet
@@ -360,10 +591,13 @@ public class PartyTab extends JPanel
 	private static final class Pip extends JComponent
 	{
 		private final Color color;
+		/** This is the mark's owner: outline it so one pip still stands out. */
+		private final boolean owner;
 
-		Pip(Color color)
+		Pip(Color color, boolean owner)
 		{
 			this.color = color;
+			this.owner = owner;
 			Dimension d = new Dimension(PIP, PIP);
 			setPreferredSize(d);
 			setMinimumSize(d);
@@ -384,7 +618,7 @@ public class PartyTab extends JPanel
 				int[] ys = {top, top + mid, top + PIP - 1, top + mid};
 				g2.setColor(color);
 				g2.fillPolygon(xs, ys, 4);
-				g2.setColor(color.darker());
+				g2.setColor(owner ? MARK_OWNER : color.darker());
 				g2.drawPolygon(xs, ys, 4);
 			}
 			finally

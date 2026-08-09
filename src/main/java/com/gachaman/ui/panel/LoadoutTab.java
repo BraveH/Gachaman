@@ -59,7 +59,6 @@ public class LoadoutTab extends JPanel
 	private static final Color SLOT_FILL = new Color(40, 38, 34);
 	private static final int SLOT_W = 64;
 	private static final int SLOT_H = 56;
-	private static final int MENU_CAP = 25;
 
 	/** (gridx, gridy) placement per slot, mirroring the equipment tab shape. */
 	private static final Map<GearSlot, int[]> SLOT_GRID = new EnumMap<>(GearSlot.class);
@@ -134,7 +133,11 @@ public class LoadoutTab extends JPanel
 		grid.setOpaque(false);
 		grid.setAlignmentX(Component.LEFT_ALIGNMENT);
 		GridBagConstraints gbc = new GridBagConstraints();
-		gbc.insets = new Insets(3, 3, 3, 3);
+		// 2px, not 3. A cell is SLOT_W plus its inset each side, and three columns
+		// have to fit the 205px inside a section(): at 3 the grid wanted
+		// 3 * (64 + 6) = 210 in a scroll pane with no horizontal bar, so the ring,
+		// shield and ammo column simply lost its right edge. 3 * (64 + 4) = 204.
+		gbc.insets = new Insets(2, 2, 2, 2);
 		for (GearSlot slot : GearSlot.values())
 		{
 			int[] pos = SLOT_GRID.get(slot);
@@ -303,24 +306,33 @@ public class LoadoutTab extends JPanel
 		});
 
 		Runnable refilter = () -> {
-			String filter = search.getText() == null
-				? "" : search.getText().toLowerCase().trim();
+			String typed = search.getText() == null ? "" : search.getText().trim();
+			String filter = typed.toLowerCase();
 			model.clear();
 			if (current != null)
 			{
 				model.addElement("Unassign " + loadoutService.displayName(current));
 			}
+			int matches = 0;
 			for (OwnedCard owned : valid)
 			{
 				if (filter.isEmpty()
 					|| loadoutService.displayName(owned).toLowerCase().contains(filter))
 				{
 					model.addElement(owned);
+					matches++;
 				}
 			}
-			if (model.isEmpty())
+			// Counted, not model.isEmpty(). With a card already in the slot the
+			// "Unassign" row is always present, so the model was never empty and
+			// the slot that HAS a card was the one slot that could never explain
+			// an empty list. And the reason matters: a filter that matches nothing
+			// is a typo to fix, not a collection to go and earn.
+			if (matches == 0)
 			{
-				model.addElement("No eligible cards for " + slot.getDisplayName());
+				model.addElement(filter.isEmpty()
+					? "No eligible cards for " + slot.getDisplayName()
+					: "No card here matches \"" + typed + "\"");
 			}
 		};
 		refilter.run();

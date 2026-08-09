@@ -51,14 +51,21 @@ public class CharterOfficeTest
 
 	private static MonsterTable.Monster monster(String name, int cb)
 	{
-		return new MonsterTable.Monster(name, cb, List.of("test"), false, 0, false, false);
+		return new MonsterTable.Monster(name, cb, List.of("test"), false, 0, false, false,
+			List.of());
 	}
 
 	private static MonsterTable.Monster monster(String name, int cb, boolean members,
 		int slayerLevel, boolean slayerTaskOnly)
 	{
 		return new MonsterTable.Monster(name, cb, List.of("test"), members, slayerLevel,
-			slayerTaskOnly, false);
+			slayerTaskOnly, false, List.of());
+	}
+
+	private static MonsterTable.Monster questMonster(String name, int cb, String... quests)
+	{
+		return new MonsterTable.Monster(name, cb, List.of("test"), false, 0, false, false,
+			List.of(quests));
 	}
 
 	private static Map<String, MonsterStats> journal(Object... nameThenKills)
@@ -303,6 +310,40 @@ public class CharterOfficeTest
 			CharterService.targets(stats, pool, 100, 99, true, onBoard);
 		Assert.assertEquals(1, targets.size());
 		Assert.assertEquals("Free", targets.get(0).getMonsterName());
+	}
+
+	/**
+	 * The journal is the only proof of familiarity the office reads, and it can
+	 * hold kills from before a quest was ever a gate (an imported account, a
+	 * dataset that gained the gate later, a monster whose free spawn is not the
+	 * gated one). A deed is still a contract, so the gate is re-checked at the
+	 * counter rather than trusted to the kill count.
+	 */
+	@Test
+	public void aQuestLockedMonsterIsNotForSaleUntilTheQuestIsDone()
+	{
+		List<MonsterTable.Monster> pool = List.of(
+			monster("Cow", 40),
+			questMonster("Gargoyle", 111, "PRIEST_IN_PERIL"));
+		Map<String, MonsterStats> stats = journal("Cow", 100, "Gargoyle", 100);
+		Assert.assertEquals(List.of("Cow"),
+			names(CharterService.targets(stats, pool, 126, 99, true, Set.of(), Set.of())));
+		Assert.assertEquals(List.of("Gargoyle", "Cow"), names(CharterService.targets(stats, pool,
+			126, 99, true, Set.of("PRIEST_IN_PERIL"), Set.of())));
+		// the six-arg overload predates the gate and must stay pre-gate, or the
+		// party layer's mixed-version fallback would mean two different things
+		Assert.assertEquals(List.of("Gargoyle", "Cow"),
+			names(CharterService.targets(stats, pool, 126, 99, true, Set.of())));
+	}
+
+	private static List<String> names(List<CharterService.Target> targets)
+	{
+		List<String> names = new java.util.ArrayList<>(targets.size());
+		for (CharterService.Target target : targets)
+		{
+			names.add(target.getMonsterName());
+		}
+		return names;
 	}
 
 	@Test

@@ -40,13 +40,15 @@ public class PartyRollStyleWireTest
 	{
 		PartyRollProposeMessage propose = gson.fromJson(gson.toJson(
 			new PartyRollProposeMessage(7L, 3L, true, 50, 12, "MAGIC",
-				PartyRollService.ROLL_PROTOCOL)),
+				PartyRollService.ROLL_PROTOCOL, PartySizing.FIGHTING_WEIGHT.name(),
+				java.util.List.of(), null)),
 			PartyRollProposeMessage.class);
 		Assert.assertEquals("MAGIC", propose.getAllowedStyle());
 
 		PartyRollResponseMessage response = gson.fromJson(gson.toJson(
 			new PartyRollResponseMessage(7L, PartyRollResponseMessage.AGREE, 3L, true, 50, 12,
-				"RANGED", PartyRollService.ROLL_PROTOCOL)), PartyRollResponseMessage.class);
+				"RANGED", PartyRollService.ROLL_PROTOCOL, java.util.List.of(), null)),
+			PartyRollResponseMessage.class);
 		Assert.assertEquals("RANGED", response.getAllowedStyle());
 	}
 

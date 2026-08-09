@@ -8,7 +8,6 @@ import com.gachaman.model.OwnedCard;
 import com.gachaman.service.GachaStateService;
 import com.gachaman.service.SetPerkService;
 import java.awt.Color;
-import java.awt.Component;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -17,6 +16,7 @@ import javax.inject.Singleton;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
@@ -130,9 +130,14 @@ public class SetsTab extends JPanel
 		// boxes here, one per boss set. The marker itself has to stay — it is gated on
 		// isBoss(), while GOLD and the gold border are gated on the orthogonal
 		// `completed`, so nothing else on the row carries "this is a boss set".
+		// Wrapped, not a plain line: bold runs ~7px/char, so "Saradomin (Commander
+		// Zilyana) *" measures 217px in a 205px column and the boss marker — the
+		// one part of the title that is not also the set's own name — was what the
+		// clip took off the end.
 		String titleText = set.getName() + (set.isBoss() ? " *" : "");
-		JLabel title = GachamanPanel.line(titleText, completed ? GOLD : Color.WHITE,
-			FontManager.getRunescapeBoldFont());
+		JComponent title = GachamanPanel.wrapped(GachamanPanel.escape(titleText),
+			completed ? GOLD : Color.WHITE, FontManager.getRunescapeBoldFont());
+		title.setToolTipText(set.isBoss() ? set.getName() + " (boss set)" : set.getName());
 		row.add(title);
 		row.add(Box.createVerticalStrut(4));
 
@@ -156,7 +161,11 @@ public class SetsTab extends JPanel
 		if (!completed && missing.length() > 0)
 		{
 			row.add(Box.createVerticalStrut(3));
-			row.add(GachamanPanel.wrapped("Missing: " + missing, SILHOUETTE));
+			// escaped: these are item-cache names going into an HTML label, and one
+			// item carrying an angle bracket would have Swing's HTML 3.2 parser
+			// read it as a tag and swallow the rest of the list
+			row.add(GachamanPanel.wrapped("Missing: " + GachamanPanel.escape(missing.toString()),
+				SILHOUETTE));
 		}
 		if (completed)
 		{

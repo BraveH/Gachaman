@@ -107,8 +107,9 @@ public class CombatBlockService
 		lastWarnTick = tick;
 		GachaState state = stateService.get();
 		String message = state != null && state.getActiveTask() != null
-			? "You may only attack your task target: " + state.getActiveTask().getMonsterName() + "."
-			: "You have no task — roll one before entering combat.";
+			? "You may only attack your contract target: "
+				+ state.getActiveTask().getMonsterName() + "."
+			: "You have no contract — roll one before entering combat.";
 		chatMessageManager.queue(QueuedMessage.builder()
 			.type(ChatMessageType.CONSOLE)
 			.runeLiteFormattedMessage("<col=b25be2>Gachaman:</col> " + message)

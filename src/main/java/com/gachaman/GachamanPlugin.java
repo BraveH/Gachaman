@@ -74,7 +74,7 @@ import net.runelite.client.ui.overlay.OverlayManager;
 @Slf4j
 @PluginDescriptor(
 	name = "Gachaman",
-	description = "RNG gamemode: attack styles rolled by fate, equipment gated behind collectible cards, chests, kill tasks and ceremonies. Removes menu entries on card-locked equipment (client-side only).",
+	description = "RNG gamemode: attack styles rolled by fate, equipment gated behind collectible cards, chests, kill contracts and ceremonies. Removes menu entries on card-locked equipment (client-side only).",
 	tags = {"gamemode", "gacha", "cards", "chest", "challenge"}
 )
 public class GachamanPlugin extends Plugin
@@ -352,6 +352,10 @@ public class GachamanPlugin extends Plugin
 		// scoped: a dead vote closes the offer scrolls it invalidated, nothing else
 		partyRollService.setCeremonyAbortHook(
 			() -> revealOverlay.abortActiveCeremony(CeremonyBus.Type.TASK_OFFERS));
+		// the running tally: inked on the offer scrolls, and beside each name on
+		// the party page, both off the one snapshot method
+		revealOverlay.setPartyVoteSupplier(partyRollService::voteView);
+		gachamanPanel.setVoteViewSupplier(partyRollService::voteView);
 		// The Charter Office sells a personal, binding contract onto a personal
 		// board, so it stands down for the whole of any party roll
 		charterService.setPartyBusyHook(partyRollService::isPartyRollLive);
@@ -474,6 +478,7 @@ public class GachamanPlugin extends Plugin
 		partyPresenceService.setRefreshHook(null);
 		partyPresenceService.reset();
 		partyRollService.setCeremonyAbortHook(null);
+		revealOverlay.setPartyVoteSupplier(null);
 		charterService.setPartyBusyHook(null);
 		charterService.setRefreshHook(null);
 		complianceService.removeListener(complianceFeedback);
@@ -663,26 +668,29 @@ public class GachamanPlugin extends Plugin
 		charterService.tick();
 	}
 
-	/** First style roll + first task offers, in that order (ceremonies queue sequentially). */
+	/**
+	 * The opening style roll (and the free colours chest it arms). Contracts are
+	 * NOT dealt here, or anywhere else automatically.
+	 *
+	 * <p>A roll cannot be cancelled — a dealt board must be decided — so dealing
+	 * one the player did not ask for spends something of theirs on their behalf.
+	 * It also made party contracts unreachable: undecided offers count as busy,
+	 * so an auto-rolled board refused the player's own {@code propose()} AND
+	 * auto-excused them from everyone else's proposal. Two members log in, both
+	 * hold boards neither asked for, and no party can form until both clear one
+	 * by hand. Rolling is one click on the Contract panel.
+	 */
 	private void beginJourneyIfFresh()
 	{
 		var state = stateService.get();
-		if (state == null)
+		if (state == null || state.getAllowedStyle() != null)
 		{
 			return;
 		}
-		if (state.getAllowedStyle() == null)
-		{
-			styleService.roll(styleTracker.currentTick());
-			// between the roulette and the task offers, so the three ceremonies
-			// queue in the order the player reads them: colours, kit, work
-			redeemFirstColoursChestIfOwed();
-		}
-		if (state.getActiveTask() == null
-			&& (state.getPendingOffers() == null || state.getPendingOffers().isEmpty()))
-		{
-			taskService.rollOffers();
-		}
+		styleService.roll(styleTracker.currentTick());
+		// after the roulette, so the two ceremonies queue in the order the
+		// player reads them: colours, then kit
+		redeemFirstColoursChestIfOwed();
 	}
 
 	/**
@@ -800,7 +808,7 @@ public class GachamanPlugin extends Plugin
 					.withFreeExtenders(s.getFreeExtenders() + 1)
 					.withStarterVouchersGranted(true));
 			chatPing("A free Style Compactor and Style Extender voucher were added"
-				+ " — apply one from the Shop tab during a task.");
+				+ " — apply one from the Shop tab during a contract.");
 		}
 	}
 
@@ -950,7 +958,7 @@ public class GachamanPlugin extends Plugin
 					loadoutOverlay.setOpen(false);
 				}
 			});
-			javax.swing.SwingUtilities.invokeLater(gachamanPanel::updateLoadoutTabVisibility);
+			javax.swing.SwingUtilities.invokeLater(gachamanPanel::updateTabVisibility);
 		}
 	}
 
@@ -1059,7 +1067,7 @@ public class GachamanPlugin extends Plugin
 				taskService.resetTransientCombat();
 				serviceRecordService.flush(); // the wiped contract's kills were still served
 				partyRollService.resetForDebug();
-				debugChat("Active task and rolled offers cleared.");
+				debugChat("Active contract and rolled offers cleared.");
 				break;
 			case "gachacosmetics":
 			{
@@ -1094,8 +1102,106 @@ public class GachamanPlugin extends Plugin
 					: (head.isHidden() ? "hidden" : String.valueOf(head.getBounds()))));
 				break;
 			}
+			case "gachawear":
+			{
+				// stage a worn card face without grinding a thousand kills.
+				// Wear is a pure function of killsServed and nothing reads it,
+				// so this can only change how a face is painted.
+				if (args.length == 0)
+				{
+					// no angle brackets in the usage line: chat runs it through
+					// the RuneLite tag parser, which eats anything in them
+					debugChat("Usage: ::gachawear none|hairline|cracked|shattered|N [name]"
+						+ " — the name is a substring; leave it off to hit every card.");
+					break;
+				}
+				com.gachaman.model.CardWear stage = com.gachaman.model.CardWear.parse(args[0]);
+				int kills;
+				if (stage != null)
+				{
+					kills = Tuning.wearKills(stage);
+				}
+				else
+				{
+					try
+					{
+						kills = Math.max(0, Integer.parseInt(args[0].trim()));
+					}
+					catch (NumberFormatException e)
+					{
+						debugChat("Not a wear stage or a kill count: " + args[0]);
+						break;
+					}
+				}
+				setCardWear(kills, joinArgs(args, 1));
+				break;
+			}
 			default:
 				break;
+		}
+	}
+
+	/** The rest of a command's arguments as one string — chat splits on spaces. */
+	private static String joinArgs(String[] args, int from)
+	{
+		StringBuilder joined = new StringBuilder();
+		for (int i = from; i < args.length; i++)
+		{
+			if (joined.length() > 0)
+			{
+				joined.append(' ');
+			}
+			joined.append(args[i]);
+		}
+		return joined.toString().trim();
+	}
+
+	/**
+	 * ::gachawear. Selects here, against the list the player is looking at, and
+	 * hands the service record an exact set of uuids — the album shows one cell
+	 * per card DEFINITION but the record is per copy, so "Dragon scimitar" can
+	 * legitimately mean several owned cards and all of them should move
+	 * together. An empty filter means every card.
+	 */
+	private void setCardWear(int kills, String filter)
+	{
+		com.gachaman.model.GachaState state = stateService.get();
+		java.util.List<com.gachaman.model.OwnedCard> owned =
+			state == null ? null : state.getOwnedCards();
+		if (owned == null || owned.isEmpty())
+		{
+			debugChat("No cards owned yet.");
+			return;
+		}
+		String needle = filter.toLowerCase(java.util.Locale.ROOT);
+		java.util.Set<String> uuids = new java.util.LinkedHashSet<>();
+		java.util.List<String> names = new java.util.ArrayList<>();
+		for (com.gachaman.model.OwnedCard card : owned)
+		{
+			String name = loadoutService.displayName(card);
+			if (needle.isEmpty() || name.toLowerCase(java.util.Locale.ROOT).contains(needle))
+			{
+				uuids.add(card.getUuid());
+				names.add(name);
+			}
+		}
+		if (uuids.isEmpty())
+		{
+			debugChat("No owned card matches \"" + filter + "\".");
+			return;
+		}
+		serviceRecordService.debugSetServed(uuids, kills);
+		com.gachaman.model.CardWear wear = Tuning.cardWear(kills);
+		debugChat(uuids.size() + " card(s) set to " + kills + " kills of service — "
+			+ (wear == com.gachaman.model.CardWear.NONE ? "no wear" : wear.getDisplayName()) + ".");
+		int shown = Math.min(names.size(), 5);
+		for (int i = 0; i < shown; i++)
+		{
+			debugChat("  " + names.get(i));
+		}
+		if (names.size() > shown)
+		{
+			debugChat("  … and " + (names.size() - shown) + " more");
 		}
 	}
 

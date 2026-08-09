@@ -92,6 +92,15 @@ public class ChestService
 		boolean wieldableNow;
 		/** Probability 0..1 for one ordinary card out of this chest. */
 		double probability;
+		/**
+		 * The cards counted in this row, sorted and de-duplicated.
+		 *
+		 * <p>Carried because a tier ladder legitimately appears in BOTH bands — the
+		 * Defence gate lands on the body only, and metal-prefixed ranged gear is
+		 * measured against Ranged — so "Hardleather" showing up twice reads as a bug
+		 * unless the panel can say which pieces are the ones still out of reach.
+		 */
+		List<String> cardNames;
 	}
 
 	/** Everything the Chest Odds panel prints, computed from the roll's own code. */
@@ -852,6 +861,10 @@ public class ChestService
 		double[] adjusted = RollOdds.adjustOdds(Tuning.CHEST_ODDS.get(tier), pityBonus);
 		double[] rarityShare = RollOdds.normalize(adjusted);
 		Map<RollOdds.TierBand, Double> totals = new LinkedHashMap<>();
+		// names per row, for the tooltip that has to name the pieces a split tier
+		// leaves out of reach. Sorted and de-duplicated: a card can be revisited
+		// across rarity buckets, and an arbitrary order would reshuffle every rebuild.
+		Map<RollOdds.TierBand, java.util.SortedSet<String>> namesByBand = new HashMap<>();
 		for (Rarity rarity : Rarity.values())
 		{
 			double share = rarityShare[rarity.ordinal()];
@@ -865,6 +878,13 @@ public class ChestService
 			for (int i = 0; i < cards.size(); i++)
 			{
 				flags[i] = wieldableByCardId.getOrDefault(cards.get(i).getCardId(), true);
+			}
+			for (int i = 0; i < cards.size(); i++)
+			{
+				namesByBand
+					.computeIfAbsent(RollOdds.bandOf(cards.get(i), flags[i]),
+						k -> new java.util.TreeSet<>(String.CASE_INSENSITIVE_ORDER))
+					.add(cards.get(i).getName());
 			}
 			for (Map.Entry<RollOdds.TierBand, Double> entry
 				: RollOdds.tierShares(cards, flags, bucket.isLeaned()).entrySet())
@@ -901,7 +921,9 @@ public class ChestService
 			String display = untiered || tierTable == null
 				? band.getTierKey()
 				: tierTable.displayNameOf(band.getTierKey());
-			rows.add(new TierOdds(band.getTierKey(), display, band.isWieldableNow(), probability));
+			java.util.SortedSet<String> names = namesByBand.get(band);
+			rows.add(new TierOdds(band.getTierKey(), display, band.isWieldableNow(), probability,
+				names == null ? java.util.Collections.emptyList() : new ArrayList<>(names)));
 		}
 		rows.sort(Comparator.comparingDouble(TierOdds::getProbability).reversed());
 

@@ -49,21 +49,43 @@ public class PartyPresenceClockTest
 		// the exact bug plain concatenation causes: a real change swallowed by
 		// the heartbeat because two different lines flatten to one string
 		Assert.assertNotEquals(
-			PartyPresenceService.signature("MELEE", 70, "Goblin", 1, 12, false),
-			PartyPresenceService.signature("MELEE", 70, "Goblin1", 1, 2, false));
+			PartyPresenceService.signature("MELEE", 70, "Goblin", 1, 12, false, null, false, null),
+			PartyPresenceService.signature("MELEE", 70, "Goblin1", 1, 2, false, null, false, null));
 	}
 
 	@Test
 	public void nullStyleAndNullTaskAreStableAndDistinct()
 	{
-		String none = PartyPresenceService.signature(null, 3, null, 0, 0, false);
-		Assert.assertEquals(none, PartyPresenceService.signature(null, 3, null, 0, 0, false));
+		String none = PartyPresenceService.signature(null, 3, null, 0, 0, false, null, false, null);
+		Assert.assertEquals(none,
+			PartyPresenceService.signature(null, 3, null, 0, 0, false, null, false, null));
 		Assert.assertNotEquals(none,
-			PartyPresenceService.signature("MELEE", 3, null, 0, 0, false));
+			PartyPresenceService.signature("MELEE", 3, null, 0, 0, false, null, false, null));
 		Assert.assertNotEquals(none,
-			PartyPresenceService.signature(null, 3, "Goblin", 0, 0, false));
+			PartyPresenceService.signature(null, 3, "Goblin", 0, 0, false, null, false, null));
 		Assert.assertNotEquals(none,
-			PartyPresenceService.signature(null, 3, null, 0, 0, true));
+			PartyPresenceService.signature(null, 3, null, 0, 0, true, null, false, null));
+	}
+
+	@Test
+	public void identityEligibilityAndContractAllMoveTheSignature()
+	{
+		// every one of these is DRAWN, so a change in any of them has to reach
+		// the party: an unsent key loses a patron pip, an unsent flag leaves a
+		// member looking eligible when they are not, and an unsent contract id
+		// silently merges two members into one block
+		String none = PartyPresenceService.signature(null, 3, null, 0, 0, false, null, false, null);
+		Assert.assertNotEquals(none, PartyPresenceService.signature(
+			null, 3, null, 0, 0, false, "00112233445566aa", false, null));
+		Assert.assertNotEquals(none,
+			PartyPresenceService.signature(null, 3, null, 0, 0, false, null, true, null));
+		Assert.assertNotEquals(none,
+			PartyPresenceService.signature(null, 3, null, 0, 0, false, null, false, 0L));
+		// and a claimed id of ZERO is a real claim, not the same as no claim:
+		// proposal ids come from nextLong(), so zero is a legal one
+		Assert.assertNotEquals(
+			PartyPresenceService.signature(null, 3, null, 0, 0, false, null, false, 0L),
+			PartyPresenceService.signature(null, 3, null, 0, 0, false, null, false, null));
 	}
 
 	@Test

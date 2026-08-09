@@ -28,14 +28,32 @@ public final class TaskGenerator
 		return generateOffers(pool, playerCb, 99, membersWorld, tainted, rng);
 	}
 
+	/** Quest gating disabled — see the {@code completedQuests} overload. */
 	public static List<TaskOffer> generateOffers(List<MonsterTable.Monster> pool, int playerCb,
 		int playerSlayerLevel, boolean membersWorld, boolean tainted, GachaRng rng)
 	{
+		return generateOffers(pool, playerCb, playerSlayerLevel, membersWorld, null, tainted, rng);
+	}
+
+	/**
+	 * @param completedQuests {@link net.runelite.api.Quest} names the player has
+	 *                        FINISHED. Null disables quest gating entirely — the
+	 *                        pre-quest-gate behaviour, which a mixed-version party
+	 *                        falls back to so every client still deals one board.
+	 *                        An EMPTY set is not the same thing: it means a player
+	 *                        who has finished nothing, and gates accordingly.
+	 */
+	public static List<TaskOffer> generateOffers(List<MonsterTable.Monster> pool, int playerCb,
+		int playerSlayerLevel, boolean membersWorld,
+		@javax.annotation.Nullable java.util.Set<String> completedQuests, boolean tainted, GachaRng rng)
+	{
 		// slayer-task-only monsters are unfulfillable contracts (a Gachaman
-		// task is not a slayer task); slayer-level-gated ones need the level
+		// task is not a slayer task); slayer-level-gated ones need the level;
+		// quest-locked ones cannot be reached or damaged at all
 		pool = pool.stream()
 			.filter(m -> !m.isSlayerTaskOnly())
 			.filter(m -> m.getSlayerLevel() <= playerSlayerLevel)
+			.filter(m -> questsSatisfied(m, completedQuests))
 			.collect(Collectors.toList());
 		List<TaskOffer> offers = new ArrayList<>(5);
 		// no monster may appear on more than one offer in the same roll
@@ -53,6 +71,26 @@ public final class TaskGenerator
 			offers.add(redemption);
 		}
 		return offers;
+	}
+
+	/**
+	 * True when every quest this monster is locked behind has been finished.
+	 *
+	 * Order-independent by construction — a Set membership test, never a list
+	 * comparison — because in a party this runs against an INTERSECTION built
+	 * from several members' answers, and two clients that walked the roster in
+	 * different orders must still agree monster for monster.
+	 */
+	static boolean questsSatisfied(MonsterTable.Monster monster,
+		@javax.annotation.Nullable java.util.Set<String> completedQuests)
+	{
+		List<String> required = monster.getQuests();
+		if (required == null || required.isEmpty())
+		{
+			return true;
+		}
+		// null = gating off; empty = a player who has finished nothing
+		return completedQuests == null || completedQuests.containsAll(required);
 	}
 
 	static TaskOffer generate(List<MonsterTable.Monster> pool, int playerCb, boolean membersWorld,
@@ -181,19 +219,30 @@ public final class TaskGenerator
 		return null;
 	}
 
+	/** Quest gating disabled — see the {@code completedQuests} overload. */
+	public static boolean charterEligible(MonsterTable.Monster monster, int playerCb,
+		int playerSlayerLevel, boolean membersWorld)
+	{
+		return charterEligible(monster, playerCb, playerSlayerLevel, membersWorld, null);
+	}
+
 	/**
 	 * Exactly the gates the board applies, and no others: slayer-task-only
 	 * monsters are unfulfillable, slayer-level-gated ones need the level, members
-	 * monsters need a members world, and nothing above INSANE's ceiling is
-	 * offerable. Paying GC must never buy past a rule the roll enforces.
+	 * monsters need a members world, quest-locked ones need the quests, and
+	 * nothing above INSANE's ceiling is offerable. Paying GC must never buy past
+	 * a rule the roll enforces — and a deed is bought with a purse the player
+	 * does not get back if the target turns out to be unreachable.
 	 */
 	public static boolean charterEligible(MonsterTable.Monster monster, int playerCb,
-		int playerSlayerLevel, boolean membersWorld)
+		int playerSlayerLevel, boolean membersWorld,
+		@javax.annotation.Nullable java.util.Set<String> completedQuests)
 	{
 		return monster != null
 			&& !monster.isSlayerTaskOnly()
 			&& monster.getSlayerLevel() <= playerSlayerLevel
 			&& (membersWorld || !monster.isMembers())
+			&& questsSatisfied(monster, completedQuests)
 			&& charterDifficulty(playerCb, monster.getCombatLevel()) != null;
 	}
 

@@ -1,10 +1,15 @@
 package com.gachaman.service;
 
 import com.gachaman.Tuning;
-import java.util.Collection;
+import com.gachaman.model.PatronRecord;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.Locale;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
@@ -16,12 +21,20 @@ import javax.annotation.Nullable;
  * worth something makes farming a friend the correct play, and the mark stops
  * meaning what it says. Do not add an economic hook here.
  *
- * Keyed by DISPLAY NAME, never by member id. A party memberId is drawn from a
- * fresh Random when PartyService is constructed and drawn AGAIN inside
- * changeParty(), so an id belongs to one process's one party session: an
- * id-keyed count would reset on every login, leaving the higher tiers
- * unreachable by construction, and would pile dead keys into a save blob that
- * is gzipped and hashed in full on every single mutate.
+ * Keyed by ACCOUNT KEY — {@link AccountKey}, the hashed account hash the party
+ * layer broadcasts — with the display name demoted to a label inside the
+ * {@link PatronRecord}. Two identifiers were rejected first and it is worth
+ * saying why. A party memberId is drawn from a fresh Random when PartyService
+ * is constructed and drawn AGAIN inside changeParty(), so an id-keyed count
+ * would reset on every login and the higher tiers would be unreachable by
+ * construction. A display name survives a login but not a rename: a partner
+ * who changes theirs forks into two rows, each with half a history, and
+ * neither one is right. The account key survives both.
+ *
+ * The key is SELF-REPORTED and unauthenticated — it arrives over the party
+ * relay from another player's client, exactly like the name it replaces. A
+ * hostile client can claim any key it likes and inflate a count in a ledger
+ * only its owner will ever see. That is the whole reason this stays cosmetic.
  *
  * Every rule lives here as a pure static so all of it is testable — the
  * service-side caller is reduced to reading a roster and calling these.
@@ -39,21 +52,43 @@ public final class PatronMark
 	private static final String[] TIER_LABELS =
 		{"Patron", "Patron I", "Patron II", "Patron III"};
 
+	/**
+	 * Display order, and the SINGLE definition of it: most contracts first,
+	 * then name, then key. Used by both {@link #ranked} and {@link #topKey} so
+	 * the Patrons page's first row and the party page's top-patron mark can
+	 * never disagree about who the mark belongs to.
+	 *
+	 * The key is the final tiebreak precisely because it is always present and
+	 * always canonical. Without it two nameless one-contract partners would tie
+	 * completely, and Gson hands the map back in JSON order, so the ordering
+	 * would differ between a fresh ledger and a reloaded one and the page would
+	 * reshuffle on its own.
+	 */
+	private static final Comparator<Map.Entry<String, PatronRecord>> DISPLAY_ORDER =
+		Comparator.<Map.Entry<String, PatronRecord>>comparingInt(e -> -e.getValue().getCount())
+			.thenComparing(e -> nameOf(e.getValue()), PatronMark::nameOrder)
+			.thenComparing(Map.Entry::getKey);
+
 	private PatronMark()
 	{
+		return;
 	}
 
 	/**
 	 * A partner name fit to persist and to draw, or null when there is nothing
-	 * creditable.
+	 * drawable.
 	 *
 	 * RuneLite already ran toJagexName and removeTags over anything that
 	 * reached PartyMember.setDisplayName, so this only has to trim and refuse
 	 * the placeholders. "&lt;unknown&gt;" is PartyMember's CONSTRUCTOR DEFAULT and
 	 * is what every member reads as while the built-in Party plugin is off —
-	 * crediting it would invent a shared top patron out of nothing, and the
-	 * angle brackets would additionally be eaten by the sidebar's HTML
-	 * renderer. The right degradation is a no-op, never a placeholder.
+	 * storing it would put a placeholder on the Patrons page as though it were
+	 * somebody's name, and the angle brackets would additionally be eaten by
+	 * the sidebar's HTML renderer.
+	 *
+	 * Unlike the old name-keyed ledger, a null here is no longer fatal: the
+	 * account key still identifies the partner, so the contract is credited
+	 * either way and only the label is missing.
 	 */
 	@Nullable
 	public static String normalizeName(@Nullable String raw)
@@ -75,33 +110,83 @@ public final class PatronMark
 		return name;
 	}
 
-	/**
-	 * Whether two names are the same partner. Both sides are normalized first,
-	 * so a placeholder can never match: this is what stops the party page's
-	 * own "A party member" fallback row, or a member still reading as
-	 * "&lt;unknown&gt;", from wearing somebody else's mark.
-	 */
-	public static boolean sameName(@Nullable String a, @Nullable String b)
+	/** The partner's record, or null when they are not in the ledger. */
+	@Nullable
+	public static PatronRecord recordFor(@Nullable Map<String, PatronRecord> ledger,
+		@Nullable String accountKey)
 	{
-		String left = normalizeName(a);
-		String right = normalizeName(b);
-		return left != null && right != null && left.equalsIgnoreCase(right);
+		String key = AccountKey.normalize(accountKey);
+		if (ledger == null || ledger.isEmpty() || key == null)
+		{
+			return null;
+		}
+		PatronRecord record = ledger.get(key);
+		return record == null || record.getCount() <= 0 ? null : record;
 	}
 
 	/** Shared contracts finished with one partner; 0 for anyone uncounted. */
-	public static int countFor(@Nullable Map<String, Integer> counts, @Nullable String name)
+	public static int countFor(@Nullable Map<String, PatronRecord> ledger,
+		@Nullable String accountKey)
 	{
-		String normalized = normalizeName(name);
-		if (counts == null || counts.isEmpty() || normalized == null)
+		PatronRecord record = recordFor(ledger, accountKey);
+		return record == null ? 0 : record.getCount();
+	}
+
+	/**
+	 * Every counted partner in display order — what the Patrons page draws.
+	 *
+	 * Junk is dropped rather than rendered: a record with no count is not a
+	 * partner, and a key that is not a key came from a hand-edited save.
+	 */
+	public static List<PatronRecord> ranked(@Nullable Map<String, PatronRecord> ledger)
+	{
+		List<Map.Entry<String, PatronRecord>> entries = sortedEntries(ledger);
+		List<PatronRecord> out = new ArrayList<>(entries.size());
+		for (Map.Entry<String, PatronRecord> entry : entries)
 		{
-			return 0;
+			out.add(entry.getValue());
 		}
-		String key = existingKey(counts, normalized);
-		return key == null ? 0 : value(counts.get(key));
+		return Collections.unmodifiableList(out);
+	}
+
+	/**
+	 * The account key of the partner who has finished the most contracts with
+	 * you, or null when nobody has. Always {@link #ranked}'s first entry.
+	 */
+	@Nullable
+	public static String topKey(@Nullable Map<String, PatronRecord> ledger)
+	{
+		List<Map.Entry<String, PatronRecord>> entries = sortedEntries(ledger);
+		return entries.isEmpty() ? null : entries.get(0).getKey();
+	}
+
+	/** Distinct counted partners — the Patrons page's headline, and its gate. */
+	public static int partnerCount(@Nullable Map<String, PatronRecord> ledger)
+	{
+		return sortedEntries(ledger).size();
+	}
+
+	/** Shared contracts across every partner. Not a contract count: a shared
+	 * contract with three partners is three marks and reads as three here. */
+	public static int totalMarks(@Nullable Map<String, PatronRecord> ledger)
+	{
+		int total = 0;
+		for (Map.Entry<String, PatronRecord> entry : sortedEntries(ledger))
+		{
+			total += entry.getValue().getCount();
+		}
+		return total;
 	}
 
 	/**
 	 * One mark per distinct partner on a finished contract.
+	 *
+	 * {@code partners} maps account key to the partner's display name at the
+	 * moment of completion; a null or unusable name still credits the mark and
+	 * simply leaves the previous label alone. Passing a Map is what makes the
+	 * "one mark per partner" rule structural rather than a dedupe pass — the
+	 * same account sitting in the party from two clients under two member ids
+	 * collapses to one entry before this is ever called.
 	 *
 	 * Returns the CALLER'S OWN instance when nothing is creditable, so
 	 * GachaStateService.mutate short-circuits on {@code next == state} and the
@@ -109,40 +194,38 @@ public final class PatronMark
 	 * Never writes into the map it was handed: the state object it came from
 	 * is shared and immutable by contract.
 	 */
-	public static Map<String, Integer> credit(@Nullable Map<String, Integer> current,
-		@Nullable Collection<String> partnerNames, int cap)
+	public static Map<String, PatronRecord> credit(@Nullable Map<String, PatronRecord> current,
+		@Nullable Map<String, String> partners, int cap, long nowMs)
 	{
-		if (partnerNames == null || partnerNames.isEmpty())
+		if (partners == null || partners.isEmpty())
 		{
 			return current;
 		}
-		// dedupe case-insensitively: one finished contract is one mark per
-		// partner even when the same account sits in the party from two
-		// clients under two member ids
-		Map<String, String> distinct = new LinkedHashMap<>();
-		for (String raw : partnerNames)
-		{
-			String name = normalizeName(raw);
-			if (name != null)
-			{
-				distinct.putIfAbsent(name.toLowerCase(Locale.ROOT), name);
-			}
-		}
-		if (distinct.isEmpty())
-		{
-			return current;
-		}
-		Map<String, Integer> next = current == null
+		Map<String, PatronRecord> next = current == null
 			? new LinkedHashMap<>() : new LinkedHashMap<>(current);
+		// two raw keys can normalize to ONE partner (they differ only in case),
+		// and the loop below would then credit that partner twice off a single
+		// contract. The caller normalizes before it builds the map, so this only
+		// backstops a future one — but "one mark per partner" is the rule the
+		// whole feature rests on, and a rule that holds by convention is not one
+		Set<String> credited = new HashSet<>();
 		boolean changed = false;
-		for (String name : distinct.values())
+		for (Map.Entry<String, String> partner : partners.entrySet())
 		{
-			String key = existingKey(next, name);
-			if (key != null)
+			String key = AccountKey.normalize(partner.getKey());
+			if (key == null || !credited.add(key))
 			{
-				// keep the ORIGINAL key's casing so a partner whose client
-				// cased the name differently keeps one row, not two
-				next.put(key, value(next.get(key)) + 1);
+				continue; // not an identity, or an identity already counted
+			}
+			String name = normalizeName(partner.getValue());
+			PatronRecord existing = next.get(key);
+			if (existing != null && existing.getCount() > 0)
+			{
+				// keep the last name we could read rather than blanking a drawn
+				// row because this one completion happened while they were
+				// logged out of the roster
+				next.put(key, new PatronRecord(name != null ? name : existing.getName(),
+					existing.getCount() + 1, nowMs));
 				changed = true;
 				continue;
 			}
@@ -152,46 +235,13 @@ public final class PatronMark
 				// than a partner you actually have a history with
 				continue;
 			}
-			next.put(name, 1);
+			next.put(key, new PatronRecord(name, 1, nowMs));
 			changed = true;
 		}
 		// a full-cap contract where every partner was turned away changed
 		// nothing, and handing back an equal-but-distinct map here would defeat
 		// the identity short-circuit and buy a whole-save encode for no edit
 		return changed ? next : current;
-	}
-
-	/**
-	 * The partner who has finished the most contracts with you, or null when
-	 * nobody has. Ties break by name so the answer cannot depend on map
-	 * iteration order — Gson hands back a LinkedTreeMap in JSON order, so an
-	 * order-sensitive winner would differ between a fresh map and a reloaded
-	 * one and the displayed mark would move on its own.
-	 */
-	@Nullable
-	public static String topPartner(@Nullable Map<String, Integer> counts)
-	{
-		if (counts == null || counts.isEmpty())
-		{
-			return null;
-		}
-		String best = null;
-		int bestCount = 0;
-		for (Map.Entry<String, Integer> entry : counts.entrySet())
-		{
-			String name = normalizeName(entry.getKey());
-			int count = value(entry.getValue());
-			if (name == null || count <= 0)
-			{
-				continue; // a junk key from a hand-edited save never wins
-			}
-			if (count > bestCount || (count == bestCount && nameOrder(name, best) < 0))
-			{
-				best = name;
-				bestCount = count;
-			}
-		}
-		return best;
 	}
 
 	/** 0 = below the first threshold, up to Tuning.PATRON_TIERS.length. */
@@ -220,6 +270,13 @@ public final class PatronMark
 		return TIER_LABELS[Math.min(tierFor(count), TIER_LABELS.length - 1)];
 	}
 
+	/** What to draw for a partner whose client never told us their name. */
+	public static String displayName(@Nullable PatronRecord record)
+	{
+		String name = record == null ? null : normalizeName(record.getName());
+		return name == null ? "An unnamed patron" : name;
+	}
+
 	/** Package-private for the test that pins the labels to the thresholds. */
 	static int labelCount()
 	{
@@ -228,40 +285,62 @@ public final class PatronMark
 
 	// --- internals ---
 
-	/** The key already holding this partner under any casing, or null. */
-	@Nullable
-	private static String existingKey(Map<String, Integer> counts, String name)
+	/** Counted, key-valid entries in {@link #DISPLAY_ORDER}. */
+	private static List<Map.Entry<String, PatronRecord>> sortedEntries(
+		@Nullable Map<String, PatronRecord> ledger)
 	{
-		if (counts.containsKey(name))
+		if (ledger == null || ledger.isEmpty())
 		{
-			return name;
+			return Collections.emptyList();
 		}
-		for (String key : counts.keySet())
+		List<Map.Entry<String, PatronRecord>> entries = new ArrayList<>(ledger.size());
+		for (Map.Entry<String, PatronRecord> entry : ledger.entrySet())
 		{
-			if (key != null && key.equalsIgnoreCase(name))
+			// a null VALUE is reachable: Gson deserializes {"abc…":null} happily
+			if (entry.getValue() == null || entry.getValue().getCount() <= 0)
 			{
-				return key;
+				continue;
 			}
+			// CANONICAL, not merely normalizable. recordFor looks the partner up
+			// with the normalized key, so a stored "…AA" would be listed here and
+			// found by nothing — the Patrons page would name a top patron the
+			// party page could not draw a pip for. credit() only ever writes
+			// canonical keys, so a non-canonical one came from a hand-edited save
+			// and the honest reading of it is "not one of ours"
+			if (!entry.getKey().equals(AccountKey.normalize(entry.getKey())))
+			{
+				continue;
+			}
+			entries.add(entry);
 		}
-		return null;
+		entries.sort(DISPLAY_ORDER);
+		return entries;
 	}
 
 	/**
-	 * Drop the lowest-count partner, but ONLY when that partner has a single
+	 * Drop the least valuable partner, but ONLY when that partner has a single
 	 * contract, so the bound cannot be weaponised: a stranger can never push
-	 * out a history of two or more. Ties break by name to keep eviction
-	 * deterministic across a reload.
+	 * out a history of two or more. Among one-offs the one you shared with
+	 * longest ago goes first, and the key breaks any remaining tie so eviction
+	 * is deterministic across a reload.
 	 */
-	private static boolean evictOneOff(Map<String, Integer> counts)
+	private static boolean evictOneOff(Map<String, PatronRecord> ledger)
 	{
 		String victim = null;
 		int lowest = Integer.MAX_VALUE;
-		for (Map.Entry<String, Integer> entry : counts.entrySet())
+		long oldest = Long.MAX_VALUE;
+		for (Map.Entry<String, PatronRecord> entry : ledger.entrySet())
 		{
-			int count = value(entry.getValue());
-			if (count < lowest || (count == lowest && nameOrder(entry.getKey(), victim) < 0))
+			PatronRecord record = entry.getValue();
+			// a junk row is the ideal victim: it occupies a slot and draws nothing
+			int count = record == null ? 0 : record.getCount();
+			long at = record == null ? 0 : record.getLastSharedAt();
+			if (count < lowest
+				|| (count == lowest && at < oldest)
+				|| (count == lowest && at == oldest && keyOrder(entry.getKey(), victim) < 0))
 			{
 				lowest = count;
+				oldest = at;
 				victim = entry.getKey();
 			}
 		}
@@ -269,24 +348,29 @@ public final class PatronMark
 		{
 			return false;
 		}
-		counts.remove(victim);
+		ledger.remove(victim);
 		return true;
 	}
 
-	/** Case-insensitive first, then case-sensitive, so no two names tie. */
-	private static int nameOrder(String a, @Nullable String b)
+	/** Nulls last, then case-insensitive, then case-sensitive, so no two tie. */
+	private static int nameOrder(@Nullable String a, @Nullable String b)
 	{
-		if (b == null)
+		if (a == null || b == null)
 		{
-			return -1;
+			return a == b ? 0 : (a == null ? 1 : -1);
 		}
 		int cmp = a.compareToIgnoreCase(b);
 		return cmp != 0 ? cmp : a.compareTo(b);
 	}
 
-	/** Gson can deserialize {"Zezima":null} — treat a null count as zero. */
-	private static int value(@Nullable Integer count)
+	private static int keyOrder(String a, @Nullable String b)
 	{
-		return count == null ? 0 : count;
+		return b == null ? -1 : a.compareTo(b);
+	}
+
+	@Nullable
+	private static String nameOf(PatronRecord record)
+	{
+		return normalizeName(record.getName());
 	}
 }

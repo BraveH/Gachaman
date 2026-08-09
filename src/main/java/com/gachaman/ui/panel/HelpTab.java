@@ -170,10 +170,10 @@ public class HelpTab extends JPanel
 		section.add(styles);
 		section.add(Box.createVerticalStrut(5));
 		paragraph(section, w, "A roulette wheel decides melee, ranged or magic — and it can re-roll "
-			+ "the same style. It re-rolls after 5 completed tasks. From the shop, a Style "
-			+ "Compactor (400 GC) makes the current task count double toward those 5 AND makes "
+			+ "the same style. It re-rolls after 5 completed contracts. From the shop, a Style "
+			+ "Compactor (400 GC) makes the current contract count double toward those 5 AND makes "
 			+ "each kill count twice toward the contract itself — the skipped count pays no GC, "
-			+ "so you trade kill income for speed. An Extender (250 GC) makes the task count "
+			+ "so you trade kill income for speed. An Extender (250 GC) makes the contract count "
 			+ "half toward the cycle. Every profile starts with one free Compactor voucher and "
 			+ "one free Extender voucher — the first use of each costs nothing.");
 		paragraph(section, w, "Attacking with a forbidden style costs GC per attack, and finishing "
@@ -187,7 +187,7 @@ public class HelpTab extends JPanel
 
 	private static JPanel buildContractsSection(int w)
 	{
-		JPanel section = GachamanPanel.section("Contracts (Tasks)");
+		JPanel section = GachamanPanel.section("Contracts");
 		paragraph(section, w, "You roll 4 contracts (Easy/Medium/Hard/Insane) scaled to your combat "
 			+ "level. While tainted a 5th Redemption contract appears. Contracts cannot be "
 			+ "abandoned.");
@@ -213,7 +213,7 @@ public class HelpTab extends JPanel
 			+ "random between them if the lead is tied — and it binds only the members who "
 			+ "actually voted; anyone who abstained keeps the rolled contracts as personal ones. "
 			+ "Completion pays the 1.6x co-op bonus, plus a flat 0.25x if the party covers more "
-			+ "than one attack style. Use \"View Rolled Tasks\" to change your vote.");
+			+ "than one attack style. Use \"View Rolled Contracts\" to change your vote.");
 		paragraph(section, w, "You may only attack your contract's monster — everything else is "
 			+ "blocked (quest targets excepted, see Tutorial & Quests).");
 		paragraph(section, w, "Per-kill GC scales three ways: the difficulty base (8/16/32/64), a "
@@ -221,8 +221,8 @@ public class HelpTab extends JPanel
 			+ "5x, while monsters more than 5 levels below you decay to 0.1x), and an "
 			+ "early-game bonus (+150% at combat 3, tapering to nothing at combat 70).");
 		paragraph(section, w, "Side bets are optional bonus objectives paying extra GC. A wiki "
-			+ "button next to the task opens the monster's wiki page, and a config toggle "
-			+ "highlights task NPCs in-game.");
+			+ "button next to the contract opens the monster's wiki page, and a config toggle "
+			+ "highlights contract NPCs in-game.");
 		paragraph(section, w, "Double Docket: kill your real Slayer assignment while on contract "
 			+ "and completion pays x1.2. It is checked when you accept AND on every kill, so "
 			+ "picking the matching Slayer task up mid-contract still counts, and once it locks "
@@ -246,7 +246,7 @@ public class HelpTab extends JPanel
 			+ "party it takes EVERY member: each stakes from their own purse and loses only "
 			+ "their own, and one refusal means no Ante for anyone — the contract goes ahead "
 			+ "either way. Contracts cannot be abandoned, so stake accordingly.");
-		paragraph(section, w, "Rhythm Combo: consecutive on-task kills within ~25 seconds stack a "
+		paragraph(section, w, "Rhythm Combo: consecutive on-contract kills within ~25 seconds stack a "
 			+ "kill-GC bonus — up to +30% at low combat, fading to a permanent +10% floor by "
 			+ "combat 45. The chain cancels only after ~60 seconds with NO attacks at all "
 			+ "(fighting something tanky keeps it alive); a forbidden attack or tainted kill "
@@ -268,20 +268,32 @@ public class HelpTab extends JPanel
 	{
 		JPanel section = GachamanPanel.section("The Party Page");
 		paragraph(section, w, "A tab showing who is with you: each member's rolled style as a "
-			+ "colour swatch, their combat level, their contract progress, and badges for "
-			+ "taint and for your Patron's Mark with them. Turn the Party contracts setting "
-			+ "off and the tab stays, but it broadcasts nothing and shows nothing — it says "
-			+ "so rather than looking empty.");
+			+ "colour swatch, their combat level, and badges for taint and for your Patron's "
+			+ "Mark with them. Turn the Party contracts setting off and the tab stays, but it "
+			+ "broadcasts nothing and shows nothing — it says so rather than looking empty.");
+		paragraph(section, w, "It is grouped by CONTRACT, not by person. Everyone working the "
+			+ "same shared contract is drawn as one block under one progress meter, because a "
+			+ "shared contract has one quota — repeating the same 12/20 under three names would "
+			+ "read as three separate jobs of twenty. Two shared contracts in one party are two "
+			+ "blocks, and anyone on their own gets their own.");
+		paragraph(section, w, "A member with no contract says why. 'No contract' is idle and free "
+			+ "to roll. 'Undecided board' means they hold dealt offers and have signed none, so "
+			+ "they cannot join a shared roll until they pick one or let the board clear. 'No "
+			+ "signal' means their client has said nothing for about a minute; it comes back on "
+			+ "their next heartbeat.");
 		paragraph(section, w, "It is DISPLAY ONLY — no roll, payout or gate reads a line of it. "
 			+ "Every value is self-reported by that member's own client and taken on trust; "
 			+ "anything arriving over the party relay is clamped to a sane range before it is "
-			+ "drawn. A row that stops reporting goes quiet after about a minute and comes back "
-			+ "on the next heartbeat.");
+			+ "drawn.");
 		paragraph(section, w, "The Patron's Mark: a private tally of how many shared contracts "
-			+ "you have finished alongside each partner, kept by display name so it survives "
-			+ "logins. Marks land at 10, 25 and 100 — Patron I, II and III. Strictly cosmetic: "
-			+ "it pays no GC and multiplies nothing, because a mark worth something would make "
-			+ "farming a friend the correct play.");
+			+ "you have finished alongside each partner. Marks land at 10, 25 and 100 — Patron "
+			+ "I, II and III. It is kept by ACCOUNT rather than by name, so a partner who "
+			+ "renames keeps one history instead of splitting into two half-tallies. The "
+			+ "Patrons tab is its home and appears the day you earn your first mark; on this "
+			+ "page each member you have history with wears a coloured pip, and whoever you "
+			+ "have shared most with gets a brighter outline. Strictly cosmetic: it pays no GC "
+			+ "and multiplies nothing, because a mark worth something would make farming a "
+			+ "friend the correct play.");
 		return section;
 	}
 
@@ -338,10 +350,12 @@ public class HelpTab extends JPanel
 			+ "no extra service, and an ironman's half-credit kill still bought the card a "
 			+ "whole kill of wear. The Album shows it as \"present for N kills\".");
 		paragraph(section, w, "Past 100, 400 and 1,000 kills of service a card wears Hairline, "
-			+ "then Cracked, then Shattered, still holding — drawn as gold-filled kintsugi "
-			+ "repair, not damage. NOTHING reads it. A worn card rolls, equips, completes sets, "
-			+ "burns at prestige and prices in the shop exactly like a pristine one. It is a "
-			+ "veteran's stripe, not a durability system.");
+			+ "then Cracked, then Shattered, still holding — worn print at the rim, creases "
+			+ "across the face, scratches and patina, the way a played card ages. Every card "
+			+ "wears in its own places; every card at a stage wears the same amount. NOTHING "
+			+ "reads it. A worn card rolls, equips, completes sets, burns at prestige and "
+			+ "prices in the shop exactly like a pristine one. It is a veteran's stripe, not "
+			+ "a durability system.");
 		return section;
 	}
 
@@ -421,7 +435,7 @@ public class HelpTab extends JPanel
 			+ "firsts — first kill, first chest, first Rare, first taint cleared... Each pays a "
 			+ "small GC bounty once; the full page totals 495 GC, just shy of one Battered "
 			+ "chest.");
-		paragraph(section, w, "Species Codex (Journal tab): the first on-task kill of each new "
+		paragraph(section, w, "Species Codex (Journal tab): the first on-contract kill of each new "
 			+ "species pays +25 GC, and milestones at 50/100/150 species pay 100/150/200 GC. "
 			+ "Contracts always roll 4 distinct monsters — the unfamiliar one pays extra.");
 		paragraph(section, w, "Graduation: the first time a gear slot's WORN tier climbs a rank "
@@ -481,6 +495,7 @@ public class HelpTab extends JPanel
 			"::gachatoken",
 			"::gachacleartaint",
 			"::gachacleartask",
+			"::gachawear <stage|kills> [name]",
 			"::gachabutton (button diagnostics)",
 			"::gachacosmetics (card audit)",
 		};
@@ -526,9 +541,17 @@ public class HelpTab extends JPanel
 		return area;
 	}
 
-	/** A left-aligned flow row whose height never stretches in the BoxLayout. */
-	private static JPanel flowRow(int w)
+	/**
+	 * A left-aligned flow row whose height never stretches in the BoxLayout.
+	 *
+	 * <p>Takes the SECTION-OUTER width, like {@link #paragraph}, and takes the
+	 * padding off itself — both call sites were handing it the unpadded number
+	 * while every other child of the same section subtracted first, so the cap
+	 * it enforced was 16px wider than the column it sits in.
+	 */
+	private static JPanel flowRow(int outerWidth)
 	{
+		final int w = outerWidth - SECTION_PADDING;
 		JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0))
 		{
 			@Override
@@ -542,9 +565,14 @@ public class HelpTab extends JPanel
 		return panel;
 	}
 
-	/** A small glyph beside a wrapped text block, icon pinned to the top. */
-	private static JPanel iconRow(int w, ImageIcon icon, JComponent text)
+	/**
+	 * A small glyph beside a wrapped text block, icon pinned to the top. Takes
+	 * the SECTION-OUTER width and subtracts the padding itself, for the same
+	 * reason {@link #flowRow} does.
+	 */
+	private static JPanel iconRow(int outerWidth, ImageIcon icon, JComponent text)
 	{
+		final int w = outerWidth - SECTION_PADDING;
 		JPanel panel = new JPanel(new BorderLayout(6, 0))
 		{
 			@Override

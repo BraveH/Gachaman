@@ -36,7 +36,6 @@ import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
-import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.QuantityFormatter;
 
 /**
@@ -48,18 +47,11 @@ public class ShopTab extends JPanel
 {
 	private static final Color GOLD = new Color(230, 190, 80);
 
-	/**
-	 * The width every section must fit in. GachamanPanel is a non-wrapped
-	 * PluginPanel (PANEL_WIDTH + SCROLLBAR_WIDTH = 242px) with a 6px
-	 * EmptyBorder on each side; each tab sits in a JScrollPane whose CUSTOM
-	 * scrollbar is 9px (GameScrollBarUI, not the stock 17px), leaving
-	 * 242 - 12 - 9 = 221.
-	 */
-	private static final int CONTENT_WIDTH = PluginPanel.PANEL_WIDTH + PluginPanel.SCROLLBAR_WIDTH
-		- 2 * PluginPanel.BORDER_OFFSET - 9;
+	/** The width every section must fit in; 221, derived in GachamanPanel. */
+	private static final int CONTENT_WIDTH = GachamanPanel.VIEWPORT_WIDTH;
 
 	/** Usable width inside a GachamanPanel.section(), which has 8px borders. */
-	private static final int SECTION_INNER_WIDTH = CONTENT_WIDTH - 16;
+	private static final int SECTION_INNER_WIDTH = GachamanPanel.SECTION_WIDTH;
 
 	/** BorderLayout hgap used by GachamanPanel.row(). */
 	private static final int ROW_GAP = 6;
@@ -181,21 +173,51 @@ public class ShopTab extends JPanel
 			{
 				end--;
 			}
-			label.setText(text.substring(0, end).trim() + ellipsis);
+			// TRAILING whitespace only. addBand indents its tier rows with three
+			// leading spaces to nest them under their band header, and trim() ate
+			// them — so the one row long enough to need truncating was also the
+			// one row that jumped back out to the margin.
+			label.setText(text.substring(0, end).replaceAll("\\s+$", "") + ellipsis);
 		}
 		label.setToolTipText(tooltip);
 		return label;
 	}
 
-	/** A word-wrapping label sized to the section's real inner width. */
-	private static JLabel wrappedText(String text, Color color)
+	/**
+	 * A word-wrapping paragraph, hard-sized to the section's real inner width.
+	 *
+	 * Not an HTML JLabel: Swing reads {@code width:Npx} in that CSS subset as a
+	 * *preferred* span, not a cap, so a long unbroken run lays the label out
+	 * wider than the column and the surrounding viewport — which has no
+	 * horizontal scrollbar — clips the overflow at the right edge with no
+	 * ellipsis to show for it. A JTextArea given an explicit size wraps against
+	 * a real width, which is what HelpTab.textBlock already does at this same
+	 * 205px. Every caller passes plain prose, so nothing here needs markup.
+	 */
+	private static JComponent wrappedText(String text, Color color)
 	{
-		JLabel label = new JLabel("<html><body style='width:" + (SECTION_INNER_WIDTH - 10)
-			+ "px'>" + text + "</body></html>");
-		label.setForeground(color);
-		label.setFont(FontManager.getRunescapeSmallFont());
-		label.setAlignmentX(Component.LEFT_ALIGNMENT);
-		return label;
+		javax.swing.JTextArea area = new javax.swing.JTextArea(text);
+		area.setEditable(false);
+		area.setFocusable(false);
+		area.setOpaque(false);
+		area.setLineWrap(true);
+		area.setWrapStyleWord(true);
+		area.setBorder(null);
+		area.setForeground(color);
+		area.setFont(FontManager.getRunescapeSmallFont());
+		area.setAlignmentX(Component.LEFT_ALIGNMENT);
+		// setSize before asking for the preferred height: the wrap, and so the
+		// line count, only exists once the area has a width to wrap against.
+		area.setSize(SECTION_INNER_WIDTH, Short.MAX_VALUE);
+		int height = area.getPreferredSize().height;
+		// all three pinned: the height above is only correct for a 205px wrap, so a
+		// BoxLayout free to shrink the width would re-wrap to more lines than the
+		// height it was given and silently cut the last one off the bottom
+		Dimension fixed = new Dimension(SECTION_INNER_WIDTH, height);
+		area.setPreferredSize(fixed);
+		area.setMinimumSize(fixed);
+		area.setMaximumSize(fixed);
+		return area;
 	}
 
 	/** A button that stretches to the full inner width of a section. */
@@ -245,8 +267,10 @@ public class ShopTab extends JPanel
 	private void tryOpenChest(Tuning.Chest tier)
 	{
 		long price = Tuning.CHEST_PRICE_GC.get(tier);
+		String name = chestName(tier);
 		if (!GachamanPanel.confirm(this, "Open chest",
-			"Open a " + chestName(tier) + " for " + QuantityFormatter.formatNumber(price) + " GC?"))
+			"Open " + GachamanPanel.article(name) + " " + name + " for "
+				+ QuantityFormatter.formatNumber(price) + " GC?"))
 		{
 			return;
 		}
@@ -278,12 +302,21 @@ public class ShopTab extends JPanel
 
 	// --- Odds disclosure ---
 
+	/** The two reach bands, as collapse targets. */
+	private enum Band
+	{
+		WIELDABLE,
+		HEADROOM
+	}
+
 	/**
-	 * Longest tier list any one band prints in full. Past this the tail is folded into
-	 * a single disclosed row rather than dropped — a hidden row would be exactly the
-	 * kind of quiet omission this panel exists to rule out.
+	 * EDT-only. Which bands the player has opened.
+	 *
+	 * <p>Empty to start, which is what makes both bands collapsed by default. A
+	 * field rather than a local because rebuild() runs on every state change and
+	 * would otherwise slam a band shut again the moment a kill landed.
 	 */
-	private static final int MAX_BAND_ROWS = 6;
+	private final java.util.EnumSet<Band> expandedBands = java.util.EnumSet.noneOf(Band.class);
 
 	/** EDT-only. Which chest the odds panel is describing. */
 	private Tuning.Chest oddsTier = Tuning.Chest.BATTERED;
@@ -311,20 +344,6 @@ public class ShopTab extends JPanel
 		javax.swing.JComboBox<Tuning.Chest> picker =
 			new javax.swing.JComboBox<>(Tuning.Chest.values());
 		picker.setSelectedItem(oddsTier);
-		picker.setRenderer(new javax.swing.DefaultListCellRenderer()
-		{
-			@Override
-			public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> list,
-				Object value, int index, boolean isSelected, boolean cellHasFocus)
-			{
-				super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-				if (value instanceof Tuning.Chest)
-				{
-					setText(chestName((Tuning.Chest) value));
-				}
-				return this;
-			}
-		});
 		picker.addActionListener(e -> {
 			Tuning.Chest picked = (Tuning.Chest) picker.getSelectedItem();
 			if (picked == null || picked == oddsTier)
@@ -337,7 +356,9 @@ public class ShopTab extends JPanel
 			// its own action listener runs while the popup is still closing
 			javax.swing.SwingUtilities.invokeLater(this::rebuild);
 		});
-		GachamanPanel.styleCombo(picker);
+		// labelled through styleCombo, not by a renderer set beforehand: styleCombo
+		// installs the only renderer the box has, and would overwrite it
+		GachamanPanel.styleCombo(picker, ShopTab::chestName);
 		picker.setAlignmentX(Component.LEFT_ALIGNMENT);
 		picker.setMaximumSize(new Dimension(SECTION_INNER_WIDTH, 24));
 		section.add(picker);
@@ -372,11 +393,15 @@ public class ShopTab extends JPanel
 		}
 		else if (odds.getPityBonusPercent() > 0)
 		{
+			// floored at 1 because the branch above already owns the zero case, so
+			// the count here is always at least one — which the old sentence then
+			// printed as the ungrammatical "within 1 more opens"
 			int remaining = Math.max(1, odds.getPityHardCap() - odds.getOpensSinceEpic());
 			section.add(wrappedText("Pity is already in those numbers: +"
 				+ String.format(Locale.ROOT, "%.1f", odds.getPityBonusPercent())
-				+ "% moved out of Common. A guaranteed Epic+ lands within "
-				+ remaining + " more opens.", new Color(150, 190, 240)));
+				+ "% moved out of Common. A guaranteed Epic+ lands "
+				+ (remaining == 1 ? "on your next open." : "within " + remaining + " more opens."),
+				new Color(150, 190, 240)));
 		}
 
 		List<ChestService.TierOdds> wieldable = new ArrayList<>();
@@ -389,9 +414,32 @@ public class ShopTab extends JPanel
 			}
 			(row.isWieldableNow() ? wieldable : headroom).add(row);
 		}
-		addBand(section, "Wieldable now", wieldable, odds.getWieldableTotal(), GOLD);
-		addBand(section, "Headroom, just out of reach", headroom, odds.getHeadroomTotal(),
-			new Color(200, 140, 90));
+		// a ladder can sit in both bands at once, so each side is told the other's
+		// keys and can explain the overlap rather than look like it double-counted
+		java.util.Set<String> wieldableKeys = new java.util.HashSet<>();
+		for (ChestService.TierOdds row : wieldable)
+		{
+			wieldableKeys.add(row.getTierKey());
+		}
+		java.util.Set<String> headroomKeys = new java.util.HashSet<>();
+		for (ChestService.TierOdds row : headroom)
+		{
+			headroomKeys.add(row.getTierKey());
+		}
+		// short titles: these share their line with a right-flush percentage, and
+		// the label half is ellipsized against whatever the value leaves over —
+		// the long form of each belongs in the tooltip, where it has room
+		addBand(section, Band.WIELDABLE, "Wieldable now",
+			"Gear you can equip at your levels today.",
+			wieldable, odds.getWieldableTotal(), GOLD, headroomKeys);
+		// "Not yet wieldable", not "Headroom": headroom is the house's word for the
+		// slice it leans against, and to a reader it suggests spare capacity — the
+		// opposite of the restriction it actually names. This pairs with the band
+		// above it and says the condition outright. Not "Locked" either: the lean
+		// never locks, and the footer two rows down promises exactly that.
+		addBand(section, Band.HEADROOM, "Not yet wieldable",
+			"Gear still out of reach — drawn less often, never locked out.",
+			headroom, odds.getHeadroomTotal(), new Color(200, 140, 90), wieldableKeys);
 		if (odds.getUntieredTotal() > 0)
 		{
 			section.add(Box.createVerticalStrut(5));
@@ -422,39 +470,174 @@ public class ShopTab extends JPanel
 		return section;
 	}
 
-	/** One "Wieldable now / Headroom" group: a header total, its tiers, then the tail. */
-	private static void addBand(JPanel section, String title, List<ChestService.TierOdds> rows,
-		double total, Color color)
+	/**
+	 * One "Wieldable now / Not yet wieldable" group: a clickable header carrying
+	 * the band total, and under it every tier in the band.
+	 *
+	 * <p>Every tier, not the first few with the rest folded into a "+N more tiers"
+	 * line: that fold saved a little height and cost the reader the one thing this
+	 * panel exists to give them, which is the actual ladder. The ladders are long,
+	 * so the header collapses instead — closed to start, and the tiers are built
+	 * either way and merely hidden, so opening one is a relayout rather than a
+	 * rebuild and the scroll position survives the click.
+	 *
+	 * @param alsoInOtherBand tier keys that also appear in the opposite band, so a
+	 *                        split ladder can say so instead of looking duplicated
+	 */
+	private void addBand(JPanel section, Band band, String title, String blurb,
+		List<ChestService.TierOdds> rows, double total, Color color,
+		java.util.Set<String> alsoInOtherBand)
 	{
 		if (rows.isEmpty())
 		{
 			return;
 		}
+		JPanel tiers = new JPanel();
+		tiers.setLayout(new BoxLayout(tiers, BoxLayout.Y_AXIS));
+		tiers.setOpaque(false);
+		tiers.setAlignmentX(Component.LEFT_ALIGNMENT);
+		tiers.setMaximumSize(new Dimension(SECTION_INNER_WIDTH, Integer.MAX_VALUE));
+		for (ChestService.TierOdds row : rows)
+		{
+			tiers.add(oddsRow("   " + row.getDisplayName(), pct(row.getProbability()),
+				ColorScheme.LIGHT_GRAY_COLOR,
+				rowTooltip(row, alsoInOtherBand.contains(row.getTierKey()))));
+		}
+		tiers.setVisible(expandedBands.contains(band));
+
 		section.add(Box.createVerticalStrut(5));
-		section.add(oddsRow(title, pct(total), color, title + ": " + pct(total) + " per card"));
-		int shown = Math.min(rows.size(), MAX_BAND_ROWS);
+		section.add(bandHeader(band, title, blurb, rows.size(), total, color, tiers));
+		section.add(tiers);
+	}
+
+	/**
+	 * The clickable line a band collapses to: a +/- marker, the band name, and the
+	 * band total flush right.
+	 *
+	 * <p>ASCII +/- rather than a triangle glyph — the RuneScape faces have no
+	 * caret, and a missing glyph draws as tofu. The marker is pinned to a fixed
+	 * width so flipping it cannot shift the title's ellipsis budget and make the
+	 * name change length as the band opens.
+	 */
+	private JPanel bandHeader(Band band, String title, String blurb, int tierCount,
+		double total, Color color, JPanel tiers)
+	{
+		JPanel row = new JPanel(new BorderLayout(ROW_GAP, 0));
+		row.setOpaque(false);
+		row.setAlignmentX(Component.LEFT_ALIGNMENT);
+		row.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+		Font font = FontManager.getRunescapeSmallFont();
+		JLabel marker = GachamanPanel.line(expandedBands.contains(band) ? "-" : "+", color, font);
+		FontMetrics fm = marker.getFontMetrics(font);
+		Dimension markerSize = new Dimension(
+			Math.max(fm.stringWidth("+"), fm.stringWidth("-")),
+			marker.getPreferredSize().height);
+		marker.setPreferredSize(markerSize);
+		marker.setMinimumSize(markerSize);
+		marker.setMaximumSize(markerSize);
+
+		// the count keeps a shut band honest about how much it is holding back
+		String tip = blurb + " " + pct(total) + " per card, over "
+			+ tierCount + (tierCount == 1 ? " tier." : " tiers.")
+			+ " Click to open or close.";
+		JLabel right = GachamanPanel.line(pct(total), color, font);
+		right.setToolTipText(tip);
+		int budget = SECTION_INNER_WIDTH - markerSize.width
+			- right.getPreferredSize().width - 2 * ROW_GAP;
+		JLabel left = truncatedLine(title, color, font, budget, tip);
+		marker.setToolTipText(tip);
+
+		row.add(marker, BorderLayout.WEST);
+		row.add(left, BorderLayout.CENTER);
+		row.add(right, BorderLayout.EAST);
+		int height = Math.max(left.getPreferredSize().height, right.getPreferredSize().height);
+		row.setMaximumSize(new Dimension(SECTION_INNER_WIDTH, height));
+
+		MouseAdapter toggle = new MouseAdapter()
+		{
+			@Override
+			public void mousePressed(MouseEvent e)
+			{
+				boolean open = !expandedBands.contains(band);
+				if (open)
+				{
+					expandedBands.add(band);
+				}
+				else
+				{
+					expandedBands.remove(band);
+				}
+				marker.setText(open ? "-" : "+");
+				tiers.setVisible(open);
+				// the section, not the row: BoxLayout skips an invisible child, so the
+				// height that has to be recomputed belongs to the container above
+				java.awt.Container parent = row.getParent();
+				if (parent != null)
+				{
+					parent.revalidate();
+					parent.repaint();
+				}
+			}
+		};
+		// on the labels as well as the row, and this is not belt-and-braces: giving a
+		// component a tooltip registers it with ToolTipManager, which adds a mouse
+		// listener, which makes the LABEL the event target. A listener on the row
+		// alone never fires, because the label under the pointer swallows the press.
+		row.addMouseListener(toggle);
+		for (JLabel part : new JLabel[]{marker, left, right})
+		{
+			part.addMouseListener(toggle);
+			part.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		}
+		return row;
+	}
+
+	/**
+	 * Most names a row's tooltip spells out before it starts counting instead. A
+	 * tooltip taller than the screen is its own kind of unreadable; the remainder
+	 * is disclosed as a count rather than dropped in silence.
+	 */
+	private static final int MAX_TOOLTIP_CARDS = 24;
+
+	/**
+	 * The tooltip on one tier row.
+	 *
+	 * <p>Out-of-reach rows name the cards behind them. That is the whole point for
+	 * a ladder that appears in both bands — "Hardleather" under Wieldable now AND
+	 * under Not yet wieldable is correct (the Defence gate lands on the body only)
+	 * but reads as a bug until the panel can say which pieces are the ones still
+	 * out of reach.
+	 *
+	 * <p>HTML, so everything interpolated is escaped: card names come from the item
+	 * cache, and {@link #pct} answers "&lt;0.1%" for a tier that rounds to zero —
+	 * which Swing's HTML 3.2 parser reads as an unclosed tag and swallows the rest.
+	 */
+	static String rowTooltip(ChestService.TierOdds row, boolean splitAcrossBands)
+	{
+		StringBuilder html = new StringBuilder("<html>");
+		html.append(GachamanPanel.escape(row.getDisplayName())).append(" - ")
+			.append(GachamanPanel.escape(pct(row.getProbability()))).append(" per card");
+		List<String> names = row.getCardNames();
+		if (row.isWieldableNow() || names == null || names.isEmpty())
+		{
+			return html.append("</html>").toString();
+		}
+		html.append("<br>");
+		html.append(splitAcrossBands
+			? "Some " + GachamanPanel.escape(row.getDisplayName())
+				+ " gear is already within reach. Still out of reach:"
+			: "Out of reach:");
+		int shown = Math.min(names.size(), MAX_TOOLTIP_CARDS);
 		for (int i = 0; i < shown; i++)
 		{
-			ChestService.TierOdds row = rows.get(i);
-			section.add(oddsRow("   " + row.getDisplayName(), pct(row.getProbability()),
-				ColorScheme.LIGHT_GRAY_COLOR,
-				row.getDisplayName() + ": " + pct(row.getProbability()) + " per card"));
+			html.append("<br>&nbsp;&nbsp;").append(GachamanPanel.escape(names.get(i)));
 		}
-		if (rows.size() <= shown)
+		if (names.size() > shown)
 		{
-			return;
+			html.append("<br>&nbsp;&nbsp;+").append(names.size() - shown).append(" more");
 		}
-		double tail = 0;
-		StringBuilder rest = new StringBuilder("<html>");
-		for (int i = shown; i < rows.size(); i++)
-		{
-			tail += rows.get(i).getProbability();
-			rest.append(rows.get(i).getDisplayName()).append(" - ")
-				.append(pct(rows.get(i).getProbability())).append("<br>");
-		}
-		rest.append("</html>");
-		section.add(oddsRow("   +" + (rows.size() - shown) + " more tiers", pct(tail),
-			ColorScheme.MEDIUM_GRAY_COLOR, rest.toString()));
+		return html.append("</html>").toString();
 	}
 
 	/**
@@ -482,8 +665,11 @@ public class ShopTab extends JPanel
 	/**
 	 * A row that rounds to 0.0% would read as impossible, which is the one claim the
 	 * headroom band must never make, so anything non-zero floors at "&lt;0.1%".
+	 *
+	 * <p>Package-private for the test that pins that leading {@code <} — it is the
+	 * reason addBand escapes this before putting it in an HTML tooltip.
 	 */
-	private static String pct(double fraction)
+	static String pct(double fraction)
 	{
 		double percent = fraction * 100;
 		if (percent > 0 && percent < 0.05)
@@ -537,23 +723,9 @@ public class ShopTab extends JPanel
 		javax.swing.JComboBox<com.gachaman.model.GearSlot> picker =
 			new javax.swing.JComboBox<>(com.gachaman.model.GearSlot.values());
 		picker.setSelectedItem(selectedSlotChest);
-		picker.setRenderer(new javax.swing.DefaultListCellRenderer()
-		{
-			@Override
-			public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> list,
-				Object value, int index, boolean isSelected, boolean cellHasFocus)
-			{
-				super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-				if (value instanceof com.gachaman.model.GearSlot)
-				{
-					setText(((com.gachaman.model.GearSlot) value).getDisplayName());
-				}
-				return this;
-			}
-		});
 		picker.addActionListener(e ->
 			selectedSlotChest = (com.gachaman.model.GearSlot) picker.getSelectedItem());
-		GachamanPanel.styleCombo(picker);
+		GachamanPanel.styleCombo(picker, com.gachaman.model.GearSlot::getDisplayName);
 		picker.setAlignmentX(Component.LEFT_ALIGNMENT);
 		picker.setMaximumSize(new Dimension(SECTION_INNER_WIDTH, 24));
 		section.add(picker);
@@ -564,10 +736,11 @@ public class ShopTab extends JPanel
 		open.setEnabled(state.getGc() >= price && chestService.getPending() == null);
 		open.addActionListener(e -> {
 			com.gachaman.model.GearSlot slot = (com.gachaman.model.GearSlot) picker.getSelectedItem();
+			String slotName = slot == null ? "" : slot.getDisplayName();
 			if (slot != null && GachamanPanel.confirm(this, "Slot chest",
-				"Open a " + slot.getDisplayName() + " chest for "
+				"Open " + GachamanPanel.article(slotName) + " " + slotName + " chest for "
 					+ QuantityFormatter.formatNumber(price) + " GC?\nOne card, "
-					+ slot.getDisplayName() + " slot only."))
+					+ slotName + " slot only."))
 			{
 				clientThread.invokeLater(() -> chestService.openSlotChest(slot));
 			}
@@ -589,10 +762,13 @@ public class ShopTab extends JPanel
 		int freeExt = state.getFreeExtenders();
 		if (freeComp > 0 || freeExt > 0)
 		{
-			String banner = "Free vouchers: "
-				+ (freeComp > 0 ? freeComp + " Compactor" : "")
+			// Pluralised both ways. Stock starts at one of each and is spent one at
+			// a time, so a lone "1 Compactor" is the ordinary reading of this line,
+			// not the edge case.
+			String banner = (freeComp + freeExt == 1 ? "Free voucher: " : "Free vouchers: ")
+				+ (freeComp > 0 ? freeComp + (freeComp == 1 ? " Compactor" : " Compactors") : "")
 				+ (freeComp > 0 && freeExt > 0 ? " · " : "")
-				+ (freeExt > 0 ? freeExt + " Extender" : "");
+				+ (freeExt > 0 ? freeExt + (freeExt == 1 ? " Extender" : " Extenders") : "");
 			section.add(truncatedLine(banner, GOLD,
 				FontManager.getRunescapeSmallFont(), SECTION_INNER_WIDTH, banner));
 			section.add(Box.createVerticalStrut(3));
@@ -601,27 +777,27 @@ public class ShopTab extends JPanel
 		if (task == null)
 		{
 			section.add(wrappedText(
-				"Charges apply to your CURRENT task — assign a task first.",
+				"Charges apply to your CURRENT contract — sign one first.",
 				ColorScheme.MEDIUM_GRAY_COLOR));
 			return section;
 		}
 		if (task.getAppliedCharge() != null)
 		{
 			boolean compactor = "COMPACTOR".equals(task.getAppliedCharge());
-			String applied = "Applied to this task: " + (compactor ? "Compactor" : "Extender");
+			String applied = "Applied to this contract: " + (compactor ? "Compactor" : "Extender");
 			section.add(truncatedLine(applied, new Color(150, 190, 240),
 				FontManager.getRunescapeBoldFont(), SECTION_INNER_WIDTH, applied));
 			section.add(Box.createVerticalStrut(3));
 			section.add(wrappedText(
-				"One charge per task — available again once a new task is assigned.",
+				"One charge per contract — available again once you sign a new one.",
 				ColorScheme.MEDIUM_GRAY_COLOR));
 			return section;
 		}
 		JButton compactor = fullWidthButton(freeComp > 0
 			? "Compactor — FREE voucher"
-			: "Compactor — " + Tuning.COMPACTOR_PRICE_GC + " GC");
-		compactor.setToolTipText("This task counts double toward the style cycle, and each kill"
-			+ " counts double toward the contract (the skipped count pays no GC)."
+			: "Compactor — " + QuantityFormatter.formatNumber(Tuning.COMPACTOR_PRICE_GC) + " GC");
+		compactor.setToolTipText("This contract counts double toward the style cycle, and each"
+			+ " kill counts double toward the contract itself (the skipped count pays no GC)."
 			+ (freeComp > 0 ? " Uses your free voucher — no GC." : ""));
 		compactor.setEnabled(freeComp > 0 || state.getGc() >= Tuning.COMPACTOR_PRICE_GC);
 		compactor.addActionListener(e -> buyCharge(true, "Compactor", Tuning.COMPACTOR_PRICE_GC));
@@ -629,16 +805,17 @@ public class ShopTab extends JPanel
 		section.add(Box.createVerticalStrut(4));
 		JButton extender = fullWidthButton(freeExt > 0
 			? "Extender — FREE voucher"
-			: "Extender — " + Tuning.EXTENDER_PRICE_GC + " GC");
-		extender.setToolTipText("This task counts only half toward the style cycle."
+			: "Extender — " + QuantityFormatter.formatNumber(Tuning.EXTENDER_PRICE_GC) + " GC");
+		extender.setToolTipText("This contract counts only half toward the style cycle."
 			+ (freeExt > 0 ? " Uses your free voucher — no GC." : ""));
 		extender.setEnabled(freeExt > 0 || state.getGc() >= Tuning.EXTENDER_PRICE_GC);
 		extender.addActionListener(e -> buyCharge(false, "Extender", Tuning.EXTENDER_PRICE_GC));
 		section.add(extender);
 		section.add(Box.createVerticalStrut(4));
 		section.add(wrappedText(
-			"Compactor: task counts x2 toward the style cycle AND kills count x2 toward"
-				+ " the contract (skips pay no GC). Extender: task counts x0.5 toward the cycle.",
+			"Compactor: this contract counts x2 toward the style cycle AND kills count x2"
+				+ " toward the contract (skips pay no GC). Extender: it counts x0.5 toward"
+				+ " the cycle.",
 			ColorScheme.MEDIUM_GRAY_COLOR));
 		return section;
 	}
@@ -648,9 +825,10 @@ public class ShopTab extends JPanel
 		GachaState state = stateService.get();
 		boolean voucher = state != null
 			&& (compactor ? state.getFreeCompactors() > 0 : state.getFreeExtenders() > 0);
-		String cost = voucher ? "using your free voucher? (no GC)" : "for " + price + " GC?";
+		String cost = voucher ? "using your free voucher? (no GC)"
+			: "for " + QuantityFormatter.formatNumber(price) + " GC?";
 		if (!GachamanPanel.confirm(this, "Buy " + pretty,
-			"Apply a " + pretty + " to your current task " + cost))
+			"Apply a " + pretty + " to your current contract " + cost))
 		{
 			return;
 		}
@@ -664,7 +842,8 @@ public class ShopTab extends JPanel
 			else
 			{
 				javax.swing.SwingUtilities.invokeLater(() -> GachamanPanel.info(this,
-					"Purchase failed — you need an active task, no charge applied yet, and enough GC."));
+					"Purchase failed — you need an active contract, no charge applied yet,"
+						+ " and enough GC."));
 			}
 		});
 	}
@@ -764,7 +943,9 @@ public class ShopTab extends JPanel
 		PrestigeService.PrestigePlan plan = prestigeService.plan();
 		section.add(wrappedText(plan.getRequirementText(), ColorScheme.LIGHT_GRAY_COLOR));
 		section.add(Box.createVerticalStrut(3));
-		String burns = "Burns " + plan.getCardsToBurn() + " Common/Uncommon cards";
+		int burn = plan.getCardsToBurn();
+		String burns = "Burns " + QuantityFormatter.formatNumber(burn)
+			+ (burn == 1 ? " Common/Uncommon card" : " Common/Uncommon cards");
 		section.add(truncatedLine(burns, ColorScheme.LIGHT_GRAY_COLOR,
 			FontManager.getRunescapeSmallFont(), SECTION_INNER_WIDTH, burns));
 		if (plan.getNextRank() > 0)
@@ -787,16 +968,19 @@ public class ShopTab extends JPanel
 		{
 			return;
 		}
+		int burn = plan.getCardsToBurn();
+		String burnCount = QuantityFormatter.formatNumber(burn);
 		if (!GachamanPanel.confirm(this, "Prestige",
 			"Rebirth to Prestige " + plan.getNextRank() + "?\n\nThis will BURN "
-				+ plan.getCardsToBurn() + " Common/Uncommon cards and cost "
-				+ QuantityFormatter.formatNumber(plan.getGcCost()) + " GC."))
+				+ burnCount + (burn == 1 ? " Common/Uncommon card" : " Common/Uncommon cards")
+				+ " and cost " + QuantityFormatter.formatNumber(plan.getGcCost()) + " GC."))
 		{
 			return;
 		}
 		if (!GachamanPanel.confirm(this, "Prestige — final warning",
-			"Are you absolutely sure? The " + plan.getCardsToBurn()
-				+ " burned cards are gone forever.\nShiny and Hologram cards are kept."))
+			"Are you absolutely sure? The " + burnCount
+				+ (burn == 1 ? " burned card is" : " burned cards are")
+				+ " gone forever.\nShiny and Hologram cards are kept."))
 		{
 			return;
 		}
@@ -832,7 +1016,10 @@ public class ShopTab extends JPanel
 			}
 			else
 			{
-				setToolTipText(chestName(tier) + " — " + Tuning.CHEST_CARDS.get(tier) + " card(s), "
+				// pluralised rather than "card(s)": the tile's own face already says
+				// "1 card" / "3 cards" properly, and the tooltip sat right under it
+				int cards = Tuning.CHEST_CARDS.get(tier);
+				setToolTipText(chestName(tier) + " — " + cards + (cards == 1 ? " card, " : " cards, ")
 					+ QuantityFormatter.formatNumber(Tuning.CHEST_PRICE_GC.get(tier)) + " GC"
 					+ (remaining > 0 ? ", " + remaining + " left ever" : ""));
 			}

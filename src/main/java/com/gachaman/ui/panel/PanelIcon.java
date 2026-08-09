@@ -7,11 +7,20 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 
 /**
- * Procedural 16x16 sidebar icon: a gacha card peeking out behind a chest.
+ * Procedural sidebar icon: a gacha card peeking out behind a chest.
  * No image resources needed.
+ *
+ * <p>The artwork is authored on a 16x16 grid — the size RuneLite's sidebar
+ * actually draws — and {@link #create(int)} scales that one drawing up rather
+ * than restating it at another size. The repository's icon.png is generated
+ * from this same code, so the listing art and the in-client button cannot
+ * drift apart the way they had.
  */
 public final class PanelIcon
 {
+	/** The grid the artwork is authored on. */
+	private static final int GRID = 16;
+
 	private static final Color CARD_FILL = new Color(88, 52, 140);
 	private static final Color CARD_TRIM = new Color(212, 175, 55);
 	private static final Color CHEST_FILL = new Color(112, 82, 46);
@@ -21,13 +30,42 @@ public final class PanelIcon
 	{
 	}
 
+	/** The 16x16 sidebar button icon. */
 	public static BufferedImage create()
 	{
-		BufferedImage img = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+		return create(GRID);
+	}
+
+	/**
+	 * The same artwork at an arbitrary square size.
+	 *
+	 * @param size edge length in pixels; must be positive
+	 */
+	public static BufferedImage create(int size)
+	{
+		if (size <= 0)
+		{
+			throw new IllegalArgumentException("icon size must be positive, was " + size);
+		}
+		BufferedImage img = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = img.createGraphics();
 		try
 		{
 			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+			if (size != GRID)
+			{
+				// geometric accuracy, which is what an upscale wants. Deliberately NOT
+				// set at 16x16: there the default (normalize) snaps the 1px outlines to
+				// the pixel grid, and that crispness is the sidebar button as it ships.
+				g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL,
+					RenderingHints.VALUE_STROKE_PURE);
+			}
+
+			// one transform for the whole drawing, so every coordinate below stays
+			// on the 16x16 grid the art was designed on
+			double scale = size / (double) GRID;
+			g.scale(scale, scale);
+			// stroke in grid units too, or the outlines thin out as the icon grows
 			g.setStroke(new BasicStroke(1f));
 
 			// card, tilted feel via offset placement (behind the chest)

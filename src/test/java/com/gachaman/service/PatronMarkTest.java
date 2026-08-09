@@ -1,10 +1,12 @@
 package com.gachaman.service;
 
 import com.gachaman.Tuning;
-import java.util.Arrays;
+import com.gachaman.model.PatronRecord;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 import org.junit.Assert;
@@ -13,7 +15,13 @@ import org.junit.Test;
 /**
  * The Patron's Mark rules, in isolation. Every decision the feature makes
  * lives in these statics — PartyRollService.creditPatrons is reduced to
- * reading a roster and calling them, and PartyTab only draws the answer.
+ * reading a roster and calling them, and PartyTab and PatronsTab only draw the
+ * answer.
+ *
+ * The ledger is keyed on the ACCOUNT KEY with the display name demoted to a
+ * label, so the theme running through this file is that identity and label are
+ * separable: a rename must not fork a history, and a shared name must not merge
+ * two strangers.
  *
  * What this does NOT prove: that two clients agree on a count. They never have
  * to. Each client keeps a private ledger of its own partners; there is no wire
@@ -21,7 +29,57 @@ import org.junit.Test;
  */
 public class PatronMarkTest
 {
-	// --- A. what counts as a name ---
+	/** A fixed clock. Real time in a test would make lastSharedAt unassertable. */
+	private static final long NOW = 1_700_000_000_000L;
+
+	private static final long DAY = 24L * 60 * 60 * 1000;
+
+	/**
+	 * A distinct, well-formed account key. Canonical casing, exactly 16 hex.
+	 *
+	 * Padded with 'a' rather than '0' so every key CONTAINS a letter: the
+	 * case-folding assertions below upper-case a key and expect a different
+	 * string back, and an all-digit key would make toUpperCase a no-op and
+	 * those tests vacuously green. Only the suffix varies, so keys still sort
+	 * by n and the tiebreak assertions stay readable.
+	 */
+	private static String key(int n)
+	{
+		String hex = Integer.toHexString(n);
+		StringBuilder out = new StringBuilder(AccountKey.KEY_LENGTH);
+		for (int i = hex.length(); i < AccountKey.KEY_LENGTH; i++)
+		{
+			out.append('a');
+		}
+		return out.append(hex).toString();
+	}
+
+	@Test
+	public void theTestKeyHelperProducesRealKeys()
+	{
+		// this file's whole premise. A helper that quietly emitted something
+		// normalize() rejects would make every assertion below test the junk
+		// path instead of the one it names.
+		for (int n : new int[]{0, 1, 9, 50, 255})
+		{
+			Assert.assertEquals("key(" + n + ") must be canonical",
+				key(n), AccountKey.normalize(key(n)));
+			Assert.assertNotEquals("key(" + n + ") must contain a hex letter, or the"
+				+ " case-folding tests below prove nothing",
+				key(n), key(n).toUpperCase(Locale.ROOT));
+		}
+		Assert.assertNotEquals(key(1), key(2));
+	}
+
+	/** One partner, so the common single-credit case reads as one line. */
+	private static Map<String, String> one(String accountKey, String name)
+	{
+		Map<String, String> partners = new LinkedHashMap<>();
+		partners.put(accountKey, name);
+		return partners;
+	}
+
+	// --- A. identity is the key; the name is only a label ---
 
 	@Test
 	public void normalizeNameRejectsThePartyPlaceholder()
@@ -29,9 +87,9 @@ public class PatronMarkTest
 		// PartyMember's CONSTRUCTOR DEFAULT, verified in the shipped client jar:
 		// the literal "<unknown>" sits in its constant pool, and the only caller
 		// of setDisplayName in the whole jar is the built-in Party plugin. With
-		// that plugin off, EVERY member reads as this — crediting it would
-		// invent one shared top patron out of nothing.
-		Assert.assertNull("the placeholder must never be credited",
+		// that plugin off, EVERY member reads as this — storing it would put a
+		// placeholder on the Patrons page as though it were somebody's name.
+		Assert.assertNull("the placeholder must never be stored as a name",
 			PatronMark.normalizeName("<unknown>"));
 		Assert.assertNull(PatronMark.normalizeName(null));
 		Assert.assertNull(PatronMark.normalizeName(""));
@@ -45,14 +103,12 @@ public class PatronMarkTest
 	public void normalizeNameTrimsAndBoundsTheName()
 	{
 		Assert.assertEquals("Zezima", PatronMark.normalizeName("  Zezima  "));
-		// U+00A0 is Jagex's word separator. It reads as a space but keys
-		// separately, so one client's "Zezima Pk" and another's would become
-		// two partners. Built by code point because in source the two
-		// characters are indistinguishable and one editor pass would make
-		// this assertion vacuous.
+		// U+00A0 is Jagex's word separator. It reads as a space but is a
+		// different character, so it is folded here rather than drawn raw.
+		// Built by code point because in source the two characters are
+		// indistinguishable and one editor pass would make this vacuous.
 		Assert.assertEquals("Zezima Pk",
 			PatronMark.normalizeName("Zezima" + (char) 0xA0 + "Pk"));
-		Assert.assertTrue(PatronMark.sameName("Zezima" + (char) 0xA0 + "Pk", "Zezima Pk"));
 		Assert.assertEquals("a 12-character name is legal", "123456789012",
 			PatronMark.normalizeName("123456789012"));
 		Assert.assertNull("13 characters cannot be a real OSRS name",
@@ -60,19 +116,34 @@ public class PatronMarkTest
 	}
 
 	@Test
-	public void sameNameNeverMatchesAPlaceholderAgainstItself()
+	public void aNameIsALabelNotAnIdentity()
 	{
-		Assert.assertTrue(PatronMark.sameName("Zezima", "zezima"));
-		Assert.assertTrue(PatronMark.sameName(" Zezima ", "Zezima"));
-		Assert.assertFalse(PatronMark.sameName("Zezima", "B0aty"));
-		// the row-match rule the panel uses: two members BOTH reading as the
-		// placeholder must not resolve to "the same partner" and share a mark
-		Assert.assertFalse("<unknown> is not a partner, even against itself",
-			PatronMark.sameName("<unknown>", "<unknown>"));
-		// the presence layer's own fallback for an unnamed row is 14 chars, so
-		// it is rejected on length and can never wear someone else's mark
-		Assert.assertFalse(PatronMark.sameName("A party member", "A party member"));
-		Assert.assertFalse(PatronMark.sameName(null, null));
+		// the whole reason the ledger moved off names: a partner who renames must
+		// keep one history, and two partners who happen to share a name must keep
+		// two. A name-keyed map got both of these backwards.
+		Map<String, PatronRecord> ledger = PatronMark.credit(null,
+			one(key(1), "Alpha"), 100, NOW);
+		ledger = PatronMark.credit(ledger, one(key(1), "Renamed"), 100, NOW);
+
+		Assert.assertEquals("a rename is one partner, not two", 1, ledger.size());
+		Assert.assertEquals(2, PatronMark.countFor(ledger, key(1)));
+		Assert.assertEquals("the label follows the latest completion",
+			"Renamed", PatronMark.recordFor(ledger, key(1)).getName());
+
+		// a completion credited while their name was unreadable keeps the label
+		ledger = PatronMark.credit(ledger, one(key(1), "<unknown>"), 100, NOW);
+		Assert.assertEquals(3, PatronMark.countFor(ledger, key(1)));
+		Assert.assertEquals("an unreadable name must not blank a drawn row",
+			"Renamed", PatronMark.recordFor(ledger, key(1)).getName());
+
+		// and the converse: one name, two accounts, two rows
+		Map<String, String> namesakes = new LinkedHashMap<>();
+		namesakes.put(key(7), "Zezima");
+		namesakes.put(key(8), "Zezima");
+		Map<String, PatronRecord> two = PatronMark.credit(null, namesakes, 100, NOW);
+		Assert.assertEquals("a shared name is not a shared identity", 2, two.size());
+		Assert.assertEquals(1, PatronMark.countFor(two, key(7)));
+		Assert.assertEquals(1, PatronMark.countFor(two, key(8)));
 	}
 
 	// --- B. crediting a finished contract ---
@@ -83,54 +154,57 @@ public class PatronMarkTest
 		// this exact identity is what GachaStateService.mutate short-circuits on
 		// (`next == state`), so a completion with no creditable partner pays for
 		// no gzip + SHA-256 of the whole save at all
-		Map<String, Integer> current = new LinkedHashMap<>();
-		current.put("Zezima", 4);
-		Assert.assertSame(current, PatronMark.credit(current, null, 100));
-		Assert.assertSame(current, PatronMark.credit(current, Collections.emptyList(), 100));
-		Assert.assertSame("every name unusable is the same as no names",
-			current, PatronMark.credit(current, Arrays.asList("<unknown>", "  ", null), 100));
+		Map<String, PatronRecord> current = new LinkedHashMap<>();
+		current.put(key(1), new PatronRecord("Zezima", 4, NOW));
+		Assert.assertSame(current, PatronMark.credit(current, null, 100, NOW));
+		Assert.assertSame(current,
+			PatronMark.credit(current, Collections.emptyMap(), 100, NOW));
+
+		Map<String, String> junk = new LinkedHashMap<>();
+		junk.put("not-a-key", "Zezima");
+		junk.put("00112233445566", "Short");
+		junk.put("00112233445566gg", "NotHex");
+		Assert.assertSame("no usable key is the same as no partners",
+			current, PatronMark.credit(current, junk, 100, NOW));
 	}
 
 	@Test
 	public void creditReturnsTheSameInstanceWhenTheCapTurnsEveryoneAway()
 	{
-		// the subtle half of the identity contract: a full map whose partners
+		// the subtle half of the identity contract: a full ledger whose partners
 		// all have real histories accepts nobody, so NOTHING changed — handing
 		// back an equal-but-distinct map would slip past mutate's `next ==
 		// state` check and buy a gzip + SHA-256 of the whole save for no edit
 		int cap = 3;
-		Map<String, Integer> full = new LinkedHashMap<>();
+		Map<String, PatronRecord> full = new LinkedHashMap<>();
 		for (int i = 0; i < cap; i++)
 		{
-			full.put("Partner" + i, 2);
+			full.put(key(i), new PatronRecord("Partner" + i, 2, NOW));
 		}
-		Assert.assertSame(full, PatronMark.credit(full,
-			Arrays.asList("Stranger", "Drifter"), cap));
+		Map<String, String> strangers = new LinkedHashMap<>();
+		strangers.put(key(50), "Stranger");
+		strangers.put(key(51), "Drifter");
+		Assert.assertSame(full, PatronMark.credit(full, strangers, cap, NOW));
 	}
 
 	@Test
-	public void creditMergesNamesCaseInsensitivelyAndKeepsTheFirstCasing()
+	public void oneAccountIsOneMarkHoweverManyClients()
 	{
-		Map<String, Integer> counts = PatronMark.credit(null,
-			Collections.singletonList("Zezima"), 100);
-		counts = PatronMark.credit(counts, Collections.singletonList("zezima"), 100);
+		// the same account dual-logged into the party arrives under two member
+		// ids. The caller collapses them into one map entry, but two entries
+		// differing only in case would still normalize to one partner and credit
+		// them twice off a single contract — one mark per partner is the rule the
+		// whole feature rests on, so it is enforced here too.
+		Map<String, String> doubled = new LinkedHashMap<>();
+		doubled.put(key(1), "Zezima");
+		doubled.put(key(1).toUpperCase(Locale.ROOT), "Zezima");
+		doubled.put("  " + key(1) + "  ", "Zezima");
 
-		Assert.assertEquals("one partner is one row however their client cased it",
-			1, counts.size());
-		Assert.assertEquals("Zezima", counts.keySet().iterator().next());
-		Assert.assertEquals(2, PatronMark.countFor(counts, "ZEZIMA"));
-	}
-
-	@Test
-	public void oneContractIsOneMarkPerPartner()
-	{
-		// a party can hold two member ids sharing one display name (the same
-		// account from two clients); the alternative reading lets a player
-		// inflate a friend's count by dual-logging
-		Map<String, Integer> counts = PatronMark.credit(null,
-			Arrays.asList("Zezima", "zezima", " Zezima "), 100);
-		Assert.assertEquals(1, counts.size());
-		Assert.assertEquals(1, PatronMark.countFor(counts, "Zezima"));
+		Map<String, PatronRecord> ledger = PatronMark.credit(null, doubled, 100, NOW);
+		Assert.assertEquals(1, ledger.size());
+		Assert.assertEquals("one contract is one mark", 1, PatronMark.countFor(ledger, key(1)));
+		Assert.assertEquals("the stored key is canonical, whatever casing arrived",
+			key(1), ledger.keySet().iterator().next());
 	}
 
 	@Test
@@ -139,30 +213,76 @@ public class PatronMarkTest
 		// the map comes off the shared, immutable state object, and
 		// creditPatrons compares the pre-mutate snapshot against the result —
 		// an in-place write would corrupt both
-		Map<String, Integer> original = new LinkedHashMap<>();
-		original.put("Zezima", 4);
-		Map<String, Integer> guarded = Collections.unmodifiableMap(original);
+		Map<String, PatronRecord> original = new LinkedHashMap<>();
+		original.put(key(1), new PatronRecord("Zezima", 4, NOW));
+		Map<String, PatronRecord> guarded = Collections.unmodifiableMap(original);
 
-		Map<String, Integer> next = PatronMark.credit(guarded,
-			Arrays.asList("Zezima", "B0aty"), 100);
+		Map<String, String> partners = new LinkedHashMap<>();
+		partners.put(key(1), "Zezima");
+		partners.put(key(2), "B0aty");
+		Map<String, PatronRecord> next = PatronMark.credit(guarded, partners, 100, NOW);
 
 		Assert.assertEquals("the caller's map is untouched", 1, guarded.size());
-		Assert.assertEquals(4, PatronMark.countFor(guarded, "Zezima"));
-		Assert.assertEquals(5, PatronMark.countFor(next, "Zezima"));
-		Assert.assertEquals(1, PatronMark.countFor(next, "B0aty"));
+		Assert.assertEquals(4, PatronMark.countFor(guarded, key(1)));
+		Assert.assertEquals(5, PatronMark.countFor(next, key(1)));
+		Assert.assertEquals(1, PatronMark.countFor(next, key(2)));
+	}
+
+	@Test
+	public void lastSharedAtIsStampedOnEveryCredit()
+	{
+		// the Patrons page draws "last <relative>", so a stamp written only on
+		// the FIRST contract would show a years-old date for a daily partner
+		Map<String, PatronRecord> ledger = PatronMark.credit(null,
+			one(key(1), "Zezima"), 100, NOW);
+		Assert.assertEquals(NOW, PatronMark.recordFor(ledger, key(1)).getLastSharedAt());
+
+		ledger = PatronMark.credit(ledger, one(key(1), "Zezima"), 100, NOW + 5 * DAY);
+		Assert.assertEquals("the stamp moves with the partnership",
+			NOW + 5 * DAY, PatronMark.recordFor(ledger, key(1)).getLastSharedAt());
+		Assert.assertEquals(2, PatronMark.countFor(ledger, key(1)));
 	}
 
 	@Test
 	public void countForToleratesJunkAndNulls()
 	{
-		Assert.assertEquals(0, PatronMark.countFor(null, "Zezima"));
-		Assert.assertEquals(0, PatronMark.countFor(Collections.emptyMap(), "Zezima"));
+		Assert.assertEquals(0, PatronMark.countFor(null, key(1)));
+		Assert.assertEquals(0, PatronMark.countFor(Collections.emptyMap(), key(1)));
 		Assert.assertEquals(0, PatronMark.countFor(
-			Collections.singletonMap("Zezima", 3), "<unknown>"));
-		// Gson can deserialize {"Zezima":null} out of a hand-edited save
-		Map<String, Integer> nulled = new HashMap<>();
-		nulled.put("Zezima", null);
-		Assert.assertEquals(0, PatronMark.countFor(nulled, "Zezima"));
+			Collections.singletonMap(key(1), new PatronRecord("Zezima", 3, NOW)), key(2)));
+		Assert.assertEquals("an unknown account is not a lookup",
+			0, PatronMark.countFor(
+				Collections.singletonMap(key(1), new PatronRecord("Zezima", 3, NOW)), null));
+		Assert.assertEquals(0, PatronMark.countFor(
+			Collections.singletonMap(key(1), new PatronRecord("Zezima", 3, NOW)), "not-a-key"));
+
+		// Gson can deserialize {"0000…01":null} out of a hand-edited save
+		Map<String, PatronRecord> nulled = new HashMap<>();
+		nulled.put(key(1), null);
+		Assert.assertEquals(0, PatronMark.countFor(nulled, key(1)));
+		Assert.assertNull(PatronMark.recordFor(nulled, key(1)));
+
+		// as can a zero count, which is a row nobody has a history with
+		Assert.assertEquals(0, PatronMark.countFor(
+			Collections.singletonMap(key(1), new PatronRecord("Ghost", 0, NOW)), key(1)));
+	}
+
+	@Test
+	public void aNonCanonicalStoredKeyDrawsNowhere()
+	{
+		// recordFor looks up with the NORMALIZED key, so an upper-cased key in a
+		// hand-edited save would be listed by ranked() and found by nothing: the
+		// Patrons page would name a top patron the party page could draw no pip
+		// for. Both sides must agree, so it is junk to both.
+		Map<String, PatronRecord> hand = new LinkedHashMap<>();
+		hand.put(key(1).toUpperCase(Locale.ROOT), new PatronRecord("Forged", 99, NOW));
+		hand.put(key(2), new PatronRecord("Real", 1, NOW));
+
+		Assert.assertEquals(0, PatronMark.countFor(hand, key(1)));
+		Assert.assertEquals(1, PatronMark.partnerCount(hand));
+		Assert.assertEquals(key(2), PatronMark.topKey(hand));
+		Assert.assertEquals(1, PatronMark.ranked(hand).size());
+		Assert.assertEquals("Real", PatronMark.ranked(hand).get(0).getName());
 	}
 
 	// --- C. the bound, and who it may displace ---
@@ -171,29 +291,51 @@ public class PatronMarkTest
 	public void aStrangerCannotDisplaceARealHistory()
 	{
 		int cap = 5;
-		Map<String, Integer> full = new LinkedHashMap<>();
+		Map<String, PatronRecord> full = new LinkedHashMap<>();
 		for (int i = 0; i < cap; i++)
 		{
-			full.put("Partner" + i, 2);
+			full.put(key(i), new PatronRecord("Partner" + i, 2, NOW));
 		}
 
-		Map<String, Integer> next = PatronMark.credit(full,
-			Collections.singletonList("Stranger"), cap);
+		Map<String, PatronRecord> next = PatronMark.credit(full,
+			one(key(50), "Stranger"), cap, NOW);
 		Assert.assertEquals("the map stays bounded", cap, next.size());
 		Assert.assertEquals("a two-contract history is never evicted",
-			0, PatronMark.countFor(next, "Stranger"));
-		Assert.assertEquals(2, PatronMark.countFor(next, "Partner0"));
+			0, PatronMark.countFor(next, key(50)));
+		Assert.assertEquals(2, PatronMark.countFor(next, key(0)));
 
 		// with one genuine one-off present, that one — and only that one — goes
-		Map<String, Integer> withOneOff = new LinkedHashMap<>(full);
-		withOneOff.remove("Partner4");
-		withOneOff.put("OneOff", 1);
-		Map<String, Integer> after = PatronMark.credit(withOneOff,
-			Collections.singletonList("Stranger"), cap);
+		Map<String, PatronRecord> withOneOff = new LinkedHashMap<>(full);
+		withOneOff.remove(key(4));
+		withOneOff.put(key(9), new PatronRecord("OneOff", 1, NOW));
+		Map<String, PatronRecord> after = PatronMark.credit(withOneOff,
+			one(key(50), "Stranger"), cap, NOW);
 		Assert.assertEquals(cap, after.size());
-		Assert.assertEquals(0, PatronMark.countFor(after, "OneOff"));
-		Assert.assertEquals(1, PatronMark.countFor(after, "Stranger"));
-		Assert.assertEquals(2, PatronMark.countFor(after, "Partner0"));
+		Assert.assertEquals(0, PatronMark.countFor(after, key(9)));
+		Assert.assertEquals(1, PatronMark.countFor(after, key(50)));
+		Assert.assertEquals(2, PatronMark.countFor(after, key(0)));
+	}
+
+	@Test
+	public void amongOneOffsTheColdestGoesFirst()
+	{
+		// a bound has to drop SOMETHING; dropping the partner you shared with
+		// longest ago is the only choice that does not throw away the newest
+		// relationship the moment it starts
+		int cap = 3;
+		Map<String, PatronRecord> full = new LinkedHashMap<>();
+		full.put(key(1), new PatronRecord("Recent", 1, NOW));
+		full.put(key(2), new PatronRecord("Ancient", 1, NOW - 400 * DAY));
+		full.put(key(3), new PatronRecord("Middling", 1, NOW - 30 * DAY));
+
+		Map<String, PatronRecord> after = PatronMark.credit(full,
+			one(key(50), "Newcomer"), cap, NOW);
+		Assert.assertEquals(cap, after.size());
+		Assert.assertEquals("the coldest one-off is the victim",
+			0, PatronMark.countFor(after, key(2)));
+		Assert.assertEquals(1, PatronMark.countFor(after, key(1)));
+		Assert.assertEquals(1, PatronMark.countFor(after, key(3)));
+		Assert.assertEquals(1, PatronMark.countFor(after, key(50)));
 	}
 
 	@Test
@@ -201,88 +343,162 @@ public class PatronMarkTest
 	{
 		// Gson hands the map back as a LinkedTreeMap in JSON order, so an
 		// order-sensitive victim would differ between a fresh map and a reloaded
-		// one and a partner would vanish on some logins but not others
-		String[] forward = {"Alpha", "Bravo", "Charlie"};
-		String[] backward = {"Charlie", "Bravo", "Alpha"};
+		// one and a partner would vanish on some logins but not others. Every
+		// count and every stamp is identical here, so ONLY the tiebreak decides.
+		int[] forward = {1, 2, 3};
+		int[] backward = {3, 2, 1};
 
-		Map<String, Integer> a = new LinkedHashMap<>();
-		for (String name : forward)
+		Map<String, PatronRecord> a = new LinkedHashMap<>();
+		for (int n : forward)
 		{
-			a.put(name, 1);
+			a.put(key(n), new PatronRecord("Partner" + n, 1, NOW));
 		}
-		Map<String, Integer> b = new LinkedHashMap<>();
-		for (String name : backward)
+		Map<String, PatronRecord> b = new LinkedHashMap<>();
+		for (int n : backward)
 		{
-			b.put(name, 1);
+			b.put(key(n), new PatronRecord("Partner" + n, 1, NOW));
 		}
 
-		Map<String, Integer> afterA = PatronMark.credit(a,
-			Collections.singletonList("Newcomer"), forward.length);
-		Map<String, Integer> afterB = PatronMark.credit(b,
-			Collections.singletonList("Newcomer"), backward.length);
+		Map<String, PatronRecord> afterA = PatronMark.credit(a,
+			one(key(50), "Newcomer"), forward.length, NOW);
+		Map<String, PatronRecord> afterB = PatronMark.credit(b,
+			one(key(50), "Newcomer"), backward.length, NOW);
 
-		for (String name : forward)
+		for (int n : forward)
 		{
-			Assert.assertEquals("victim must not depend on insertion order: " + name,
-				PatronMark.countFor(afterA, name), PatronMark.countFor(afterB, name));
+			Assert.assertEquals("victim must not depend on insertion order: " + key(n),
+				PatronMark.countFor(afterA, key(n)), PatronMark.countFor(afterB, key(n)));
 		}
+		Assert.assertEquals(forward.length, afterA.size());
 	}
 
 	@Test
 	public void aCapOfZeroOrLessIsNoCapAtAll()
 	{
 		// defensive: a mis-tuned constant must not silently stop counting
-		Map<String, Integer> counts = PatronMark.credit(null,
-			Arrays.asList("Alpha", "Bravo", "Charlie"), 0);
-		Assert.assertEquals(3, counts.size());
+		Map<String, String> partners = new LinkedHashMap<>();
+		partners.put(key(1), "Alpha");
+		partners.put(key(2), "Bravo");
+		partners.put(key(3), "Charlie");
+		Assert.assertEquals(3, PatronMark.credit(null, partners, 0, NOW).size());
+		Assert.assertEquals(3, PatronMark.credit(null, partners, -1, NOW).size());
 	}
 
 	// --- D. who wears the mark ---
 
 	@Test
-	public void topPartnerIsIndependentOfMapOrder()
+	public void topKeyIsIndependentOfMapOrder()
 	{
-		Map<String, Integer> seed = new LinkedHashMap<>();
-		seed.put("Alpha", 3);
-		seed.put("Bravo", 9);
-		seed.put("Charlie", 4);
+		Map<String, PatronRecord> seed = new LinkedHashMap<>();
+		seed.put(key(1), new PatronRecord("Alpha", 3, NOW));
+		seed.put(key(2), new PatronRecord("Bravo", 9, NOW));
+		seed.put(key(3), new PatronRecord("Charlie", 4, NOW));
 
-		Assert.assertEquals("Bravo", PatronMark.topPartner(new HashMap<>(seed)));
-		Assert.assertEquals("Bravo", PatronMark.topPartner(new LinkedHashMap<>(seed)));
-		Assert.assertEquals("Bravo", PatronMark.topPartner(new TreeMap<>(seed)));
+		Assert.assertEquals(key(2), PatronMark.topKey(new HashMap<>(seed)));
+		Assert.assertEquals(key(2), PatronMark.topKey(new LinkedHashMap<>(seed)));
+		Assert.assertEquals(key(2), PatronMark.topKey(new TreeMap<>(seed)));
 
 		// a tie must resolve the same way from either insertion order
-		Map<String, Integer> tieForward = new LinkedHashMap<>();
-		tieForward.put("Alpha", 7);
-		tieForward.put("Bravo", 7);
-		Map<String, Integer> tieBackward = new LinkedHashMap<>();
-		tieBackward.put("Bravo", 7);
-		tieBackward.put("Alpha", 7);
-		Assert.assertEquals(PatronMark.topPartner(tieForward),
-			PatronMark.topPartner(tieBackward));
+		Map<String, PatronRecord> tieForward = new LinkedHashMap<>();
+		tieForward.put(key(1), new PatronRecord("Alpha", 7, NOW));
+		tieForward.put(key(2), new PatronRecord("Bravo", 7, NOW));
+		Map<String, PatronRecord> tieBackward = new LinkedHashMap<>();
+		tieBackward.put(key(2), new PatronRecord("Bravo", 7, NOW));
+		tieBackward.put(key(1), new PatronRecord("Alpha", 7, NOW));
+		Assert.assertEquals(PatronMark.topKey(tieForward), PatronMark.topKey(tieBackward));
+
+		// and two NAMELESS ties still resolve, because the key is the last word
+		Map<String, PatronRecord> nameless = new LinkedHashMap<>();
+		nameless.put(key(5), new PatronRecord(null, 2, NOW));
+		nameless.put(key(4), new PatronRecord(null, 2, NOW));
+		Assert.assertEquals(key(4), PatronMark.topKey(nameless));
 	}
 
 	@Test
-	public void topPartnerIgnoresJunkKeysAndZeroCounts()
+	public void topKeyIgnoresJunkKeysAndZeroCounts()
 	{
-		Map<String, Integer> counts = new LinkedHashMap<>();
-		counts.put("<unknown>", 999);
-		counts.put("", 5);
-		counts.put("Ghost", 0);
-		counts.put("Nulled", null);
-		counts.put("Zezima", 1);
+		Map<String, PatronRecord> ledger = new LinkedHashMap<>();
+		ledger.put("<unknown>", new PatronRecord("Placeholder", 999, NOW));
+		ledger.put("", new PatronRecord("Blank", 5, NOW));
+		ledger.put(key(1), new PatronRecord("Ghost", 0, NOW));
+		ledger.put(key(2), null);
+		ledger.put(key(3), new PatronRecord("Zezima", 1, NOW));
 
-		Assert.assertEquals("a placeholder must never become the displayed mark,"
-			+ " however high its count", "Zezima", PatronMark.topPartner(counts));
+		Assert.assertEquals("a key that is not a key must never become the mark,"
+			+ " however high its count", key(3), PatronMark.topKey(ledger));
+		Assert.assertEquals(1, PatronMark.partnerCount(ledger));
+		Assert.assertEquals(1, PatronMark.totalMarks(ledger));
 	}
 
 	@Test
-	public void topPartnerOfNothingIsNothing()
+	public void topKeyOfNothingIsNothing()
 	{
-		// the legacy-save path and the day-one path: render no mark, not a blank row
-		Assert.assertNull(PatronMark.topPartner(null));
-		Assert.assertNull(PatronMark.topPartner(Collections.emptyMap()));
-		Assert.assertNull(PatronMark.topPartner(Collections.singletonMap("Zezima", 0)));
+		// the day-one path: render no mark, not a blank row
+		Assert.assertNull(PatronMark.topKey(null));
+		Assert.assertNull(PatronMark.topKey(Collections.emptyMap()));
+		Assert.assertNull(PatronMark.topKey(
+			Collections.singletonMap(key(1), new PatronRecord("Ghost", 0, NOW))));
+		Assert.assertEquals(0, PatronMark.partnerCount(null));
+		Assert.assertEquals(0, PatronMark.totalMarks(null));
+		Assert.assertTrue(PatronMark.ranked(null).isEmpty());
+	}
+
+	@Test
+	public void rankedIsDescendingAndAgreesWithTopKey()
+	{
+		// the Patrons page draws ranked() in order and must NOT re-sort: its
+		// first row and the outlined pip on the party page are the same claim
+		// about the same person, and two sorts would eventually disagree
+		Map<String, PatronRecord> ledger = new LinkedHashMap<>();
+		ledger.put(key(1), new PatronRecord("Alpha", 3, NOW));
+		ledger.put(key(2), new PatronRecord("Bravo", 9, NOW));
+		ledger.put(key(3), new PatronRecord("Charlie", 4, NOW));
+		ledger.put(key(4), new PatronRecord("Ghost", 0, NOW));
+
+		List<PatronRecord> ranked = PatronMark.ranked(ledger);
+		Assert.assertEquals("uncounted rows are not partners", 3, ranked.size());
+		for (int i = 1; i < ranked.size(); i++)
+		{
+			Assert.assertTrue("descending at " + i,
+				ranked.get(i - 1).getCount() >= ranked.get(i).getCount());
+		}
+		Assert.assertSame("row 0 IS the mark's owner",
+			PatronMark.recordFor(ledger, PatronMark.topKey(ledger)), ranked.get(0));
+		Assert.assertEquals(3, PatronMark.partnerCount(ledger));
+		Assert.assertEquals("marks, not contracts: one shared contract with three"
+			+ " partners is three", 16, PatronMark.totalMarks(ledger));
+	}
+
+	@Test
+	public void rankedIsNotTheCallersToEdit()
+	{
+		// it is handed straight to a panel loop; an accidental sort there would
+		// silently disagree with topKey rather than fail
+		try
+		{
+			PatronMark.ranked(Collections.singletonMap(key(1),
+				new PatronRecord("Zezima", 1, NOW))).clear();
+			Assert.fail("ranked() must be unmodifiable");
+		}
+		catch (UnsupportedOperationException expected)
+		{
+			// intended
+		}
+	}
+
+	@Test
+	public void displayNameFallsBackForAnUnnamedPartner()
+	{
+		// a partner credited while their client could not read their name is
+		// still a real partner with a real count — the row draws either way
+		Assert.assertEquals("An unnamed patron", PatronMark.displayName(null));
+		Assert.assertEquals("An unnamed patron",
+			PatronMark.displayName(new PatronRecord(null, 4, NOW)));
+		Assert.assertEquals("a stored name that is not a name is not drawn raw",
+			"An unnamed patron",
+			PatronMark.displayName(new PatronRecord("<unknown>", 4, NOW)));
+		Assert.assertEquals("Zezima",
+			PatronMark.displayName(new PatronRecord("  Zezima  ", 4, NOW)));
 	}
 
 	// --- E. the tier ladder ---
@@ -352,14 +568,17 @@ public class PatronMarkTest
 		// the property the feature exists for, and the one an id-keyed map could
 		// never satisfy: a memberId is re-drawn from a fresh Random every login,
 		// so tier II and III would be unreachable by construction
-		Map<String, Integer> counts = null;
+		Map<String, PatronRecord> ledger = null;
 		int crossings = 0;
 		for (int contract = 1; contract <= 100; contract++)
 		{
-			int before = PatronMark.countFor(counts, "Zezima");
-			counts = PatronMark.credit(counts, Collections.singletonList("Zezima"),
-				Tuning.PATRON_MAX_PARTNERS);
-			int after = PatronMark.countFor(counts, "Zezima");
+			int before = PatronMark.countFor(ledger, key(1));
+			// they rename halfway through: a name-keyed ledger forked here and
+			// each half stalled below the next threshold
+			String name = contract < 50 ? "Zezima" : "Zezima Pk";
+			ledger = PatronMark.credit(ledger, one(key(1), name),
+				Tuning.PATRON_MAX_PARTNERS, NOW + contract * DAY);
+			int after = PatronMark.countFor(ledger, key(1));
 			Assert.assertEquals(before + 1, after);
 			if (PatronMark.crossedTier(before, after))
 			{
@@ -368,7 +587,12 @@ public class PatronMarkTest
 		}
 		Assert.assertEquals("one announcement per threshold, no more",
 			Tuning.PATRON_TIERS.length, crossings);
-		Assert.assertEquals("Zezima", PatronMark.topPartner(counts));
-		Assert.assertEquals("Patron III", PatronMark.tierLabel(PatronMark.countFor(counts, "Zezima")));
+		Assert.assertEquals("a rename must not fork the history", 1, ledger.size());
+		Assert.assertEquals(key(1), PatronMark.topKey(ledger));
+		Assert.assertEquals("Zezima Pk", PatronMark.displayName(PatronMark.recordFor(ledger, key(1))));
+		Assert.assertEquals("Patron III",
+			PatronMark.tierLabel(PatronMark.countFor(ledger, key(1))));
+		Assert.assertEquals(NOW + 100 * DAY,
+			PatronMark.recordFor(ledger, key(1)).getLastSharedAt());
 	}
 }

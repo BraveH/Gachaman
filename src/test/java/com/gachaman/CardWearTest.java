@@ -121,4 +121,71 @@ public class CardWearTest
 				wear.getDisplayName().matches("[\\x20-\\x7E]*"));
 		}
 	}
+
+	// --- the inverse, used only by ::gachawear ---
+
+	/**
+	 * The round trip, over every stage. wearKills lives in the same file as
+	 * cardWear precisely so the two cannot drift, and this is the assertion that
+	 * makes that guarantee real rather than a comment: retune a threshold and it
+	 * still passes, add a stage and forget the inverse and it does not.
+	 */
+	@Test
+	public void everyStageNamesItsOwnFloor()
+	{
+		for (CardWear wear : CardWear.values())
+		{
+			Assert.assertEquals("wearKills(" + wear + ") does not land on " + wear,
+				wear, Tuning.cardWear(Tuning.wearKills(wear)));
+		}
+	}
+
+	/**
+	 * The floor is the FLOOR — one kill short of it must be a lower stage. A
+	 * wearKills that returned the middle of a band would still pass the round
+	 * trip above while making "::gachawear cracked" a lie about the number.
+	 */
+	@Test
+	public void theFloorIsTheFirstKillOfItsStage()
+	{
+		Assert.assertEquals(0, Tuning.wearKills(CardWear.NONE));
+		for (CardWear wear : CardWear.values())
+		{
+			if (wear != CardWear.NONE)
+			{
+				Assert.assertTrue(Tuning.cardWear(Tuning.wearKills(wear) - 1).ordinal()
+					< wear.ordinal());
+			}
+		}
+	}
+
+	// --- CardWear.parse ---
+
+	@Test
+	public void parseTakesEveryStageNameInAnyCase()
+	{
+		for (CardWear wear : CardWear.values())
+		{
+			Assert.assertEquals(wear, CardWear.parse(wear.name()));
+			Assert.assertEquals(wear, CardWear.parse(wear.name().toLowerCase(java.util.Locale.ROOT)));
+			Assert.assertEquals(wear, CardWear.parse("  " + wear.name() + "  "));
+		}
+	}
+
+	/**
+	 * Null, not NONE. The caller's other reading of the argument is a raw kill
+	 * count, so a stage default here would turn a typo into a wiped record.
+	 */
+	@Test
+	public void parseRejectsAnythingThatIsNotAStage()
+	{
+		Assert.assertNull(CardWear.parse(null));
+		Assert.assertNull(CardWear.parse(""));
+		Assert.assertNull(CardWear.parse("   "));
+		Assert.assertNull(CardWear.parse("shatter"));
+		Assert.assertNull(CardWear.parse("shatteredd"));
+		Assert.assertNull(CardWear.parse("100"));
+		// the display name is prose, not an input token
+		Assert.assertNull(CardWear.parse(CardWear.SHATTERED.getDisplayName()));
+	}
 }
