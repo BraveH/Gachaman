@@ -37,6 +37,43 @@ public final class PanelIcon
 	}
 
 	/**
+	 * The artwork centred on a canvas of the given size, aspect preserved.
+	 *
+	 * <p>For the Plugin Hub, whose icon is 48x72 while this drawing is square.
+	 * Scaled to fit the shorter edge and centred rather than stretched to fill:
+	 * a chest pulled to 1.5x its height is not the same mark, and the icon has to
+	 * match the sidebar button it sits beside in the plugin list.
+	 *
+	 * @param width  canvas width in pixels; must be positive
+	 * @param height canvas height in pixels; must be positive
+	 */
+	public static BufferedImage create(int width, int height)
+	{
+		if (width <= 0 || height <= 0)
+		{
+			throw new IllegalArgumentException(
+				"icon canvas must be positive, was " + width + "x" + height);
+		}
+		int edge = Math.min(width, height);
+		BufferedImage art = create(edge);
+		if (width == height)
+		{
+			return art;
+		}
+		BufferedImage canvas = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = canvas.createGraphics();
+		try
+		{
+			g.drawImage(art, (width - edge) / 2, (height - edge) / 2, null);
+		}
+		finally
+		{
+			g.dispose();
+		}
+		return canvas;
+	}
+
+	/**
 	 * The same artwork at an arbitrary square size.
 	 *
 	 * @param size edge length in pixels; must be positive
