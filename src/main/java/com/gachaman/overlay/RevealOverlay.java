@@ -1490,7 +1490,8 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		}
 		else
 		{
-			// ornate: two chains whip off (1200 / 2600), the lid seam leaks
+			// ornate: a padlock bursts and the chain it held whips off - the
+			// outer chain at 1200, the inner at 2600 - then the lid seam leaks
 			// light with mounting intensity, then the lid blasts open with a
 			// decaying 2-3px camera shake
 			if (ChestStrain.straining(el, tier))
