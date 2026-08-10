@@ -1,0 +1,103 @@
+name: Quest monster is blocked
+description: Gachaman won't let you attack something a quest requires you to kill
+title: "[Quest NPC] <npc name> during <quest name>"
+labels: ["bug", "quest-exemption"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Quest combat is meant to be exempt from the contract lock — an NPC required by an
+        in-progress quest can be attacked with any style, with no penalties.
+
+        The list of which NPCs those are is **curated by hand**, so it has gaps, and the plugin
+        cannot tell the difference between a monster it is right to block and one it is wrong to
+        block. Only you can. Thank you for reporting it.
+
+        **You do not have to wait for a fix to keep playing.** In game:
+
+        ```
+        ::gachaunlock <npc name>
+        ```
+
+        That unblocks just that NPC until you close the client. `::gacharelock <npc name>` undoes
+        it, and `::gacharelock` on its own clears every override. Anything you have overridden is
+        listed under **Quest-unlocked NPCs** at the bottom of the Overview tab.
+
+  - type: input
+    id: npc
+    attributes:
+      label: NPC name
+      description: >
+        Exactly as it appears in game, spelling and capitalisation included — this is the text the
+        plugin matches on, so "Zombie rat" and "Zombie Rat" are not the same thing to it. If the
+        name has a level or a suffix in the right-click menu, leave those off.
+      placeholder: Lesser demon
+    validations:
+      required: true
+
+  - type: input
+    id: quest
+    attributes:
+      label: Quest
+      description: The quest that requires killing it. Please use the quest's full in-game name.
+      placeholder: Dragon Slayer I
+    validations:
+      required: true
+
+  - type: dropdown
+    id: when
+    attributes:
+      label: Was it ever attackable during this quest?
+      description: >
+        This is the most useful thing in the whole report. "Never" and "it stopped partway" are two
+        completely different bugs — the first is a missing entry, the second is a step window that
+        closes too early — and they get fixed in different places.
+      options:
+        - Never — it has been blocked for the whole quest
+        - It worked earlier in the quest, then stopped
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: step
+    attributes:
+      label: What were you doing when it blocked you?
+      description: >
+        The quest step, roughly — where you were and what the quest had just told you to do. If you
+        picked "it worked earlier, then stopped" above, what happened in between matters most.
+      placeholder: |
+        Inside Melzar's Maze getting the first map piece. The lesser demon on the bottom floor
+        had no Attack option.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: workaround
+    attributes:
+      label: Did `::gachaunlock <npc name>` let you continue?
+      description: >
+        If yes, that confirms it is the quest exemption table and nothing else. If no, something
+        different is wrong and this is more useful to know than it looks.
+      options:
+        - "Yes"
+        - "No"
+        - I haven't tried it
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Gachaman version
+      placeholder: 1.0.0
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots of the right-click menu are welcome but not required.
+    validations:
+      required: false

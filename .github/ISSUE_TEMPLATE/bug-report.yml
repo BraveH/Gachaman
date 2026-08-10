@@ -1,0 +1,100 @@
+name: Bug report
+description: Something in Gachaman behaves wrongly
+title: "[Bug] <short summary>"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. If the bug is **"a quest needs me to kill something and the
+        plugin won't let me"**, please go back and use the *Quest monster is blocked* template
+        instead — it asks the two questions that fix that one quickly.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+      placeholder: |
+        What I did:
+        What I expected:
+        What happened instead:
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: >
+        As precisely as you can manage. "It happens sometimes" is still worth reporting — say so
+        and describe the last time you saw it rather than leaving this out.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: persists
+    attributes:
+      label: Does it survive a restart?
+      description: >
+        Whether it comes back after closing and reopening the client separates a bad saved state
+        from a one-off glitch, and that decides where to start looking.
+      options:
+        - Yes — it is still wrong after restarting
+        - No — restarting cleared it
+        - Haven't tried
+        - Not applicable
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Gachaman version
+      placeholder: 1.0.0
+    validations:
+      required: false
+
+  - type: input
+    id: runelite
+    attributes:
+      label: RuneLite version
+      placeholder: 1.12.35
+    validations:
+      required: false
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: >
+        If the plugin threw an error, the log usually says so. RuneLite writes it to
+        `.runelite/logs/client.log` in your home folder. Paste anything mentioning `gachaman`
+        or an exception near the time it went wrong — it is pasted as code, so no backticks needed.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots are welcome.
+    validations:
+      required: false

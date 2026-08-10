@@ -446,10 +446,14 @@ style, no penalties, no taint. Which NPCs those are comes from a **hand-curated 
 the plugin, cross-checked against the game's own quest state — so it can have gaps, and a gap looks
 like Gachaman refusing to let you kill something your quest just told you to.
 
-**If that happens, please [open an issue](https://github.com/BraveH/Gachaman/issues) and name two
-things: the NPC, and the quest it is needed for.** That is everything needed to fix it for everyone,
-and it is the only way the gap gets found — the plugin cannot tell the difference between a monster
-it is right to block and one it is wrong to block.
+**If that happens, please [report the blocked
+monster](https://github.com/BraveH/Gachaman/issues/new?template=blocked-quest-npc.yml).** The form
+asks for the NPC's exact in-game name and the quest that needs it, plus one question worth answering
+carefully: whether the monster was attackable *earlier* in the quest and then stopped. Never-worked
+and stopped-working are different bugs and get fixed in different places.
+
+That report is the only way a gap gets found — the plugin cannot tell the difference between a
+monster it is right to block and one it is wrong to block. Only you can.
 
 To keep playing while you wait for a fix:
 
