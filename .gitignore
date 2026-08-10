@@ -2,6 +2,11 @@
 /build/
 /.gradle/
 
+# Compiled classes. Two of RuneLite's own .class files were once committed at
+# the repo root from unpacking the client jar to read an API; the Plugin Hub
+# review caught it. Nothing here should ever be a build output.
+*.class
+
 # IDE
 /.idea/
 /*.iml
