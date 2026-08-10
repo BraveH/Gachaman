@@ -475,8 +475,15 @@ public class HelpTab extends JPanel
 		paragraph(section, w, "Tutorial Island has NO restrictions; the moment you leave, your "
 			+ "first style roll and contracts fire.");
 		paragraph(section, w, "Quest combat is protected: NPCs required by any IN-PROGRESS quest "
-			+ "are attackable with any style, with no penalties (126 quests covered; Quest "
-			+ "Helper's current step is also honored when that plugin runs).");
+			+ "are attackable with any style, with no penalties. Whatever is currently unlocked "
+			+ "this way is listed at the bottom of the Overview tab.");
+		paragraph(section, w, "The list of quest monsters is curated by hand, so it can have gaps. "
+			+ "If a quest needs you to kill something and Gachaman blocks it, please open an issue "
+			+ "at github.com/BraveH/Gachaman naming the NPC and the quest it is needed for — that "
+			+ "is what gets it fixed for everyone.");
+		paragraph(section, w, "To keep going in the meantime, ::gachaunlock <npc name> unblocks "
+			+ "that one NPC until you close the client, and ::gacharelock puts it back. Overrides "
+			+ "show in the Overview list so you can see what you left open.");
 		return section;
 	}
 
@@ -485,6 +492,9 @@ public class HelpTab extends JPanel
 		JPanel section = GachamanPanel.section("Commands");
 		paragraph(section, w, "::gachaparty proposes or agrees to a party roll;"
 			+ " ::gachaparty no declines it; ::gachaparty start / cancel are host-only.");
+		paragraph(section, w, "::gachaunlock <npc name> unblocks a quest monster the table missed, "
+			+ "for this session only; ::gacharelock <npc name> undoes it, and ::gacharelock with "
+			+ "no name clears the lot.");
 		section.add(textBlock("With Advanced > Debug commands enabled:", MUTED, w - SECTION_PADDING));
 		section.add(Box.createVerticalStrut(3));
 		String[] commands = {

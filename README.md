@@ -24,7 +24,8 @@ It's a gacha game bolted onto an MMO, and it turns "I got a drop" into "I got *p
 [Your first hour](#your-first-hour) · [The loop](#the-loop) · [The wheel](#1--the-wheel-your-style-isnt-yours)
 · [The board](#2--the-board-contracts-and-coin) · [The chest](#3--the-chest) · [The cards](#4--the-cards)
 · [Rolling with friends](#rolling-with-friends) · [The long game](#the-long-game)
-· [Your sidebar](#your-sidebar) · [Disclosures](#honest-disclosures) · [Settings](#settings) · [Commands](#commands)
+· [Your sidebar](#your-sidebar) · [Blocked quest monsters](#when-a-quest-monster-is-blocked)
+· [Disclosures](#honest-disclosures) · [Settings](#settings) · [Commands](#commands)
 
 ---
 
@@ -430,7 +431,37 @@ fresh account isn't handed three empty tabs to wonder about:
 | **Loadout** | Assign cards to slots. There's an in-game overlay too, plus chatbox card search. *Appears with **One card per slot** on* |
 | **Help** | The rules, in the client, when you need them |
 
+The Overview page ends with **Quest-unlocked NPCs** — everything you may currently attack besides
+your contract target, and which quest opened it. It hides itself when there is nothing to show, and
+it never truncates: if a monster is unlocked, it is on that list.
+
 ![The fortune timeline](docs/screenshots/timeline.png)
+
+---
+
+## When a quest monster is blocked
+
+Quest combat is protected: an NPC required by an **in-progress** quest can be attacked with any
+style, no penalties, no taint. Which NPCs those are comes from a **hand-curated table** shipped with
+the plugin, cross-checked against the game's own quest state — so it can have gaps, and a gap looks
+like Gachaman refusing to let you kill something your quest just told you to.
+
+**If that happens, please [open an issue](https://github.com/BraveH/Gachaman/issues) and name two
+things: the NPC, and the quest it is needed for.** That is everything needed to fix it for everyone,
+and it is the only way the gap gets found — the plugin cannot tell the difference between a monster
+it is right to block and one it is wrong to block.
+
+To keep playing while you wait for a fix:
+
+```
+::gachaunlock Rat
+::gacharelock Rat
+```
+
+`::gachaunlock` takes the NPC's exact in-game name and unblocks just that one. It lasts until you
+close the client — deliberately, so a bypass can't outlive the bug it worked around and quietly
+become part of your run. Anything you have overridden is listed under **Quest-unlocked NPCs** on the
+Overview tab, marked as a manual override, so you can always see what you left open.
 
 ---
 
@@ -517,8 +548,12 @@ fresh account isn't handed three empty tabs to wonder about:
 | `::gachaparty no` | Sit this one out |
 | `::gachaparty start` | *Host only.* Start immediately with whoever has agreed (minimum 2) |
 | `::gachaparty cancel` | *Host only.* During the answer phase it aborts the roll outright. After the offers are rolled it dissolves the **party** only — the rolled contracts remain for every participant as personal offers, and accepted contracts stay binding |
+| `::gachaunlock <npc name>` | Unblock a quest monster the table missed, **for this session only** — see [When a quest monster is blocked](#when-a-quest-monster-is-blocked) |
+| `::gacharelock <npc name>` | Undo one override. With no name, clears every override |
 
-All of the above require the **Party contracts** setting (on by default).
+The `::gachaparty` commands require the **Party contracts** setting (on by default). The unlock pair
+does not — it is an escape hatch, and a player stuck behind a bad exemption should not have to find a
+setting first.
 
 <details>
 <summary><b>Debug commands</b> — enable <i>Advanced → Debug commands</i> first</summary>

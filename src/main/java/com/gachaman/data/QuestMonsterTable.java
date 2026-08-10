@@ -57,6 +57,10 @@ public class QuestMonsterTable
 	 */
 	public static final class Gate
 	{
+		/** The NPC as written in the file, for display; the index keys on its
+		 *  lowercase form. One Gate per (npc, entry) so it can name itself. */
+		@Getter
+		private final String npcName;
 		@Getter
 		private final Quest quest;
 		/** Id in the VarPlayerID or VarbitID space, or -1 for no window. */
@@ -68,8 +72,9 @@ public class QuestMonsterTable
 		private final int min;
 		private final int max;
 
-		Gate(Quest quest, int varId, boolean varbit, int min, int max)
+		Gate(String npcName, Quest quest, int varId, boolean varbit, int min, int max)
 		{
+			this.npcName = npcName;
 			this.quest = quest;
 			this.varId = varId;
 			this.varbit = varbit;
@@ -91,6 +96,8 @@ public class QuestMonsterTable
 
 	/** lowercased npc name -> every reason it may be attacked. */
 	private Map<String, List<Gate>> gatesByNpc = Collections.emptyMap();
+	/** Same gates, flat and in file order, for enumeration by the panel. */
+	private List<Gate> allGates = Collections.emptyList();
 
 	public static QuestMonsterTable load(Gson gson)
 	{
@@ -105,6 +112,7 @@ public class QuestMonsterTable
 			}
 			QuestsFile file = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), QuestsFile.class);
 			Map<String, List<Gate>> index = new HashMap<>();
+			List<Gate> all = new ArrayList<>();
 			for (Entry entry : file.quests)
 			{
 				Quest quest;
@@ -117,13 +125,15 @@ public class QuestMonsterTable
 					log.warn("quest-monsters.json references unknown quest {}", entry.quest);
 					continue;
 				}
-				Gate gate = gateOf(entry, quest);
 				for (String name : entry.npcNames)
 				{
+					Gate gate = gateOf(entry, quest, name);
 					index.computeIfAbsent(name.toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(gate);
+					all.add(gate);
 				}
 			}
 			table.gatesByNpc = Collections.unmodifiableMap(index);
+			table.allGates = Collections.unmodifiableList(all);
 		}
 		catch (Exception e)
 		{
@@ -137,13 +147,13 @@ public class QuestMonsterTable
 	 * failure that locks a player out of a quest is the one worth avoiding, and
 	 * the build catches malformed entries anyway (DatasetIntegrityTest).
 	 */
-	private static Gate gateOf(Entry entry, Quest quest)
+	private static Gate gateOf(Entry entry, Quest quest, String npcName)
 	{
 		boolean hasRange = entry.min != null || entry.max != null;
 		if (entry.varp != null && entry.varbit != null)
 		{
 			log.warn("{} names both a varp and a varbit — ignoring the window", entry.quest);
-			return new Gate(quest, -1, false, 0, 0);
+			return new Gate(npcName, quest, -1, false, 0, 0);
 		}
 		Integer id = entry.varp != null ? entry.varp : entry.varbit;
 		if (id == null || !hasRange)
@@ -153,20 +163,26 @@ public class QuestMonsterTable
 				log.warn("{} has half a window (id={}, min={}, max={}) — ignoring it",
 					entry.quest, id, entry.min, entry.max);
 			}
-			return new Gate(quest, -1, false, 0, 0);
+			return new Gate(npcName, quest, -1, false, 0, 0);
 		}
 		int min = entry.min != null ? entry.min : Integer.MIN_VALUE;
 		int max = entry.max != null ? entry.max : Integer.MAX_VALUE;
 		if (min > max)
 		{
 			log.warn("{} has min {} above max {} — ignoring the window", entry.quest, min, max);
-			return new Gate(quest, -1, false, 0, 0);
+			return new Gate(npcName, quest, -1, false, 0, 0);
 		}
-		return new Gate(quest, id, entry.varbit != null, min, max);
+		return new Gate(npcName, quest, id, entry.varbit != null, min, max);
 	}
 
 	public List<Gate> gatesFor(String npcName)
 	{
 		return gatesByNpc.getOrDefault(npcName.toLowerCase(Locale.ROOT), Collections.emptyList());
+	}
+
+	/** Every gate in the table, for callers that have to enumerate rather than ask. */
+	public List<Gate> allGates()
+	{
+		return allGates;
 	}
 }

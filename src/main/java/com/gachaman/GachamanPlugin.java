@@ -127,6 +127,8 @@ public class GachamanPlugin extends Plugin
 	@Inject
 	private ComplianceService complianceService;
 	@Inject
+	private com.gachaman.service.QuestExemptionService questExemptionService;
+	@Inject
 	private TaskService taskService;
 	@Inject
 	private StyleService styleService;
@@ -1015,6 +1017,48 @@ public class GachamanPlugin extends Plugin
 			else
 			{
 				partyRollService.agree(); // proposes when no proposal is live
+			}
+			return;
+		}
+		// The quest-unlock escape hatch is NOT behind debugCommands: it exists
+		// for a player who is locked out of a quest by a gap in the bundled
+		// table, and telling them to first enable a developer setting is telling
+		// them to stay stuck. Session-only, and the Overview tab shows every
+		// override that is live so none is ever silently left on.
+		if ("gachaunlock".equalsIgnoreCase(command))
+		{
+			String npc = String.join(" ", event.getArguments()).trim();
+			if (npc.isEmpty())
+			{
+				debugChatAlways("Usage: ::gachaunlock &lt;npc name&gt; — unblocks that NPC"
+					+ " until you close the client. Please also report it on GitHub.");
+			}
+			else
+			{
+				questExemptionService.unlock(npc);
+				debugChatAlways("Unblocked \"" + npc + "\" for this session."
+					+ " Undo with ::gacharelock " + npc);
+				gachamanPanel.refresh();
+			}
+			return;
+		}
+		if ("gacharelock".equalsIgnoreCase(command))
+		{
+			String npc = String.join(" ", event.getArguments()).trim();
+			if (npc.isEmpty())
+			{
+				int cleared = questExemptionService.relock(null);
+				debugChatAlways(cleared == 0
+					? "No manual unlocks were active."
+					: "Cleared " + cleared + " manual unlock" + (cleared == 1 ? "" : "s") + ".");
+				gachamanPanel.refresh();
+			}
+			else
+			{
+				debugChatAlways(questExemptionService.relock(npc) > 0
+					? "Re-blocked \"" + npc + "\"."
+					: "\"" + npc + "\" was not manually unlocked.");
+				gachamanPanel.refresh();
 			}
 			return;
 		}
