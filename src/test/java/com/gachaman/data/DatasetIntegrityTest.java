@@ -345,6 +345,45 @@ public class DatasetIntegrityTest
 	}
 
 	/**
+	 * Windows are per NPC, not per quest.
+	 *
+	 * <p>They are SPELLED as one entry per window — {@code npcNames} groups the
+	 * NPCs that happen to share one, it is not the unit the window applies to —
+	 * and the loader flattens that to npc name -&gt; every gate on it. So one
+	 * quest can gate one monster to a stretch of itself and leave another open
+	 * for its whole run, and a single monster can carry several windows in the
+	 * same quest by appearing on several entries.
+	 *
+	 * <p>This is easy to misread as quest-level, so it is pinned: Dragon Slayer
+	 * I holds Melzar's Maze open only up to the Crandor landing, while Elvarg —
+	 * who cannot be reached outside the quest anyway — stays open throughout.
+	 */
+	@Test
+	public void oneQuestCanGateDifferentNpcsDifferently()
+	{
+		QuestMonsterTable table = QuestMonsterTable.load(new Gson());
+		QuestMonsterTable.Gate maze = table.gatesFor("Skeleton").stream()
+			.filter(g -> g.getQuest() == net.runelite.api.Quest.DRAGON_SLAYER_I)
+			.findFirst().orElse(null);
+		QuestMonsterTable.Gate elvarg = table.gatesFor("Elvarg").stream()
+			.filter(g -> g.getQuest() == net.runelite.api.Quest.DRAGON_SLAYER_I)
+			.findFirst().orElse(null);
+		Assert.assertNotNull(maze);
+		Assert.assertNotNull(elvarg);
+		Assert.assertTrue("two NPCs of one quest must be able to differ",
+			maze.hasWindow() != elvarg.hasWindow());
+		// and the grouped NPCs really do each carry it, rather than the first one
+		for (String npc : new String[]{"Zombie rat", "Ghost", "Skeleton", "Zombie",
+			"Melzar the Mad", "Lesser demon", "Wormbrain"})
+		{
+			Assert.assertTrue(npc + " lost the window its entry carries",
+				table.gatesFor(npc).stream()
+					.filter(g -> g.getQuest() == net.runelite.api.Quest.DRAGON_SLAYER_I)
+					.anyMatch(QuestMonsterTable.Gate::hasWindow));
+		}
+	}
+
+	/**
 	 * The window arithmetic itself, with no Client in sight.
 	 *
 	 * <p>Provenance of the one window that ships, because JSON cannot carry it:
