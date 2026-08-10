@@ -1,34 +1,38 @@
-name: Bug report
-description: Something in Gachaman behaves wrongly
-title: "[Bug] <short summary>"
+name: Something's broken
+description: Report anything in Gachaman behaving wrongly
+title: "[Bug] <what went wrong>"
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time. If the bug is **"a quest needs me to kill something and the
-        plugin won't let me"**, please go back and use the *Quest monster is blocked* template
-        instead — it asks the two questions that fix that one quickly.
+        Thanks for taking the time.
+
+        If the problem is **a quest telling you to kill something and Gachaman not letting you**,
+        go back and pick *A quest monster won't let me attack it* instead — that one asks the
+        questions that get it sorted fastest.
+
+        Don't worry about filling in every box. A half-filled report is far better than none.
 
   - type: textarea
     id: what
     attributes:
-      label: What happened
-      description: What you saw, and what you expected instead.
+      label: What went wrong?
+      description: What you were doing, what you expected, and what happened instead.
       placeholder: |
-        What I did:
-        What I expected:
-        What happened instead:
+        I was...
+        I expected...
+        Instead...
     validations:
       required: true
 
   - type: textarea
     id: steps
     attributes:
-      label: Steps to reproduce
+      label: How can we make it happen again?
       description: >
-        As precisely as you can manage. "It happens sometimes" is still worth reporting — say so
-        and describe the last time you saw it rather than leaving this out.
+        Step by step, as best you can. If it only happens now and then, say so and describe the
+        last time you saw it — that's still worth reporting.
       placeholder: |
         1.
         2.
@@ -39,54 +43,53 @@ body:
   - type: dropdown
     id: persists
     attributes:
-      label: Does it survive a restart?
-      description: >
-        Whether it comes back after closing and reopening the client separates a bad saved state
-        from a one-off glitch, and that decides where to start looking.
+      label: Is it still wrong after you restart the client?
       options:
-        - Yes — it is still wrong after restarting
-        - No — restarting cleared it
-        - Haven't tried
-        - Not applicable
+        - "Yes, it's still wrong"
+        - "No, restarting fixed it"
+        - "Haven't tried"
+        - "Doesn't apply"
     validations:
       required: true
 
   - type: input
     id: version
     attributes:
-      label: Gachaman version
-      placeholder: 1.0.0
+      label: Which version of Gachaman?
+      description: If you know it. It's on the plugin's page in the Plugin Hub.
+      placeholder: "1.0.0"
     validations:
       required: false
 
   - type: input
     id: runelite
     attributes:
-      label: RuneLite version
-      placeholder: 1.12.35
+      label: Which version of RuneLite?
+      description: Bottom of the RuneLite settings panel, if you can find it.
+      placeholder: "1.12.35"
     validations:
       required: false
 
   - type: dropdown
     id: os
     attributes:
-      label: Operating system
+      label: What are you playing on?
       options:
         - Windows
-        - macOS
+        - Mac
         - Linux
-        - Other
+        - Something else
     validations:
       required: false
 
   - type: textarea
     id: logs
     attributes:
-      label: Relevant log output
+      label: Did you see an error message?
       description: >
-        If the plugin threw an error, the log usually says so. RuneLite writes it to
-        `.runelite/logs/client.log` in your home folder. Paste anything mentioning `gachaman`
-        or an exception near the time it went wrong — it is pasted as code, so no backticks needed.
+        If something popped up, paste it here. If you're comfortable digging out RuneLite's log
+        file, anything from around the time it went wrong helps too. If none of that means much to
+        you, skip this — the report is still useful without it.
       render: text
     validations:
       required: false
@@ -94,7 +97,7 @@ body:
   - type: textarea
     id: extra
     attributes:
-      label: Anything else
-      description: Screenshots are welcome.
+      label: Anything else?
+      description: Screenshots welcome.
     validations:
       required: false

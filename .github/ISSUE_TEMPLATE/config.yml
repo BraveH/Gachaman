@@ -1,12 +1,12 @@
-# Blank issues stay on: feature ideas, balance arguments and questions are all
-# welcome and none of them fit a bug form.
+# Blank issues stay on: ideas, balance arguments and questions are all welcome
+# and none of them fit a bug form.
 blank_issues_enabled: true
 contact_links:
-  - name: A quest monster is blocked and you need to keep playing now
+  - name: A quest monster is blocked and you want to keep playing right now
     url: https://github.com/BraveH/Gachaman#when-a-quest-monster-is-blocked
     about: >
-      ::gachaunlock <npc name> unblocks it for this session. Please still file the report — the
-      override is a workaround, not a fix.
+      ::gachaunlock <monster name> lets you attack it until you close the client. Please still
+      report it afterwards — that only gets you moving, it doesn't fix it.
   - name: How the gamemode works
     url: https://github.com/BraveH/Gachaman#readme
-    about: The full rules, also available in the plugin's own Help tab.
+    about: The full rules, also in the plugin's own Help tab.

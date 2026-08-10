@@ -1,36 +1,35 @@
-name: Quest monster is blocked
-description: Gachaman won't let you attack something a quest requires you to kill
-title: "[Quest NPC] <npc name> during <quest name>"
+name: A quest monster won't let me attack it
+description: Gachaman is blocking something your quest needs you to kill
+title: "[Quest] <monster> during <quest>"
 labels: ["bug", "quest-exemption"]
 body:
   - type: markdown
     attributes:
       value: |
-        Quest combat is meant to be exempt from the contract lock — an NPC required by an
-        in-progress quest can be attacked with any style, with no penalties.
+        Gachaman is supposed to get out of your way during quests — anything a quest needs you to
+        kill should be attackable, whatever style you rolled, with no penalties. If it isn't, that's
+        our mistake, not something you did wrong.
 
-        The list of which NPCs those are is **curated by hand**, so it has gaps, and the plugin
-        cannot tell the difference between a monster it is right to block and one it is wrong to
-        block. Only you can. Thank you for reporting it.
-
-        **You do not have to wait for a fix to keep playing.** In game:
+        **You don't have to wait for a fix to carry on.** Type this in game:
 
         ```
-        ::gachaunlock <npc name>
+        ::gachaunlock Lesser demon
         ```
 
-        That unblocks just that NPC until you close the client. `::gacharelock <npc name>` undoes
-        it, and `::gacharelock` on its own clears every override. Anything you have overridden is
-        listed under **Quest-unlocked NPCs** at the bottom of the Overview tab.
+        Use the monster's name. That lets you attack it until you close the client.
+        `::gacharelock Lesser demon` puts it back, and `::gacharelock` on its own clears the lot.
+        Anything you've unlocked is listed at the bottom of the Overview tab, so you can always see
+        what you've left on.
+
+        Then fill this in, and we'll get it fixed properly for everyone.
 
   - type: input
     id: npc
     attributes:
-      label: NPC name
+      label: What is the monster called?
       description: >
-        Exactly as it appears in game, spelling and capitalisation included — this is the text the
-        plugin matches on, so "Zombie rat" and "Zombie Rat" are not the same thing to it. If the
-        name has a level or a suffix in the right-click menu, leave those off.
+        Exactly as it appears when you right-click it — spelling and capital letters included. Leave
+        off the level and anything after it.
       placeholder: Lesser demon
     validations:
       required: true
@@ -38,8 +37,7 @@ body:
   - type: input
     id: quest
     attributes:
-      label: Quest
-      description: The quest that requires killing it. Please use the quest's full in-game name.
+      label: Which quest needs you to kill it?
       placeholder: Dragon Slayer I
     validations:
       required: true
@@ -47,57 +45,53 @@ body:
   - type: dropdown
     id: when
     attributes:
-      label: Was it ever attackable during this quest?
+      label: Could you attack it earlier in the same quest?
       description: >
-        This is the most useful thing in the whole report. "Never" and "it stopped partway" are two
-        completely different bugs — the first is a missing entry, the second is a step window that
-        closes too early — and they get fixed in different places.
+        If it worked before and then stopped, that's a different problem from it never working at
+        all — knowing which saves us a lot of guessing.
       options:
-        - Never — it has been blocked for the whole quest
-        - It worked earlier in the quest, then stopped
-        - Not sure
+        - "No — it's been blocked the whole quest"
+        - "Yes — it worked earlier, then stopped"
+        - "Can't remember"
     validations:
       required: true
 
   - type: textarea
     id: step
     attributes:
-      label: What were you doing when it blocked you?
-      description: >
-        The quest step, roughly — where you were and what the quest had just told you to do. If you
-        picked "it worked earlier, then stopped" above, what happened in between matters most.
+      label: Where were you up to?
+      description: Roughly what the quest had just asked you to do, and where you were.
       placeholder: |
-        Inside Melzar's Maze getting the first map piece. The lesser demon on the bottom floor
-        had no Attack option.
+        In Melzar's Maze looking for the first map piece. The lesser demon at the bottom
+        had no Attack option when I right-clicked it.
     validations:
       required: true
 
   - type: dropdown
     id: workaround
     attributes:
-      label: Did `::gachaunlock <npc name>` let you continue?
-      description: >
-        If yes, that confirms it is the quest exemption table and nothing else. If no, something
-        different is wrong and this is more useful to know than it looks.
+      label: Did `::gachaunlock` get you moving again?
+      description: If it didn't, something else is going on, and that's worth knowing.
       options:
         - "Yes"
         - "No"
-        - I haven't tried it
+        - "Haven't tried it"
     validations:
       required: true
 
   - type: input
     id: version
     attributes:
-      label: Gachaman version
-      placeholder: 1.0.0
+      label: Which version of Gachaman?
+      description: If you know it. It's on the plugin's page in the Plugin Hub.
+      placeholder: "1.0.0"
     validations:
       required: false
 
   - type: textarea
     id: extra
     attributes:
-      label: Anything else
-      description: Screenshots of the right-click menu are welcome but not required.
+      label: Anything else?
+      description: A screenshot of the right-click menu is handy if you have one.
     validations:
       required: false
