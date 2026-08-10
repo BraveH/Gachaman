@@ -4,7 +4,8 @@
     { "quest": "IMP_CATCHER", "npcNames": ["Imp"] },
     { "quest": "WITCHS_POTION", "npcNames": ["Rat"] },
     { "quest": "DEMON_SLAYER", "npcNames": ["Delrith", "Dark wizard"] },
-    { "quest": "DRAGON_SLAYER_I", "npcNames": ["Elvarg", "Zombie rat", "Ghost", "Skeleton", "Zombie", "Melzar the Mad", "Lesser demon", "Wormbrain"] },
+    { "quest": "DRAGON_SLAYER_I", "npcNames": ["Zombie rat", "Ghost", "Skeleton", "Zombie", "Melzar the Mad", "Lesser demon", "Wormbrain"], "varp": 176, "min": 1, "max": 7 },
+    { "quest": "DRAGON_SLAYER_I", "npcNames": ["Elvarg"] },
     { "quest": "WITCHS_HOUSE", "npcNames": ["Witch's experiment"] },
     { "quest": "LOST_CITY", "npcNames": ["Tree spirit"] },
     { "quest": "PRIEST_IN_PERIL", "npcNames": ["Temple Guardian", "Monk of Zamorak"] },
@@ -125,6 +126,11 @@
     { "quest": "LEARNING_THE_ROPES", "npcNames": ["Giant rat"] },
     { "quest": "THE_IDES_OF_MILK", "npcNames": ["Brutus"] },
     { "quest": "THE_BLOOD_MOON_RISES", "npcNames": ["Vyrewatch", "Vyrewatch Sentinel", "Monk of Zamorak", "Sanguidae", "Webbed-winged Crow", "Venator", "Ancient feral vyre", "The Maiden of Sugadinti", "Nylocas Vasilias", "Wyrd", "Lowerniel Drakan"] },
-    { "quest": "INTO_THE_TOMBS", "npcNames": ["Akkha", "Ba-Ba", "Kephri", "Zebak", "Tumeken's Warden", "Elidinis' Warden"] }
+    { "quest": "INTO_THE_TOMBS", "npcNames": ["Akkha", "Ba-Ba", "Kephri", "Zebak", "Tumeken's Warden", "Elidinis' Warden"] },
+    { "quest": "BIOHAZARD", "npcNames": ["Mourner"] },
+    { "quest": "CABIN_FEVER", "npcNames": ["Pirate"] },
+    { "quest": "DARKNESS_OF_HALLOWVALE", "npcNames": ["Vanstrom Klause"] },
+    { "quest": "MOURNINGS_END_PART_II", "npcNames": ["Shadow"] },
+    { "quest": "PRYING_TIMES", "npcNames": ["Drink troll"] }
   ]
 }

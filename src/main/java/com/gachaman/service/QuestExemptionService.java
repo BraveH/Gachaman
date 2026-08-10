@@ -58,11 +58,25 @@ public class QuestExemptionService
 
 	private boolean compute(String lowerName)
 	{
-		for (Quest quest : questMonsterTable.questsFor(lowerName))
+		for (QuestMonsterTable.Gate gate : questMonsterTable.gatesFor(lowerName))
 		{
 			try
 			{
-				if (quest.getState(client) == QuestState.IN_PROGRESS)
+				if (gate.getQuest().getState(client) != QuestState.IN_PROGRESS)
+				{
+					continue;
+				}
+				if (!gate.hasWindow())
+				{
+					return true;
+				}
+				// the same variable the quest itself tracks its progress in, read
+				// through the ordinary client API - this is how Quest Helper knows
+				// which step you are on, and it needs no privileged access
+				int value = gate.isVarbit()
+					? client.getVarbitValue(gate.getVarId())
+					: client.getVarpValue(gate.getVarId());
+				if (gate.contains(value))
 				{
 					return true;
 				}

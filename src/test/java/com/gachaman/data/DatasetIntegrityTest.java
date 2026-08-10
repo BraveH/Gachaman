@@ -245,6 +245,130 @@ public class DatasetIntegrityTest
 		}
 	}
 
+	/**
+	 * Every quest combat exemption must name a real {@link net.runelite.api.Quest}.
+	 *
+	 * <p>The loader only logs a warning and skips, so a typo is a monster the
+	 * player is quietly blocked from attacking during the one quest that needs
+	 * it — with nothing on screen to explain why. The build is the only place
+	 * that can catch it.
+	 */
+	@Test
+	public void everyQuestExemptionNamesARealQuest()
+	{
+		JsonArray quests = load("quest-monsters.json").getAsJsonArray("quests");
+		Assert.assertTrue(quests.size() >= 100);
+		for (JsonElement entryEl : quests)
+		{
+			JsonObject entry = entryEl.getAsJsonObject();
+			String quest = entry.get("quest").getAsString();
+			try
+			{
+				net.runelite.api.Quest.valueOf(quest);
+			}
+			catch (IllegalArgumentException e)
+			{
+				Assert.fail("quest-monsters.json names " + quest + ", not a Quest constant");
+			}
+			Assert.assertTrue(quest + " has no NPCs — drop the entry instead",
+				entry.getAsJsonArray("npcNames").size() > 0);
+		}
+	}
+
+	/**
+	 * Varplayers and varbits are SEPARATE id spaces read by different client
+	 * methods, and {@code getVarpValue} on a varbit id returns a plausible
+	 * integer rather than an error. An entry that names the wrong one produces a
+	 * window that is silently wrong — no exception, no log line, just a player
+	 * who cannot attack the monster their quest told them to. So: exactly one id
+	 * kind, and never half a window.
+	 */
+	@Test
+	public void everyQuestWindowIsWellFormed()
+	{
+		JsonArray quests = load("quest-monsters.json").getAsJsonArray("quests");
+		int windowed = 0;
+		for (JsonElement entryEl : quests)
+		{
+			JsonObject entry = entryEl.getAsJsonObject();
+			String quest = entry.get("quest").getAsString();
+			boolean hasVarp = entry.has("varp");
+			boolean hasVarbit = entry.has("varbit");
+			boolean hasRange = entry.has("min") || entry.has("max");
+			Assert.assertFalse(quest + " names both a varp and a varbit",
+				hasVarp && hasVarbit);
+			if (!hasVarp && !hasVarbit && !hasRange)
+			{
+				continue;
+			}
+			windowed++;
+			Assert.assertTrue(quest + " has a range but no varp/varbit to read",
+				hasVarp || hasVarbit);
+			Assert.assertTrue(quest + " has a varp/varbit but no min/max, so it gates nothing",
+				hasRange);
+			int id = (hasVarp ? entry.get("varp") : entry.get("varbit")).getAsInt();
+			Assert.assertTrue(quest + " has a non-positive var id " + id, id > 0);
+			int min = entry.has("min") ? entry.get("min").getAsInt() : Integer.MIN_VALUE;
+			int max = entry.has("max") ? entry.get("max").getAsInt() : Integer.MAX_VALUE;
+			Assert.assertTrue(quest + " has min " + min + " above max " + max, min <= max);
+		}
+		// windows are opt-in and most entries have none, but if this hits zero
+		// someone has deleted the only thing the feature exists for
+		Assert.assertTrue("no quest carries a progress window any more", windowed >= 1);
+	}
+
+	/**
+	 * A window that excludes the whole quest blocks the player out of it. The
+	 * cheap structural check: the range has to admit at least one value a quest
+	 * in progress can actually hold, and quest progress vars count up from 1.
+	 */
+	@Test
+	public void noQuestWindowExcludesEveryInProgressValue()
+	{
+		for (JsonElement entryEl : load("quest-monsters.json").getAsJsonArray("quests"))
+		{
+			JsonObject entry = entryEl.getAsJsonObject();
+			if (!entry.has("varp") && !entry.has("varbit"))
+			{
+				continue;
+			}
+			String quest = entry.get("quest").getAsString();
+			int max = entry.has("max") ? entry.get("max").getAsInt() : Integer.MAX_VALUE;
+			Assert.assertTrue(quest + " has max " + max + ", which no started quest can be",
+				max >= 1);
+		}
+	}
+
+	/** The window arithmetic itself, with no Client in sight. */
+	@Test
+	public void gatesAdmitExactlyTheirWindow()
+	{
+		QuestMonsterTable table = QuestMonsterTable.load(new Gson());
+		QuestMonsterTable.Gate maze = null;
+		QuestMonsterTable.Gate elvarg = null;
+		for (QuestMonsterTable.Gate gate : table.gatesFor("Ghost"))
+		{
+			if (gate.getQuest() == net.runelite.api.Quest.DRAGON_SLAYER_I)
+			{
+				maze = gate;
+			}
+		}
+		for (QuestMonsterTable.Gate gate : table.gatesFor("Elvarg"))
+		{
+			elvarg = gate;
+		}
+		Assert.assertNotNull("Melzar's Maze mobs lost their Dragon Slayer gate", maze);
+		Assert.assertNotNull("Elvarg lost her Dragon Slayer gate", elvarg);
+		Assert.assertTrue("the maze gate lost its window", maze.hasWindow());
+		Assert.assertFalse("the maze window must be a varplayer, not a varbit", maze.isVarbit());
+		Assert.assertFalse(maze.contains(0));
+		Assert.assertTrue(maze.contains(1));
+		Assert.assertTrue(maze.contains(7));
+		Assert.assertFalse("the maze reopens after the map is handed over", maze.contains(8));
+		// no window means whole-quest, exactly as before windows existed
+		Assert.assertFalse(elvarg.hasWindow());
+	}
+
 	@Test
 	public void loadersLoadTheRealFiles()
 	{
