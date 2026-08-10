@@ -4,7 +4,7 @@
     { "quest": "IMP_CATCHER", "npcNames": ["Imp"] },
     { "quest": "WITCHS_POTION", "npcNames": ["Rat"] },
     { "quest": "DEMON_SLAYER", "npcNames": ["Delrith", "Dark wizard"] },
-    { "quest": "DRAGON_SLAYER_I", "npcNames": ["Zombie rat", "Ghost", "Skeleton", "Zombie", "Melzar the Mad", "Lesser demon", "Wormbrain"], "varp": 176, "min": 1, "max": 7 },
+    { "quest": "DRAGON_SLAYER_I", "npcNames": ["Zombie rat", "Ghost", "Skeleton", "Zombie", "Melzar the Mad", "Lesser demon", "Wormbrain"], "varp": 176, "min": 1, "max": 8 },
     { "quest": "DRAGON_SLAYER_I", "npcNames": ["Elvarg"] },
     { "quest": "WITCHS_HOUSE", "npcNames": ["Witch's experiment"] },
     { "quest": "LOST_CITY", "npcNames": ["Tree spirit"] },
