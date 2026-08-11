@@ -1,0 +1,74 @@
+{
+  "_comment": [
+    "Ranged gear that wears a metal prefix but is not gated on the melee metal ladder.",
+    "'nouns' maps the last word of a cleaned card name to a family; both spellings are",
+    "listed because the game uses one of each ('Bronze bolts' plural, 'Rune arrow'",
+    "singular) and no stemmer turns 'knives' into 'knife'.",
+    "'families' gives the Ranged level each metal really needs. A metal with no item in",
+    "the family is simply absent (there is no black arrow) and the caller falls back to",
+    "the tier ladder's own number. Ammunition carries no equip requirement at all, so",
+    "the number encoded is the LAUNCHER's - a yew bow (40) for rune arrows, an adamant",
+    "crossbow (46) for adamant bolts."
+  ],
+  "nouns": {
+    "arrow": "ARROW",
+    "arrows": "ARROW",
+    "bolt": "BOLTS",
+    "bolts": "BOLTS",
+    "javelin": "JAVELIN",
+    "javelins": "JAVELIN",
+    "crossbow": "CROSSBOW",
+    "crossbows": "CROSSBOW",
+    "dart": "DART",
+    "darts": "DART",
+    "knife": "KNIFE",
+    "knives": "KNIFE",
+    "thrownaxe": "THROWNAXE",
+    "thrownaxes": "THROWNAXE",
+    "brutal": "BRUTAL",
+    "chinchompa": "CHINCHOMPA",
+    "chinchompas": "CHINCHOMPA",
+    "salamander": "SALAMANDER",
+    "salamanders": "SALAMANDER"
+  },
+  "families": {
+    "ARROW": {
+      "bronze": 1, "iron": 1, "steel": 5,
+      "mithril": 20, "adamant": 30, "rune": 40, "dragon": 60
+    },
+    "BOLTS": {
+      "bronze": 1, "iron": 26, "steel": 31,
+      "mithril": 36, "adamant": 46, "rune": 61, "dragon": 64
+    },
+    "JAVELIN": {
+      "bronze": 65, "iron": 65, "steel": 65,
+      "mithril": 65, "adamant": 65, "rune": 65, "dragon": 65
+    },
+    "CROSSBOW": {
+      "bronze": 1, "iron": 26, "steel": 31,
+      "mithril": 36, "adamant": 46, "rune": 61, "dragon": 64
+    },
+    "DART": {
+      "bronze": 1, "iron": 1, "steel": 5, "black": 10,
+      "mithril": 20, "adamant": 30, "rune": 40, "dragon": 60
+    },
+    "KNIFE": {
+      "bronze": 1, "iron": 1, "steel": 5, "black": 10,
+      "mithril": 20, "adamant": 30, "rune": 40, "dragon": 60
+    },
+    "THROWNAXE": {
+      "bronze": 1, "iron": 1, "steel": 5,
+      "mithril": 20, "adamant": 30, "rune": 40, "dragon": 61
+    },
+    "BRUTAL": {
+      "bronze": 30, "iron": 30, "steel": 30, "black": 30,
+      "mithril": 30, "adamant": 30, "rune": 30, "dragon": 30
+    },
+    "CHINCHOMPA": {
+      "black": 65
+    },
+    "SALAMANDER": {
+      "black": 70
+    }
+  }
+}

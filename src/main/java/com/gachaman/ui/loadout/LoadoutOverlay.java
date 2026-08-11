@@ -56,8 +56,7 @@ import net.runelite.client.ui.overlay.OverlayPosition;
  * {@link LoadoutInputListener}.
  */
 @Singleton
-public class LoadoutOverlay extends Overlay
-{
+public class LoadoutOverlay extends Overlay {
 	static final int BOARD_W = 180;
 	static final int BOARD_H = 260;
 	private static final int SOCKET = 36;
@@ -136,8 +135,7 @@ public class LoadoutOverlay extends Overlay
 	public LoadoutOverlay(Client client, ClientThread clientThread, GachaStateService stateService,
 		LoadoutService loadoutService, ChestService chestService, CardDatabase cardDatabase,
 		CardImageService cardImageService, ChatboxCardSearch cardSearch, SpriteManager spriteManager,
-		GachamanConfig config)
-	{
+		GachamanConfig config) {
 		this.config = config;
 		this.client = client;
 		this.clientThread = clientThread;
@@ -171,53 +169,44 @@ public class LoadoutOverlay extends Overlay
 		socketRects.put(GearSlot.RING, socket(right, 204));
 	}
 
-	private static Rectangle socket(int x, int y)
-	{
+	private static Rectangle socket(int x, int y) {
 		return new Rectangle(x, y, SOCKET, SOCKET);
 	}
 
-	public void toggle()
-	{
+	public void toggle() {
 		open = !open;
 	}
 
-	public void setOpen(boolean open)
-	{
+	public void setOpen(boolean open) {
 		this.open = open;
 	}
 
 	/** Canvas-space hover position fed by the input listener (never consumed). */
-	public void setHoverCanvasPoint(@Nullable Point point)
-	{
+	public void setHoverCanvasPoint(@Nullable Point point) {
 		hoverCanvasPoint = point;
 	}
 
 	@Override
-	public Dimension render(Graphics2D graphics)
-	{
+	public Dimension render(Graphics2D graphics) {
 		GachaState state = stateService.get();
-		if (!open || state == null || !config.oneCardPerSlot())
-		{
+		if (!open || state == null || !config.oneCardPerSlot()) {
 			open = false;
 			return null;
 		}
 		// the board belongs to the equipment page: switching tabs closes it
 		Widget equipment =
 			client.getWidget(InterfaceID.Wornitems.UNIVERSE);
-		if (equipment == null || equipment.isHidden())
-		{
+		if (equipment == null || equipment.isHidden()) {
 			open = false;
 			return null;
 		}
 
 		// Anchor next to the inventory until the user drags us somewhere.
-		if (getPreferredLocation() == null)
-		{
+		if (getPreferredLocation() == null) {
 			int ax = Math.max(0, client.getCanvasWidth() - BOARD_W - RIGHT_OFFSET);
 			int ay = Math.max(0, client.getCanvasHeight() - BOARD_H - BOTTOM_OFFSET);
 			Rectangle bounds = getBounds();
-			if (bounds.x != ax || bounds.y != ay)
-			{
+			if (bounds.x != ax || bounds.y != ay) {
 				// graphics is already translated to the stale location; skip
 				// one frame so the renderer picks the new anchor up.
 				bounds.setLocation(ax, ay);
@@ -245,13 +234,11 @@ public class LoadoutOverlay extends Overlay
 
 		GearSlot hovered = hoveredSlot();
 		Map<String, OwnedCard> byUuid = ownedByUuid(state);
-		for (GearSlot slot : GearSlot.values())
-		{
+		for (GearSlot slot : GearSlot.values()) {
 			drawSocket(g, slot, state, byUuid, hovered == slot, now);
 		}
 
-		if (state.getPendingDeeds() > 0)
-		{
+		if (state.getPendingDeeds() > 0) {
 			float pulse = (float) (0.5 + 0.5 * Math.sin(now / 240.0));
 			g.setColor(new Color(DEED_RIBBON.getRed(), DEED_RIBBON.getGreen(), DEED_RIBBON.getBlue(),
 				(int) (110 + 145 * pulse)));
@@ -266,20 +253,17 @@ public class LoadoutOverlay extends Overlay
 	}
 
 	private void drawSocket(Graphics2D g, GearSlot slot, GachaState state,
-		Map<String, OwnedCard> byUuid, boolean hovered, long now)
-	{
+		Map<String, OwnedCard> byUuid, boolean hovered, long now) {
 		Rectangle r = socketRects.get(slot);
 		boolean deeded = state.getDeededSlots().contains(slot.name());
 		OwnedCard assigned = assignedCard(state, byUuid, slot);
 		boolean claimable = !deeded && state.getPendingDeeds() > 0;
 
 		BufferedImage tile = tileImage(!deeded, hovered);
-		if (tile != null)
-		{
+		if (tile != null) {
 			g.drawImage(tile, r.x, r.y, null);
 		}
-		else
-		{
+		else {
 			// procedural fallback until the tile sprite has loaded
 			g.setColor(deeded ? SOCKET_BG : SOCKET_BG_LOCKED);
 			g.fillRect(r.x, r.y, r.width, r.height);
@@ -288,11 +272,9 @@ public class LoadoutOverlay extends Overlay
 			g.drawRect(r.x, r.y, r.width - 1, r.height - 1);
 		}
 
-		if (assigned != null)
-		{
+		if (assigned != null) {
 			BufferedImage sprite = spriteFor(assigned);
-			if (sprite != null)
-			{
+			if (sprite != null) {
 				g.drawImage(sprite,
 					r.x + (r.width - sprite.getWidth()) / 2,
 					r.y + (r.height - sprite.getHeight()) / 2, null);
@@ -302,11 +284,9 @@ public class LoadoutOverlay extends Overlay
 			g.setStroke(STROKE_1);
 			g.drawRect(r.x + 1, r.y + 1, r.width - 3, r.height - 3);
 		}
-		else if (deeded)
-		{
+		else if (deeded) {
 			BufferedImage silhouette = silhouetteImage(slot);
-			if (silhouette != null)
-			{
+			if (silhouette != null) {
 				Composite prev = g.getComposite();
 				g.setComposite(SILHOUETTE_COMPOSITE);
 				g.drawImage(silhouette,
@@ -314,8 +294,7 @@ public class LoadoutOverlay extends Overlay
 					r.y + (r.height - silhouette.getHeight()) / 2, null);
 				g.setComposite(prev);
 			}
-			else
-			{
+			else {
 				// silhouette still loading: the old centred plus glyph
 				g.setColor(PLUS_COLOR);
 				g.setStroke(STROKE_2);
@@ -326,11 +305,9 @@ public class LoadoutOverlay extends Overlay
 			}
 			drawPlusBadge(g, r);
 		}
-		else
-		{
+		else {
 			drawPadlock(g, r, claimable);
-			if (claimable)
-			{
+			if (claimable) {
 				float pulse = (float) (0.5 + 0.5 * Math.sin(now / 240.0));
 				g.setColor(new Color(DEED_RIBBON.getRed(), DEED_RIBBON.getGreen(),
 					DEED_RIBBON.getBlue(), (int) (90 + 160 * pulse)));
@@ -341,8 +318,7 @@ public class LoadoutOverlay extends Overlay
 	}
 
 	/** Small gold add badge in the socket corner: assignment stays obvious. */
-	private void drawPlusBadge(Graphics2D g, Rectangle r)
-	{
+	private void drawPlusBadge(Graphics2D g, Rectangle r) {
 		int size = 11;
 		int bx = r.x + r.width - size - 2;
 		int by = r.y + r.height - size - 2;
@@ -356,8 +332,7 @@ public class LoadoutOverlay extends Overlay
 		g.drawLine(cx, cy - 2, cx, cy + 2);
 	}
 
-	private void drawPadlock(Graphics2D g, Rectangle r, boolean claimable)
-	{
+	private void drawPadlock(Graphics2D g, Rectangle r, boolean claimable) {
 		int cx = r.x + r.width / 2;
 		int cy = r.y + r.height / 2;
 		g.setColor(claimable ? DEED_RIBBON : LOCK_COLOR);
@@ -375,13 +350,10 @@ public class LoadoutOverlay extends Overlay
 	 * null until the sprite has loaded. All four variants are baked once.
 	 */
 	@Nullable
-	private BufferedImage tileImage(boolean locked, boolean hovered)
-	{
-		if (tileBase == null)
-		{
+	private BufferedImage tileImage(boolean locked, boolean hovered) {
+		if (tileBase == null) {
 			BufferedImage raw = sprite(SpriteID.EQUIPMENT_SLOT_TILE);
-			if (raw == null)
-			{
+			if (raw == null) {
 				return null;
 			}
 			tileBase = scaled(raw, SOCKET, SOCKET);
@@ -389,8 +361,7 @@ public class LoadoutOverlay extends Overlay
 			tileHover = tinted(tileBase, HOVER_TILE_FACTOR);
 			tileDarkHover = tinted(tileDark, HOVER_TILE_FACTOR);
 		}
-		if (locked)
-		{
+		if (locked) {
 			return hovered ? tileDarkHover : tileDark;
 		}
 		return hovered ? tileHover : tileBase;
@@ -398,21 +369,17 @@ public class LoadoutOverlay extends Overlay
 
 	/** The native slot silhouette, fit to the socket; null until loaded. */
 	@Nullable
-	private BufferedImage silhouetteImage(GearSlot slot)
-	{
+	private BufferedImage silhouetteImage(GearSlot slot) {
 		int spriteId = silhouetteSpriteId(slot);
 		BufferedImage prepared = silhouetteCache.get(spriteId);
-		if (prepared != null)
-		{
+		if (prepared != null) {
 			return prepared;
 		}
 		BufferedImage raw = sprite(spriteId);
-		if (raw == null)
-		{
+		if (raw == null) {
 			return null;
 		}
-		if (raw.getWidth() > SOCKET || raw.getHeight() > SOCKET)
-		{
+		if (raw.getWidth() > SOCKET || raw.getHeight() > SOCKET) {
 			raw = scaled(raw, Math.min(raw.getWidth(), SOCKET), Math.min(raw.getHeight(), SOCKET));
 		}
 		silhouetteCache.put(spriteId, raw);
@@ -421,24 +388,19 @@ public class LoadoutOverlay extends Overlay
 
 	/** Raw sprite via SpriteManager; null (and retried) while still loading. */
 	@Nullable
-	private BufferedImage sprite(int spriteId)
-	{
+	private BufferedImage sprite(int spriteId) {
 		BufferedImage img = spriteCache.get(spriteId);
-		if (img == null)
-		{
+		if (img == null) {
 			img = spriteManager.getSprite(spriteId, 0);
-			if (img != null)
-			{
+			if (img != null) {
 				spriteCache.put(spriteId, img);
 			}
 		}
 		return img;
 	}
 
-	private static int silhouetteSpriteId(GearSlot slot)
-	{
-		switch (slot)
-		{
+	private static int silhouetteSpriteId(GearSlot slot) {
+		switch (slot) {
 			case HEAD:
 				return SpriteID.EQUIPMENT_SLOT_HEAD;
 			case CAPE:
@@ -466,8 +428,7 @@ public class LoadoutOverlay extends Overlay
 	}
 
 	/** Nearest-neighbour scale into a fresh ARGB image (bake-time only). */
-	private static BufferedImage scaled(BufferedImage src, int w, int h)
-	{
+	private static BufferedImage scaled(BufferedImage src, int w, int h) {
 		BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = out.createGraphics();
 		g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
@@ -478,14 +439,12 @@ public class LoadoutOverlay extends Overlay
 	}
 
 	/** Multiplies RGB by factor (clamped), preserving alpha (bake-time only). */
-	private static BufferedImage tinted(BufferedImage src, float factor)
-	{
+	private static BufferedImage tinted(BufferedImage src, float factor) {
 		int w = src.getWidth();
 		int h = src.getHeight();
 		BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
 		int[] pixels = src.getRGB(0, 0, w, h, null, 0, w);
-		for (int i = 0; i < pixels.length; i++)
-		{
+		for (int i = 0; i < pixels.length; i++) {
 			int argb = pixels[i];
 			int red = Math.min(255, (int) (((argb >> 16) & 0xFF) * factor));
 			int green = Math.min(255, (int) (((argb >> 8) & 0xFF) * factor));
@@ -497,21 +456,17 @@ public class LoadoutOverlay extends Overlay
 	}
 
 	@Nullable
-	private BufferedImage spriteFor(OwnedCard owned)
-	{
+	private BufferedImage spriteFor(OwnedCard owned) {
 		Integer itemId = iconItemIdFor(owned);
 		return itemId == null ? null : cardImageService.itemImage(itemId, null);
 	}
 
 	@Nullable
-	private Integer iconItemIdFor(OwnedCard owned)
-	{
-		if (!cardDatabase.isReady())
-		{
+	private Integer iconItemIdFor(OwnedCard owned) {
+		if (!cardDatabase.isReady()) {
 			return null;
 		}
-		if (owned.isHologram())
-		{
+		if (owned.isHologram()) {
 			HologramDefinition holo = cardDatabase.holograms().get(owned.getTierKey());
 			CardDefinition rep = holo == null ? null
 				: cardDatabase.cardByName(holo.getRepresentativeItemName());
@@ -521,20 +476,16 @@ public class LoadoutOverlay extends Overlay
 		return card == null ? null : card.getCardId();
 	}
 
-	private Color borderColorFor(OwnedCard owned, long now)
-	{
-		if (owned.getVariant() == Variant.SHINY)
-		{
+	private Color borderColorFor(OwnedCard owned, long now) {
+		if (owned.getVariant() == Variant.SHINY) {
 			return CardRenderer.prismaticColor(now, 0);
 		}
-		if (owned.isHologram())
-		{
+		if (owned.isHologram()) {
 			return HOLOGRAM_EDGE;
 		}
 		Rarity rarity = Rarity.COMMON;
 		CardDefinition card = cardDatabase.isReady() ? cardDatabase.card(owned.getCardId()) : null;
-		if (card != null)
-		{
+		if (card != null) {
 			rarity = card.getRarity();
 		}
 		return rarity.getColor();
@@ -543,10 +494,8 @@ public class LoadoutOverlay extends Overlay
 	// --- Click handling (called by LoadoutInputListener, AWT thread) ---
 
 	/** True when the canvas point is inside the visible board. */
-	public boolean containsCanvasPoint(Point canvasPoint)
-	{
-		if (!open || canvasPoint == null)
-		{
+	public boolean containsCanvasPoint(Point canvasPoint) {
+		if (!open || canvasPoint == null) {
 			return false;
 		}
 		Rectangle bounds = getBounds();
@@ -555,10 +504,8 @@ public class LoadoutOverlay extends Overlay
 	}
 
 	/** Handle a left click at the given canvas point; hops to the client thread. */
-	public void handleClick(Point canvasPoint)
-	{
-		if (!containsCanvasPoint(canvasPoint))
-		{
+	public void handleClick(Point canvasPoint) {
+		if (!containsCanvasPoint(canvasPoint)) {
 			return;
 		}
 		Rectangle bounds = getBounds();
@@ -566,45 +513,35 @@ public class LoadoutOverlay extends Overlay
 		clientThread.invokeLater(() -> handleClickOnClientThread(rel));
 	}
 
-	private void handleClickOnClientThread(Point rel)
-	{
+	private void handleClickOnClientThread(Point rel) {
 		GachaState state = stateService.get();
-		if (state == null)
-		{
+		if (state == null) {
 			return;
 		}
 		GearSlot slot = slotAt(rel);
-		if (slot == null)
-		{
+		if (slot == null) {
 			return;
 		}
 		boolean deeded = state.getDeededSlots().contains(slot.name());
-		if (!deeded)
-		{
-			if (state.getPendingDeeds() > 0)
-			{
+		if (!deeded) {
+			if (state.getPendingDeeds() > 0) {
 				chestService.claimDeed(slot);
 			}
 			return;
 		}
 		OwnedCard assigned = assignedCard(state, ownedByUuid(state), slot);
-		if (assigned != null)
-		{
+		if (assigned != null) {
 			loadoutService.unassign(slot);
 		}
-		else
-		{
+		else {
 			cardSearch.openFor(slot);
 		}
 	}
 
 	@Nullable
-	private GearSlot slotAt(Point rel)
-	{
-		for (Map.Entry<GearSlot, Rectangle> entry : socketRects.entrySet())
-		{
-			if (entry.getValue().contains(rel))
-			{
+	private GearSlot slotAt(Point rel) {
+		for (Map.Entry<GearSlot, Rectangle> entry : socketRects.entrySet()) {
+			if (entry.getValue().contains(rel)) {
 				return entry.getKey();
 			}
 		}
@@ -612,11 +549,9 @@ public class LoadoutOverlay extends Overlay
 	}
 
 	@Nullable
-	private GearSlot hoveredSlot()
-	{
+	private GearSlot hoveredSlot() {
 		Point canvas = hoverCanvasPoint;
-		if (canvas == null || !containsCanvasPoint(canvas))
-		{
+		if (canvas == null || !containsCanvasPoint(canvas)) {
 			return null;
 		}
 		Rectangle bounds = getBounds();
@@ -625,13 +560,10 @@ public class LoadoutOverlay extends Overlay
 
 	// --- helpers ---
 
-	private static Map<String, OwnedCard> ownedByUuid(GachaState state)
-	{
+	private static Map<String, OwnedCard> ownedByUuid(GachaState state) {
 		Map<String, OwnedCard> byUuid = new HashMap<>();
-		if (state.getOwnedCards() != null)
-		{
-			for (OwnedCard card : state.getOwnedCards())
-			{
+		if (state.getOwnedCards() != null) {
+			for (OwnedCard card : state.getOwnedCards()) {
 				byUuid.put(card.getUuid(), card);
 			}
 		}
@@ -639,14 +571,12 @@ public class LoadoutOverlay extends Overlay
 	}
 
 	@Nullable
-	private static OwnedCard assignedCard(GachaState state, Map<String, OwnedCard> byUuid, GearSlot slot)
-	{
+	private static OwnedCard assignedCard(GachaState state, Map<String, OwnedCard> byUuid, GearSlot slot) {
 		String uuid = state.getLoadout() == null ? null : state.getLoadout().get(slot.name());
 		return uuid == null ? null : byUuid.get(uuid);
 	}
 
-	private static void drawCentered(Graphics2D g, String text, int cx, int baselineY)
-	{
+	private static void drawCentered(Graphics2D g, String text, int cx, int baselineY) {
 		FontMetrics fm = g.getFontMetrics();
 		g.drawString(text, cx - fm.stringWidth(text) / 2, baselineY);
 	}

@@ -40,14 +40,12 @@ import net.runelite.client.util.QuantityFormatter;
  * personal bests and a sortable per-monster stats table with a totals line.
  */
 @Singleton
-public class JournalTab extends JPanel
-{
+public class JournalTab extends JPanel {
 	private final GachaStateService stateService;
 	private final MonsterTable monsterTable;
 
 	@Inject
-	public JournalTab(GachaStateService stateService, MonsterTable monsterTable)
-	{
+	public JournalTab(GachaStateService stateService, MonsterTable monsterTable) {
 		this.stateService = stateService;
 		this.monsterTable = monsterTable;
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
@@ -55,12 +53,10 @@ public class JournalTab extends JPanel
 		setBorder(new EmptyBorder(0, 0, 6, 0));
 	}
 
-	void rebuild()
-	{
+	void rebuild() {
 		removeAll();
 		GachaState state = stateService.get();
-		if (state == null)
-		{
+		if (state == null) {
 			add(GachamanPanel.centeredNote("Log in to view your journal."));
 			revalidate();
 			repaint();
@@ -79,8 +75,7 @@ public class JournalTab extends JPanel
 		repaint();
 	}
 
-	private JPanel buildCodexSection(GachaState state)
-	{
+	private JPanel buildCodexSection(GachaState state) {
 		JPanel section = GachamanPanel.section("Species Codex");
 		int discovered = state.getSpeciesDiscovered() == null ? 0 : state.getSpeciesDiscovered().size();
 		int total = monsterTable.getMonsters().size();
@@ -88,16 +83,13 @@ public class JournalTab extends JPanel
 			Color.WHITE, FontManager.getRunescapeBoldFont()));
 		section.add(Box.createVerticalStrut(4));
 		int nextIndex = -1;
-		for (int i = 0; i < Tuning.BESTIARY_MILESTONES.length; i++)
-		{
-			if (Tuning.BESTIARY_MILESTONES[i] > discovered)
-			{
+		for (int i = 0; i < Tuning.BESTIARY_MILESTONES.length; i++) {
+			if (Tuning.BESTIARY_MILESTONES[i] > discovered) {
 				nextIndex = i;
 				break;
 			}
 		}
-		if (nextIndex >= 0)
-		{
+		if (nextIndex >= 0) {
 			int next = Tuning.BESTIARY_MILESTONES[nextIndex];
 			section.add(new GachamanPanel.MeterBar((double) discovered / next,
 				ColorScheme.BRAND_ORANGE, discovered + " / " + next));
@@ -107,8 +99,7 @@ public class JournalTab extends JPanel
 						Tuning.BESTIARY_MILESTONE_GC[nextIndex]) + " GC",
 				ColorScheme.LIGHT_GRAY_COLOR));
 		}
-		else
-		{
+		else {
 			section.add(GachamanPanel.smallLine("All codex milestones complete!",
 				ColorScheme.BRAND_ORANGE));
 		}
@@ -118,59 +109,49 @@ public class JournalTab extends JPanel
 		section.add(GachamanPanel.wrapped("First on-contract kill of a new species pays +"
 				+ QuantityFormatter.formatNumber(Tuning.DISCOVERY_GC) + " GC.",
 			ColorScheme.MEDIUM_GRAY_COLOR));
-		if (discovered > 0)
-		{
+		if (discovered > 0) {
 			section.add(Box.createVerticalStrut(5));
 			section.add(GachamanPanel.smallLine("Discovered:", ColorScheme.BRAND_ORANGE));
 			// persisted keys are lowercased — recover display names from the table
 			Map<String, String> displayNames = new HashMap<>();
-			for (MonsterTable.Monster monster : monsterTable.getMonsters())
-			{
+			for (MonsterTable.Monster monster : monsterTable.getMonsters()) {
 				displayNames.put(monster.getName().toLowerCase(Locale.ROOT),
 					monster.getName());
 			}
 			List<String> names = new ArrayList<>();
-			for (String key : state.getSpeciesDiscovered())
-			{
+			for (String key : state.getSpeciesDiscovered()) {
 				names.add(displayNames.getOrDefault(key, capitalize(key)));
 			}
 			names.sort(String.CASE_INSENSITIVE_ORDER);
-			for (String name : names)
-			{
+			for (String name : names) {
 				section.add(GachamanPanel.smallLine("· " + name, ColorScheme.LIGHT_GRAY_COLOR));
 			}
 		}
 		return section;
 	}
 
-	private static String capitalize(String s)
-	{
-		if (s == null || s.isEmpty())
-		{
+	private static String capitalize(String s) {
+		if (s == null || s.isEmpty()) {
 			return "?";
 		}
 		return Character.toUpperCase(s.charAt(0)) + s.substring(1);
 	}
 
-	private JPanel buildFirstsSection(GachaState state)
-	{
+	private JPanel buildFirstsSection(GachaState state) {
 		JPanel section = GachamanPanel.section("Firsts");
 		Set<String> claimed = state.getFirstsClaimed() == null
 			? Collections.emptySet() : state.getFirstsClaimed();
 		FirstStamp[] stamps = FirstStamp.values();
 		int earned = 0;
-		for (FirstStamp stamp : stamps)
-		{
-			if (claimed.contains(stamp.name()))
-			{
+		for (FirstStamp stamp : stamps) {
+			if (claimed.contains(stamp.name())) {
 				earned++;
 			}
 		}
 		section.add(new GachamanPanel.MeterBar((double) earned / stamps.length,
 			new Color(230, 190, 80), earned + " / " + stamps.length + " stamped"));
 		section.add(Box.createVerticalStrut(4));
-		for (FirstStamp stamp : stamps)
-		{
+		for (FirstStamp stamp : stamps) {
 			boolean got = claimed.contains(stamp.name());
 			Integer gc = Tuning.FIRSTS_GC.get(stamp);
 			// markers limited to glyphs the RuneScape TTFs actually cover
@@ -187,15 +168,12 @@ public class JournalTab extends JPanel
 		return section;
 	}
 
-	private JPanel buildPbSection(GachaState state)
-	{
+	private JPanel buildPbSection(GachaState state) {
 		JPanel section = GachamanPanel.section("Personal Bests");
 		boolean any = false;
-		for (TaskDifficulty difficulty : TaskDifficulty.values())
-		{
+		for (TaskDifficulty difficulty : TaskDifficulty.values()) {
 			PersonalBest pb = state.getPersonalBests().get(difficulty.name());
-			if (pb == null || (pb.getFastestTaskMs() <= 0 && pb.getBiggestHaulGc() <= 0))
-			{
+			if (pb == null || (pb.getFastestTaskMs() <= 0 && pb.getBiggestHaulGc() <= 0)) {
 				continue;
 			}
 			any = true;
@@ -205,44 +183,37 @@ public class JournalTab extends JPanel
 			// "Biggest haul: 12,345 GC — Commander Zilyana" runs to 284px in a 205px
 			// column, and with the horizontal scrollbar disabled the name — the half
 			// the player cannot infer — was the half that got cut.
-			if (pb.getFastestTaskMs() > 0)
-			{
+			if (pb.getFastestTaskMs() > 0) {
 				section.add(GachamanPanel.smallLine(
 					"Fastest: " + formatDuration(pb.getFastestTaskMs()),
 					ColorScheme.LIGHT_GRAY_COLOR));
-				if (pb.getFastestMonster() != null)
-				{
+				if (pb.getFastestMonster() != null) {
 					section.add(GachamanPanel.smallLine("    " + pb.getFastestMonster(),
 						ColorScheme.MEDIUM_GRAY_COLOR));
 				}
 			}
-			if (pb.getBiggestHaulGc() > 0)
-			{
+			if (pb.getBiggestHaulGc() > 0) {
 				section.add(GachamanPanel.smallLine(
 					"Biggest haul: " + QuantityFormatter.formatNumber(pb.getBiggestHaulGc()) + " GC",
 					ColorScheme.LIGHT_GRAY_COLOR));
-				if (pb.getBiggestHaulMonster() != null)
-				{
+				if (pb.getBiggestHaulMonster() != null) {
 					section.add(GachamanPanel.smallLine("    " + pb.getBiggestHaulMonster(),
 						ColorScheme.MEDIUM_GRAY_COLOR));
 				}
 			}
 			section.add(Box.createVerticalStrut(4));
 		}
-		if (!any)
-		{
+		if (!any) {
 			section.add(GachamanPanel.smallLine("No records yet — complete some contracts!",
 				ColorScheme.MEDIUM_GRAY_COLOR));
 		}
 		return section;
 	}
 
-	private JPanel buildStatsSection(GachaState state)
-	{
+	private JPanel buildStatsSection(GachaState state) {
 		JPanel section = GachamanPanel.section("Monster Stats");
 		Map<String, MonsterStats> stats = state.getMonsterStats();
-		if (stats.isEmpty())
-		{
+		if (stats.isEmpty()) {
 			section.add(GachamanPanel.smallLine("Nothing slain yet.", ColorScheme.MEDIUM_GRAY_COLOR));
 			return section;
 		}
@@ -254,8 +225,7 @@ public class JournalTab extends JPanel
 		long totalKills = 0;
 		long totalGc = 0;
 		long totalTasks = 0;
-		for (Map.Entry<String, MonsterStats> entry : stats.entrySet())
-		{
+		for (Map.Entry<String, MonsterStats> entry : stats.entrySet()) {
 			MonsterStats ms = entry.getValue();
 			rows.add(new Object[]{entry.getKey(), ms.getKills(), ms.getGcEarned(),
 				(long) ms.getTasksCompleted()});
@@ -264,17 +234,14 @@ public class JournalTab extends JPanel
 			totalTasks += ms.getTasksCompleted();
 		}
 
-		DefaultTableModel model = new DefaultTableModel(rows.toArray(new Object[0][]), columns)
-		{
+		DefaultTableModel model = new DefaultTableModel(rows.toArray(new Object[0][]), columns) {
 			@Override
-			public boolean isCellEditable(int row, int column)
-			{
+			public boolean isCellEditable(int row, int column) {
 				return false;
 			}
 
 			@Override
-			public Class<?> getColumnClass(int column)
-			{
+			public Class<?> getColumnClass(int column) {
 				return column == 0 ? String.class : Long.class;
 			}
 		};
@@ -326,29 +293,24 @@ public class JournalTab extends JPanel
 	}
 
 	/** Right-aligned, separator-formatted cell for the table's three Long columns. */
-	private static final class NumberCell extends DefaultTableCellRenderer
-	{
-		NumberCell()
-		{
+	private static final class NumberCell extends DefaultTableCellRenderer {
+		NumberCell() {
 			setHorizontalAlignment(SwingConstants.RIGHT);
 		}
 
 		@Override
-		protected void setValue(Object value)
-		{
+		protected void setValue(Object value) {
 			setText(value instanceof Number
 				? QuantityFormatter.formatNumber(((Number) value).longValue())
 				: (value == null ? "" : value.toString()));
 		}
 	}
 
-	private static String formatDuration(long ms)
-	{
+	private static String formatDuration(long ms) {
 		long totalSeconds = ms / 1000;
 		long minutes = totalSeconds / 60;
 		long seconds = totalSeconds % 60;
-		if (minutes >= 60)
-		{
+		if (minutes >= 60) {
 			return String.format("%d:%02d:%02d", minutes / 60, minutes % 60, seconds);
 		}
 		return String.format("%d:%02d", minutes, seconds);

@@ -18,6 +18,7 @@ import java.util.Set;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.widgets.ItemQuantityMode;
 import net.runelite.api.widgets.JavaScriptCallback;
@@ -36,8 +37,7 @@ import net.runelite.client.game.chatbox.ChatboxTextInput;
  */
 @Slf4j
 @Singleton
-public class ChatboxCardSearch extends ChatboxTextInput
-{
+public class ChatboxCardSearch extends ChatboxTextInput {
 	private static final int ICON_WIDTH = 36;
 	private static final int ICON_HEIGHT = 32;
 	private static final int PADDING = 6;
@@ -45,20 +45,12 @@ public class ChatboxCardSearch extends ChatboxTextInput
 	private static final int FONT_SIZE = 16;
 	private static final int HOVERED_OPACITY = 128;
 
-	private static final class Result
-	{
+	@RequiredArgsConstructor
+	private static final class Result {
 		final String uuid;
 		final String name;
 		final int iconItemId;
 		final Rarity rarity;
-
-		Result(String uuid, String name, int iconItemId, Rarity rarity)
-		{
-			this.uuid = uuid;
-			this.name = name;
-			this.iconItemId = iconItemId;
-			this.rarity = rarity;
-		}
 	}
 
 	private final ChatboxPanelManager chatboxPanelManager;
@@ -71,8 +63,7 @@ public class ChatboxCardSearch extends ChatboxTextInput
 
 	@Inject
 	public ChatboxCardSearch(ChatboxPanelManager chatboxPanelManager, ClientThread clientThread,
-		LoadoutService loadoutService, CardDatabase cardDatabase)
-	{
+		LoadoutService loadoutService, CardDatabase cardDatabase) {
 		super(chatboxPanelManager, clientThread);
 		this.chatboxPanelManager = chatboxPanelManager;
 		this.loadoutService = loadoutService;
@@ -85,21 +76,18 @@ public class ChatboxCardSearch extends ChatboxTextInput
 	}
 
 	/** Open the picker for one loadout slot. Safe to call from any thread. */
-	public void openFor(GearSlot gearSlot)
-	{
+	public void openFor(GearSlot gearSlot) {
 		clientThread.invokeLater(() -> {
 			// close any live input first (incl. a previous run of this search)
 			// so key/mouse listeners unregister cleanly before we rebuild
-			if (chatboxPanelManager.getCurrentInput() != null)
-			{
+			if (chatboxPanelManager.getCurrentInput() != null) {
 				chatboxPanelManager.close();
 			}
 			this.slot = gearSlot;
 			prompt(gearSlot.getDisplayName() + " slot — choose a card");
 			value("");
 			onClose(() -> {
-				if (this.slot == gearSlot)
-				{
+				if (this.slot == gearSlot) {
 					this.slot = null;
 				}
 			});
@@ -109,11 +97,9 @@ public class ChatboxCardSearch extends ChatboxTextInput
 	}
 
 	@Override
-	protected void update()
-	{
+	protected void update() {
 		Widget container = chatboxPanelManager.getContainerWidget();
-		if (container == null)
-		{
+		if (container == null) {
 			return;
 		}
 		container.deleteAllChildren();
@@ -134,8 +120,7 @@ public class ChatboxCardSearch extends ChatboxTextInput
 
 		int x = PADDING;
 		int y = PADDING * 3;
-		for (Result result : results)
-		{
+		for (Result result : results) {
 			final Result r = result;
 			final Widget item = container.createChild(-1, WidgetType.GRAPHIC);
 			item.setItemId(r.iconItemId);
@@ -155,8 +140,7 @@ public class ChatboxCardSearch extends ChatboxTextInput
 			item.revalidate();
 
 			x += ICON_WIDTH + PADDING;
-			if (x + ICON_WIDTH >= container.getWidth())
-			{
+			if (x + ICON_WIDTH >= container.getWidth()) {
 				y += ICON_HEIGHT + PADDING;
 				x = PADDING;
 			}
@@ -164,13 +148,10 @@ public class ChatboxCardSearch extends ChatboxTextInput
 	}
 
 	@Override
-	public void keyPressed(KeyEvent ev)
-	{
-		if (ev.getKeyCode() == KeyEvent.VK_ENTER)
-		{
+	public void keyPressed(KeyEvent ev) {
+		if (ev.getKeyCode() == KeyEvent.VK_ENTER) {
 			ev.consume();
-			if (!results.isEmpty())
-			{
+			if (!results.isEmpty()) {
 				final Result first = results.get(0);
 				clientThread.invokeLater(() -> select(first));
 			}
@@ -180,58 +161,46 @@ public class ChatboxCardSearch extends ChatboxTextInput
 	}
 
 	/** Client thread. */
-	private void select(Result result)
-	{
+	private void select(Result result) {
 		GearSlot target = slot;
-		if (target != null)
-		{
+		if (target != null) {
 			loadoutService.assign(target, result.uuid);
 		}
 		chatboxPanelManager.close();
 	}
 
-	private void filterResults()
-	{
+	private void filterResults() {
 		results.clear();
 		GearSlot target = slot;
-		if (target == null || !cardDatabase.isReady())
-		{
+		if (target == null || !cardDatabase.isReady()) {
 			return;
 		}
 		String filter = getValue() == null ? "" : getValue().toLowerCase(Locale.ROOT).trim();
 		List<OwnedCard> valid;
-		try
-		{
+		try {
 			valid = loadoutService.validFor(target);
 		}
-		catch (Exception e)
-		{
+		catch (Exception e) {
 			log.warn("validFor({}) failed", target, e);
 			return;
 		}
-		if (valid == null)
-		{
+		if (valid == null) {
 			return;
 		}
 		Set<String> seen = new HashSet<>();
 		List<Result> matched = new ArrayList<>();
-		for (OwnedCard owned : valid)
-		{
+		for (OwnedCard owned : valid) {
 			Result r = toResult(owned);
-			if (r == null || !r.name.toLowerCase(Locale.ROOT).contains(filter))
-			{
+			if (r == null || !r.name.toLowerCase(Locale.ROOT).contains(filter)) {
 				continue;
 			}
-			if (seen.add(r.name))
-			{
+			if (seen.add(r.name)) {
 				matched.add(r);
 			}
 		}
 		matched.sort(Comparator.comparing(a -> a.name.toLowerCase(Locale.ROOT)));
-		for (Result r : matched)
-		{
-			if (results.size() >= MAX_RESULTS)
-			{
+		for (Result r : matched) {
+			if (results.size() >= MAX_RESULTS) {
 				break;
 			}
 			results.add(r);
@@ -239,33 +208,27 @@ public class ChatboxCardSearch extends ChatboxTextInput
 	}
 
 	@Nullable
-	private Result toResult(OwnedCard owned)
-	{
-		if (owned.isHologram())
-		{
+	private Result toResult(OwnedCard owned) {
+		if (owned.isHologram()) {
 			HologramDefinition holo = cardDatabase.holograms().get(owned.getTierKey());
-			if (holo == null)
-			{
+			if (holo == null) {
 				return null;
 			}
 			CardDefinition rep = cardDatabase.cardByName(holo.getRepresentativeItemName());
-			if (rep == null)
-			{
+			if (rep == null) {
 				return null;
 			}
 			return new Result(owned.getUuid(), holo.getName(), rep.getCardId(), holo.getRarity());
 		}
 		CardDefinition card = cardDatabase.card(owned.getCardId());
-		if (card == null)
-		{
+		if (card == null) {
 			return null;
 		}
 		String name = owned.getVariant() == Variant.SHINY ? card.getName() + " (Shiny)" : card.getName();
 		return new Result(owned.getUuid(), name, card.getCardId(), card.getRarity());
 	}
 
-	private static String colTag(Rarity rarity)
-	{
+	private static String colTag(Rarity rarity) {
 		int rgb = rarity.getColor().getRGB() & 0xFFFFFF;
 		return "<col=" + String.format("%06x", rgb) + ">";
 	}

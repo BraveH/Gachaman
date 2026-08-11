@@ -31,8 +31,7 @@ import javax.annotation.Nullable;
  *
  * Pure statics, so every rule here is testable without a Client.
  */
-public final class AccountKey
-{
+public final class AccountKey {
 	/** 8 bytes of SHA-256, hex-encoded. */
 	public static final int KEY_LENGTH = 16;
 
@@ -41,8 +40,7 @@ public final class AccountKey
 
 	private static final char[] HEX = "0123456789abcdef".toCharArray();
 
-	private AccountKey()
-	{
+	private AccountKey() {
 		return;
 	}
 
@@ -54,27 +52,22 @@ public final class AccountKey
 	 * same person. Callers must treat null as "unknown", never as a group.
 	 */
 	@Nullable
-	public static String of(long accountHash)
-	{
-		if (accountHash == NO_ACCOUNT || accountHash == 0L)
-		{
+	public static String of(long accountHash) {
+		if (accountHash == NO_ACCOUNT || accountHash == 0L) {
 			return null;
 		}
 		MessageDigest digest;
-		try
-		{
+		try {
 			digest = MessageDigest.getInstance("SHA-256");
 		}
-		catch (NoSuchAlgorithmException e)
-		{
+		catch (NoSuchAlgorithmException e) {
 			// SHA-256 is required of every JRE; if it is genuinely absent the
 			// right answer is "no identity", not a crash on the game thread
 			return null;
 		}
 		byte[] hash = digest.digest(Long.toString(accountHash).getBytes(StandardCharsets.UTF_8));
 		char[] out = new char[KEY_LENGTH];
-		for (int i = 0; i < KEY_LENGTH / 2; i++)
-		{
+		for (int i = 0; i < KEY_LENGTH / 2; i++) {
 			out[i * 2] = HEX[(hash[i] >> 4) & 0xF];
 			out[i * 2 + 1] = HEX[hash[i] & 0xF];
 		}
@@ -90,22 +83,17 @@ public final class AccountKey
 	 * grow somebody else's save file, and a mixed-case one would key twice.
 	 */
 	@Nullable
-	public static String normalize(@Nullable String raw)
-	{
-		if (raw == null)
-		{
+	public static String normalize(@Nullable String raw) {
+		if (raw == null) {
 			return null;
 		}
 		String key = raw.trim().toLowerCase(Locale.ROOT);
-		if (key.length() != KEY_LENGTH)
-		{
+		if (key.length() != KEY_LENGTH) {
 			return null;
 		}
-		for (int i = 0; i < KEY_LENGTH; i++)
-		{
+		for (int i = 0; i < KEY_LENGTH; i++) {
 			char c = key.charAt(i);
-			if ((c < '0' || c > '9') && (c < 'a' || c > 'f'))
-			{
+			if ((c < '0' || c > '9') && (c < 'a' || c > 'f')) {
 				return null;
 			}
 		}
@@ -116,8 +104,7 @@ public final class AccountKey
 	 * Whether two claims name the same account. Two unknowns are NOT the same
 	 * account — that is the whole reason this is not {@code Objects.equals}.
 	 */
-	public static boolean same(@Nullable String a, @Nullable String b)
-	{
+	public static boolean same(@Nullable String a, @Nullable String b) {
 		String left = normalize(a);
 		String right = normalize(b);
 		return left != null && left.equals(right);

@@ -39,8 +39,7 @@ import javax.annotation.Nullable;
  * Every rule lives here as a pure static so all of it is testable — the
  * service-side caller is reduced to reading a roster and calling these.
  */
-public final class PatronMark
-{
+public final class PatronMark {
 	/**
 	 * OSRS display names are at most 12 characters. Anything longer did not
 	 * come from a real name — the string arrives over the party relay from
@@ -69,8 +68,7 @@ public final class PatronMark
 			.thenComparing(e -> nameOf(e.getValue()), PatronMark::nameOrder)
 			.thenComparing(Map.Entry::getKey);
 
-	private PatronMark()
-	{
+	private PatronMark() {
 		return;
 	}
 
@@ -91,10 +89,8 @@ public final class PatronMark
 	 * either way and only the label is missing.
 	 */
 	@Nullable
-	public static String normalizeName(@Nullable String raw)
-	{
-		if (raw == null)
-		{
+	public static String normalizeName(@Nullable String raw) {
+		if (raw == null) {
 			return null;
 		}
 		// U+00A0. Jagex names use it as the word separator, and it reads as a
@@ -103,8 +99,7 @@ public final class PatronMark
 		// or encoding round-trip would silently eat it
 		String name = raw.replace((char) 0xA0, ' ').trim();
 		if (name.isEmpty() || name.length() > MAX_NAME
-			|| name.indexOf('<') >= 0 || name.indexOf('>') >= 0)
-		{
+			|| name.indexOf('<') >= 0 || name.indexOf('>') >= 0) {
 			return null;
 		}
 		return name;
@@ -113,11 +108,9 @@ public final class PatronMark
 	/** The partner's record, or null when they are not in the ledger. */
 	@Nullable
 	public static PatronRecord recordFor(@Nullable Map<String, PatronRecord> ledger,
-		@Nullable String accountKey)
-	{
+		@Nullable String accountKey) {
 		String key = AccountKey.normalize(accountKey);
-		if (ledger == null || ledger.isEmpty() || key == null)
-		{
+		if (ledger == null || ledger.isEmpty() || key == null) {
 			return null;
 		}
 		PatronRecord record = ledger.get(key);
@@ -126,8 +119,7 @@ public final class PatronMark
 
 	/** Shared contracts finished with one partner; 0 for anyone uncounted. */
 	public static int countFor(@Nullable Map<String, PatronRecord> ledger,
-		@Nullable String accountKey)
-	{
+		@Nullable String accountKey) {
 		PatronRecord record = recordFor(ledger, accountKey);
 		return record == null ? 0 : record.getCount();
 	}
@@ -138,12 +130,10 @@ public final class PatronMark
 	 * Junk is dropped rather than rendered: a record with no count is not a
 	 * partner, and a key that is not a key came from a hand-edited save.
 	 */
-	public static List<PatronRecord> ranked(@Nullable Map<String, PatronRecord> ledger)
-	{
+	public static List<PatronRecord> ranked(@Nullable Map<String, PatronRecord> ledger) {
 		List<Map.Entry<String, PatronRecord>> entries = sortedEntries(ledger);
 		List<PatronRecord> out = new ArrayList<>(entries.size());
-		for (Map.Entry<String, PatronRecord> entry : entries)
-		{
+		for (Map.Entry<String, PatronRecord> entry : entries) {
 			out.add(entry.getValue());
 		}
 		return Collections.unmodifiableList(out);
@@ -154,25 +144,21 @@ public final class PatronMark
 	 * you, or null when nobody has. Always {@link #ranked}'s first entry.
 	 */
 	@Nullable
-	public static String topKey(@Nullable Map<String, PatronRecord> ledger)
-	{
+	public static String topKey(@Nullable Map<String, PatronRecord> ledger) {
 		List<Map.Entry<String, PatronRecord>> entries = sortedEntries(ledger);
 		return entries.isEmpty() ? null : entries.get(0).getKey();
 	}
 
 	/** Distinct counted partners — the Patrons page's headline, and its gate. */
-	public static int partnerCount(@Nullable Map<String, PatronRecord> ledger)
-	{
+	public static int partnerCount(@Nullable Map<String, PatronRecord> ledger) {
 		return sortedEntries(ledger).size();
 	}
 
 	/** Shared contracts across every partner. Not a contract count: a shared
 	 * contract with three partners is three marks and reads as three here. */
-	public static int totalMarks(@Nullable Map<String, PatronRecord> ledger)
-	{
+	public static int totalMarks(@Nullable Map<String, PatronRecord> ledger) {
 		int total = 0;
-		for (Map.Entry<String, PatronRecord> entry : sortedEntries(ledger))
-		{
+		for (Map.Entry<String, PatronRecord> entry : sortedEntries(ledger)) {
 			total += entry.getValue().getCount();
 		}
 		return total;
@@ -195,10 +181,8 @@ public final class PatronMark
 	 * is shared and immutable by contract.
 	 */
 	public static Map<String, PatronRecord> credit(@Nullable Map<String, PatronRecord> current,
-		@Nullable Map<String, String> partners, int cap, long nowMs)
-	{
-		if (partners == null || partners.isEmpty())
-		{
+		@Nullable Map<String, String> partners, int cap, long nowMs) {
+		if (partners == null || partners.isEmpty()) {
 			return current;
 		}
 		Map<String, PatronRecord> next = current == null
@@ -210,17 +194,14 @@ public final class PatronMark
 		// whole feature rests on, and a rule that holds by convention is not one
 		Set<String> credited = new HashSet<>();
 		boolean changed = false;
-		for (Map.Entry<String, String> partner : partners.entrySet())
-		{
+		for (Map.Entry<String, String> partner : partners.entrySet()) {
 			String key = AccountKey.normalize(partner.getKey());
-			if (key == null || !credited.add(key))
-			{
+			if (key == null || !credited.add(key)) {
 				continue; // not an identity, or an identity already counted
 			}
 			String name = normalizeName(partner.getValue());
 			PatronRecord existing = next.get(key);
-			if (existing != null && existing.getCount() > 0)
-			{
+			if (existing != null && existing.getCount() > 0) {
 				// keep the last name we could read rather than blanking a drawn
 				// row because this one completion happened while they were
 				// logged out of the roster
@@ -229,8 +210,7 @@ public final class PatronMark
 				changed = true;
 				continue;
 			}
-			if (cap > 0 && next.size() >= cap && !evictOneOff(next))
-			{
+			if (cap > 0 && next.size() >= cap && !evictOneOff(next)) {
 				// at the cap with nobody to displace: drop the newcomer rather
 				// than a partner you actually have a history with
 				continue;
@@ -245,13 +225,10 @@ public final class PatronMark
 	}
 
 	/** 0 = below the first threshold, up to Tuning.PATRON_TIERS.length. */
-	public static int tierFor(int count)
-	{
+	public static int tierFor(int count) {
 		int tier = 0;
-		for (int threshold : Tuning.PATRON_TIERS)
-		{
-			if (count >= threshold)
-			{
+		for (int threshold : Tuning.PATRON_TIERS) {
+			if (count >= threshold) {
 				tier++;
 			}
 		}
@@ -259,27 +236,23 @@ public final class PatronMark
 	}
 
 	/** True only on the completion that pushes a partner up a tier. */
-	public static boolean crossedTier(int before, int after)
-	{
+	public static boolean crossedTier(int before, int after) {
 		return tierFor(after) > tierFor(before);
 	}
 
 	/** Clamped, so adding a fourth threshold to PATRON_TIERS cannot throw. */
-	public static String tierLabel(int count)
-	{
+	public static String tierLabel(int count) {
 		return TIER_LABELS[Math.min(tierFor(count), TIER_LABELS.length - 1)];
 	}
 
 	/** What to draw for a partner whose client never told us their name. */
-	public static String displayName(@Nullable PatronRecord record)
-	{
+	public static String displayName(@Nullable PatronRecord record) {
 		String name = record == null ? null : normalizeName(record.getName());
 		return name == null ? "An unnamed patron" : name;
 	}
 
 	/** Package-private for the test that pins the labels to the thresholds. */
-	static int labelCount()
-	{
+	static int labelCount() {
 		return TIER_LABELS.length;
 	}
 
@@ -287,18 +260,14 @@ public final class PatronMark
 
 	/** Counted, key-valid entries in {@link #DISPLAY_ORDER}. */
 	private static List<Map.Entry<String, PatronRecord>> sortedEntries(
-		@Nullable Map<String, PatronRecord> ledger)
-	{
-		if (ledger == null || ledger.isEmpty())
-		{
+		@Nullable Map<String, PatronRecord> ledger) {
+		if (ledger == null || ledger.isEmpty()) {
 			return Collections.emptyList();
 		}
 		List<Map.Entry<String, PatronRecord>> entries = new ArrayList<>(ledger.size());
-		for (Map.Entry<String, PatronRecord> entry : ledger.entrySet())
-		{
+		for (Map.Entry<String, PatronRecord> entry : ledger.entrySet()) {
 			// a null VALUE is reachable: Gson deserializes {"abc…":null} happily
-			if (entry.getValue() == null || entry.getValue().getCount() <= 0)
-			{
+			if (entry.getValue() == null || entry.getValue().getCount() <= 0) {
 				continue;
 			}
 			// CANONICAL, not merely normalizable. recordFor looks the partner up
@@ -307,8 +276,7 @@ public final class PatronMark
 			// party page could not draw a pip for. credit() only ever writes
 			// canonical keys, so a non-canonical one came from a hand-edited save
 			// and the honest reading of it is "not one of ours"
-			if (!entry.getKey().equals(AccountKey.normalize(entry.getKey())))
-			{
+			if (!entry.getKey().equals(AccountKey.normalize(entry.getKey()))) {
 				continue;
 			}
 			entries.add(entry);
@@ -324,28 +292,24 @@ public final class PatronMark
 	 * longest ago goes first, and the key breaks any remaining tie so eviction
 	 * is deterministic across a reload.
 	 */
-	private static boolean evictOneOff(Map<String, PatronRecord> ledger)
-	{
+	private static boolean evictOneOff(Map<String, PatronRecord> ledger) {
 		String victim = null;
 		int lowest = Integer.MAX_VALUE;
 		long oldest = Long.MAX_VALUE;
-		for (Map.Entry<String, PatronRecord> entry : ledger.entrySet())
-		{
+		for (Map.Entry<String, PatronRecord> entry : ledger.entrySet()) {
 			PatronRecord record = entry.getValue();
 			// a junk row is the ideal victim: it occupies a slot and draws nothing
 			int count = record == null ? 0 : record.getCount();
 			long at = record == null ? 0 : record.getLastSharedAt();
 			if (count < lowest
 				|| (count == lowest && at < oldest)
-				|| (count == lowest && at == oldest && keyOrder(entry.getKey(), victim) < 0))
-			{
+				|| (count == lowest && at == oldest && keyOrder(entry.getKey(), victim) < 0)) {
 				lowest = count;
 				oldest = at;
 				victim = entry.getKey();
 			}
 		}
-		if (victim == null || lowest > 1)
-		{
+		if (victim == null || lowest > 1) {
 			return false;
 		}
 		ledger.remove(victim);
@@ -353,24 +317,20 @@ public final class PatronMark
 	}
 
 	/** Nulls last, then case-insensitive, then case-sensitive, so no two tie. */
-	private static int nameOrder(@Nullable String a, @Nullable String b)
-	{
-		if (a == null || b == null)
-		{
+	private static int nameOrder(@Nullable String a, @Nullable String b) {
+		if (a == null || b == null) {
 			return a == b ? 0 : (a == null ? 1 : -1);
 		}
 		int cmp = a.compareToIgnoreCase(b);
 		return cmp != 0 ? cmp : a.compareTo(b);
 	}
 
-	private static int keyOrder(String a, @Nullable String b)
-	{
+	private static int keyOrder(String a, @Nullable String b) {
 		return b == null ? -1 : a.compareTo(b);
 	}
 
 	@Nullable
-	private static String nameOf(PatronRecord record)
-	{
+	private static String nameOf(PatronRecord record) {
 		return normalizeName(record.getName());
 	}
 }

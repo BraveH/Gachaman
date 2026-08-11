@@ -3,6 +3,7 @@ package com.gachaman.service;
 import java.util.Set;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
@@ -21,8 +22,8 @@ import net.runelite.client.eventbus.Subscribe;
  */
 @Slf4j
 @Singleton
-public class EquipBlockService
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class EquipBlockService {
 	private static final Set<String> EQUIP_OPTIONS = Set.of("Wield", "Wear", "Equip", "Hold");
 
 	private final Client client;
@@ -31,44 +32,28 @@ public class EquipBlockService
 
 	private int lastWarnTick = -1;
 
-	@Inject
-	public EquipBlockService(Client client, PermissionService permissionService,
-		ChatMessageManager chatMessageManager)
-	{
-		this.client = client;
-		this.permissionService = permissionService;
-		this.chatMessageManager = chatMessageManager;
-	}
-
 	@Subscribe
-	public void onMenuEntryAdded(MenuEntryAdded event)
-	{
+	public void onMenuEntryAdded(MenuEntryAdded event) {
 		MenuEntry entry = event.getMenuEntry();
-		if (!isEquipOption(entry.getOption()))
-		{
+		if (!isEquipOption(entry.getOption())) {
 			return;
 		}
 		int itemId = entry.getItemId();
-		if (itemId > 0 && permissionService.isForbidden(itemId))
-		{
+		if (itemId > 0 && permissionService.isForbidden(itemId)) {
 			client.getMenu().removeMenuEntry(entry);
 		}
 	}
 
 	@Subscribe
-	public void onMenuOptionClicked(MenuOptionClicked event)
-	{
-		if (!isEquipOption(event.getMenuOption()))
-		{
+	public void onMenuOptionClicked(MenuOptionClicked event) {
+		if (!isEquipOption(event.getMenuOption())) {
 			return;
 		}
 		int itemId = event.getItemId();
-		if (itemId > 0 && permissionService.isForbidden(itemId))
-		{
+		if (itemId > 0 && permissionService.isForbidden(itemId)) {
 			event.consume();
 			int tick = client.getTickCount();
-			if (tick != lastWarnTick)
-			{
+			if (tick != lastWarnTick) {
 				lastWarnTick = tick;
 				chatMessageManager.queue(QueuedMessage.builder()
 					.type(ChatMessageType.CONSOLE)
@@ -79,8 +64,7 @@ public class EquipBlockService
 		}
 	}
 
-	static boolean isEquipOption(String option)
-	{
+	static boolean isEquipOption(String option) {
 		return option != null && EQUIP_OPTIONS.contains(option);
 	}
 }

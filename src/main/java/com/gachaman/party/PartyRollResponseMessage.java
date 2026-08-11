@@ -24,8 +24,7 @@ import net.runelite.client.party.messages.PartyMemberMessage;
 @EqualsAndHashCode(callSuper = false)
 @NoArgsConstructor
 @AllArgsConstructor
-public class PartyRollResponseMessage extends PartyMemberMessage
-{
+public class PartyRollResponseMessage extends PartyMemberMessage {
 	public static final int AGREE = 0;
 	public static final int DECLINE = 1;
 	public static final int BUSY = 2;

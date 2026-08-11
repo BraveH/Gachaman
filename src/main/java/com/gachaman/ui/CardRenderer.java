@@ -31,8 +31,7 @@ import lombok.Value;
  * cycling, hologram scanlines with chromatic ghosting, deterministic sparkles.
  * Pure drawing — animation state comes in via timeMs so callers control time.
  */
-public final class CardRenderer
-{
+public final class CardRenderer {
 	private static final Color CARD_BG_TOP = new Color(48, 42, 32);
 	private static final Color CARD_BG_BOTTOM = new Color(28, 24, 18);
 	private static final Color NAME_BAND = new Color(20, 17, 12, 230);
@@ -74,8 +73,7 @@ public final class CardRenderer
 
 	@Value
 	@Builder
-	public static class CardView
-	{
+	public static class CardView {
 		String name;
 		Rarity rarity;
 		Variant variant;
@@ -91,13 +89,11 @@ public final class CardRenderer
 		int killsServed;
 	}
 
-	private CardRenderer()
-	{
+	private CardRenderer() {
 	}
 
 	/** Draw a face-down card back. */
-	public static void drawBack(Graphics2D g, int x, int y, int w, int h, long timeMs)
-	{
+	public static void drawBack(Graphics2D g, int x, int y, int w, int h, long timeMs) {
 		Graphics2D g2 = (Graphics2D) g.create();
 		g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		RoundRectangle2D shape = new RoundRectangle2D.Float(x, y, w, h, w / 7f, w / 7f);
@@ -122,8 +118,7 @@ public final class CardRenderer
 	}
 
 	/** Draw a face-up card. */
-	public static void drawFace(Graphics2D g, int x, int y, int w, int h, CardView view, long timeMs)
-	{
+	public static void drawFace(Graphics2D g, int x, int y, int w, int h, CardView view, long timeMs) {
 		Graphics2D g2 = (Graphics2D) g.create();
 		g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		RoundRectangle2D shape = new RoundRectangle2D.Float(x, y, w, h, w / 7f, w / 7f);
@@ -134,8 +129,7 @@ public final class CardRenderer
 
 		// art — cropped to its opaque bounds first: item sprites carry uneven
 		// transparent padding, so centering the raw sprite off-centers the art.
-		if (view.getArt() != null)
-		{
+		if (view.getArt() != null) {
 			int artH = (int) (h * 0.52);
 			int artY = y + (int) (h * 0.12);
 			BufferedImage art = cropToOpaqueBounds(view.getArt());
@@ -155,8 +149,7 @@ public final class CardRenderer
 		// 90px. Drawing it under the art instead would read as a dirty background
 		// rather than as a dirty card.
 		CardWear wear = Tuning.cardWear(view.getKillsServed());
-		if (wear != CardWear.NONE)
-		{
+		if (wear != CardWear.NONE) {
 			// seeded from the NAME, not from timeMs and not from a new CardView
 			// field: the pattern is then frame-stable (no shimmer on a static
 			// card), survives a restart, and is identical between the album
@@ -172,8 +165,7 @@ public final class CardRenderer
 		g2.setColor(view.getRarity().getColor());
 		drawFittedString(g2, view.getName(), x + w / 2, y + h - bandH / 2 - h / 8, w - 8,
 			new Font(Font.SANS_SERIF, Font.BOLD, Math.max(9, w / 9)), 8);
-		if (view.getSubtitle() != null)
-		{
+		if (view.getSubtitle() != null) {
 			g2.setColor(new Color(200, 200, 200));
 			drawFittedString(g2, view.getSubtitle(), x + w / 2, y + h - h / 16, w - 8,
 				new Font(Font.SANS_SERIF, Font.PLAIN, Math.max(8, w / 12)), 7);
@@ -188,8 +180,7 @@ public final class CardRenderer
 		String service = view.getKillsServed() > 0 ? serviceText(view.getKillsServed()) : null;
 		int badgeTextW = -1;
 		int badgeBottom = y;
-		if (service != null)
-		{
+		if (service != null) {
 			g2.setFont(serviceFont(w));
 			badgeTextW = g2.getFontMetrics().stringWidth(service);
 			badgeBottom = serviceBadgeY(y, h) + g2.getFontMetrics().getHeight();
@@ -205,23 +196,19 @@ public final class CardRenderer
 			(labelLeft + labelRight) / 2, y + h / 14 + 4, labelRight - labelLeft);
 
 		// variant effects
-		if (view.getVariant() == Variant.SHINY)
-		{
+		if (view.getVariant() == Variant.SHINY) {
 			drawShiny(g2, shape, x, y, w, h, timeMs);
 		}
-		else if (view.getVariant() == Variant.HOLOGRAM)
-		{
+		else if (view.getVariant() == Variant.HOLOGRAM) {
 			drawHologram(g2, shape, x, y, w, h, timeMs);
 		}
-		else if (view.getRarity().atLeast(Rarity.EPIC))
-		{
+		else if (view.getRarity().atLeast(Rarity.EPIC)) {
 			drawSheen(g2, shape, x, y, w, h, timeMs, 3000, new Color(255, 255, 255, 40));
 		}
 
 		// after the variant effects so the number is not lost under scanlines;
 		// the border block below re-sets both colour and stroke, so nothing leaks
-		if (service != null)
-		{
+		if (service != null) {
 			drawServiceBadge(g2, x, y, w, h, service);
 		}
 
@@ -235,8 +222,7 @@ public final class CardRenderer
 		// on the card and the crease ran underneath it.
 		int topBandBottom = Math.max(badgeBottom, y + h / 14 + 4 + labelSize);
 		int nameBandTop = y + h - bandH - h / 8;
-		if (wear != CardWear.NONE)
-		{
+		if (wear != CardWear.NONE) {
 			drawWearLines(g2, shape, w, wear, wearSegments(x, y, w, h, wear,
 				view.getName().hashCode(), wearProtect(x, y, w, h, topBandBottom, nameBandTop)));
 		}
@@ -255,8 +241,7 @@ public final class CardRenderer
 		// that is the whole point of it. A worn card's frame is interrupted where
 		// the gilt has flaked off, so the nicks have to bite the border itself
 		// rather than sit politely inside it.
-		if (wear != CardWear.NONE)
-		{
+		if (wear != CardWear.NONE) {
 			drawWearEdge(g2, shape, x, y, w, h, wear, view.getName().hashCode());
 		}
 
@@ -264,21 +249,17 @@ public final class CardRenderer
 	}
 
 	/** Rarity-colored glow behind a card (charge-up etc.); intensity 0..1. */
-	public static void drawGlow(Graphics2D g, int x, int y, int w, int h, Color color, float intensity)
-	{
-		if (intensity <= 0)
-		{
+	public static void drawGlow(Graphics2D g, int x, int y, int w, int h, Color color, float intensity) {
+		if (intensity <= 0) {
 			return;
 		}
 		Graphics2D g2 = (Graphics2D) g.create();
 		g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		int layers = 12;
-		for (int i = layers; i >= 1; i--)
-		{
+		for (int i = layers; i >= 1; i--) {
 			float t = (float) i / layers;
 			int alpha = (int) (intensity * 90 * (1 - t) * (1 - t));
-			if (alpha <= 0)
-			{
+			if (alpha <= 0) {
 				continue;
 			}
 			g2.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), Math.min(255, alpha)));
@@ -291,14 +272,12 @@ public final class CardRenderer
 
 	// --- effect internals ---
 
-	private static void drawShiny(Graphics2D g2, Shape clip, int x, int y, int w, int h, long timeMs)
-	{
+	private static void drawShiny(Graphics2D g2, Shape clip, int x, int y, int w, int h, long timeMs) {
 		Graphics2D gs = (Graphics2D) g2.create();
 		gs.setClip(clip);
 		// two counter-drifting prismatic bands, swept diagonally
 		gs.rotate(Math.toRadians(-25), x + w / 2.0, y + h / 2.0);
-		for (int band = 0; band < 2; band++)
-		{
+		for (int band = 0; band < 2; band++) {
 			float phase = ((timeMs + band * 900) % 2600) / 2600f;
 			int bx = x - w - h / 2 + (int) (phase * (w * 3 + h));
 			Color c = prismaticColor(timeMs, band * 120);
@@ -308,10 +287,9 @@ public final class CardRenderer
 		}
 		gs.rotate(Math.toRadians(25), x + w / 2.0, y + h / 2.0);
 		// deterministic sparkles
-		for (int i = 0; i < 7; i++)
-		{
-			float u = hash01(i * 733 + 1);
-			float v = hash01(i * 733 + 2);
+		for (int i = 0; i < 7; i++) {
+			float u = Paint.hash01(i * 733 + 1);
+			float v = Paint.hash01(i * 733 + 2);
 			float twinkle = (float) (0.5 + 0.5 * Math.sin(timeMs / 260.0 + i * 1.7));
 			int alpha = (int) (200 * twinkle);
 			gs.setColor(new Color(255, 255, 255, alpha));
@@ -324,8 +302,7 @@ public final class CardRenderer
 		gs.dispose();
 	}
 
-	private static void drawHologram(Graphics2D g2, Shape clip, int x, int y, int w, int h, long timeMs)
-	{
+	private static void drawHologram(Graphics2D g2, Shape clip, int x, int y, int w, int h, long timeMs) {
 		Graphics2D gs = (Graphics2D) g2.create();
 		gs.setClip(clip);
 		// cyan wash
@@ -334,8 +311,7 @@ public final class CardRenderer
 		// scanlines drifting downward
 		int offset = (int) ((timeMs / 90) % 6);
 		gs.setColor(new Color(140, 230, 255, 34));
-		for (int sy = y + offset; sy < y + h; sy += 6)
-		{
+		for (int sy = y + offset; sy < y + h; sy += 6) {
 			gs.drawLine(x, sy, x + w, sy);
 		}
 		// chromatic ghost edges
@@ -348,8 +324,7 @@ public final class CardRenderer
 		gs.setComposite(old);
 		// occasional flicker band
 		float flicker = (timeMs % 2400) / 2400f;
-		if (flicker > 0.9f)
-		{
+		if (flicker > 0.9f) {
 			int fy = y + (int) ((flicker - 0.9f) * 10 * h);
 			gs.setColor(new Color(200, 245, 255, 60));
 			gs.fillRect(x, fy, w, 4);
@@ -358,8 +333,7 @@ public final class CardRenderer
 	}
 
 	private static void drawSheen(Graphics2D g2, Shape clip, int x, int y, int w, int h,
-		long timeMs, int periodMs, Color color)
-	{
+		long timeMs, int periodMs, Color color) {
 		// diagonal sweep: band travels corner-to-corner, tilted ~25 degrees
 		Graphics2D gs = (Graphics2D) g2.create();
 		gs.setClip(clip);
@@ -394,8 +368,7 @@ public final class CardRenderer
 	// cards in the album carry it in the same places.
 
 	/** Crease width. Scales with the card so a 90px thumb and a 150px reveal read alike. */
-	static float wearStroke(int w)
-	{
+	static float wearStroke(int w) {
 		return Math.max(1.6f, w / 55f);
 	}
 
@@ -406,8 +379,7 @@ public final class CardRenderer
 	 * test assert the painted footprint against the same number the renderer uses
 	 * instead of against a copy of it that can drift.
 	 */
-	static float wearInkReach(int w)
-	{
+	static float wearInkReach(int w) {
 		return wearStroke(w) * 1.35f;
 	}
 
@@ -416,10 +388,8 @@ public final class CardRenderer
 	 * short of a tear, so these numbers are small on purpose: none at all on a
 	 * lightly played card, one on a worn one, two on a wreck.
 	 */
-	static int creaseCount(CardWear wear)
-	{
-		switch (wear)
-		{
+	static int creaseCount(CardWear wear) {
+		switch (wear) {
 			case CRACKED:
 				return 1;
 			case SHATTERED:
@@ -434,10 +404,8 @@ public final class CardRenderer
 	 * immediately — a card with a hundred kills of service has been in and out of
 	 * a loadout a hundred times, and fine scuffing is the first thing that shows.
 	 */
-	static int scratchCount(CardWear wear)
-	{
-		switch (wear)
-		{
+	static int scratchCount(CardWear wear) {
+		switch (wear) {
 			case HAIRLINE:
 				return 6;
 			case CRACKED:
@@ -450,10 +418,8 @@ public final class CardRenderer
 	}
 
 	/** Line opacity for creases and scratches. Strictly increasing, never opaque. */
-	static int wearAlpha(CardWear wear)
-	{
-		switch (wear)
-		{
+	static int wearAlpha(CardWear wear) {
+		switch (wear) {
 			case HAIRLINE:
 				return 96;
 			case CRACKED:
@@ -469,10 +435,8 @@ public final class CardRenderer
 	 * Handling-dirt opacity at the rim, where the vignette is darkest. Kept well
 	 * under the line work: patina is the layer you notice last.
 	 */
-	static int grimeAlpha(CardWear wear)
-	{
-		switch (wear)
-		{
+	static int grimeAlpha(CardWear wear) {
+		switch (wear) {
 			case HAIRLINE:
 				return 34;
 			case CRACKED:
@@ -490,10 +454,8 @@ public final class CardRenderer
 	 * only way to get a fringe out of discrete marks is to use enough of them
 	 * that they overlap.
 	 */
-	static int edgeNicks(CardWear wear)
-	{
-		switch (wear)
-		{
+	static int edgeNicks(CardWear wear) {
+		switch (wear) {
 			case HAIRLINE:
 				return 20;
 			case CRACKED:
@@ -516,8 +478,7 @@ public final class CardRenderer
 	 * drift out of step with drawFace the way a re-derived copy would.
 	 */
 	static Rectangle[] wearProtect(int x, int y, int w, int h, int topBandBottom,
-		int nameBandTop)
-	{
+		int nameBandTop) {
 		return new Rectangle[]{
 			new Rectangle(x, y, w, Math.max(1, topBandBottom - y)),
 			new Rectangle(x, nameBandTop, w, Math.max(1, y + h - nameBandTop))
@@ -537,24 +498,18 @@ public final class CardRenderer
 	 * whose bands eat the entire face draws no seams at all rather than seams in
 	 * the wrong place.
 	 */
-	static int[] wearOpenBand(@Nullable Rectangle[] protect, int y, int h)
-	{
+	static int[] wearOpenBand(@Nullable Rectangle[] protect, int y, int h) {
 		int lo = y;
 		int hi = y + h;
-		if (protect != null)
-		{
-			for (Rectangle r : protect)
-			{
-				if (r == null)
-				{
+		if (protect != null) {
+			for (Rectangle r : protect) {
+				if (r == null) {
 					continue;
 				}
-				if (r.y <= lo)
-				{
+				if (r.y <= lo) {
 					lo = Math.max(lo, r.y + r.height);
 				}
-				else
-				{
+				else {
 					hi = Math.min(hi, r.y);
 				}
 			}
@@ -581,12 +536,10 @@ public final class CardRenderer
 	 * instead of letting it taper into the frame.
 	 */
 	static double[] wearEdgePoint(int x, int y, int w, int h, int[] band, int edge, float t,
-		float pad)
-	{
+		float pad) {
 		double u = 0.15 + 0.70 * t;
 		double v = band[0] + u * (band[1] - band[0]);
-		switch (edge & 3)
-		{
+		switch (edge & 3) {
 			case 0:
 				return new double[]{x + u * w, y + pad};
 			case 1:
@@ -614,8 +567,7 @@ public final class CardRenderer
 	 * aimed, so it meets the frame cleanly instead of stopping in mid-air.
 	 */
 	static double[][] wearSeamPath(double ax, double ay, double bx, double by, int seed,
-		double amp)
-	{
+		double amp) {
 		double dx = bx - ax;
 		double dy = by - ay;
 		double len = Math.hypot(dx, dy);
@@ -623,20 +575,19 @@ public final class CardRenderer
 		double ny = len < 1e-6 ? 0 : dx / len;
 		// one full lobe at the low end, so even the calmest seam bows rather than
 		// running straight; the fast wave rides on it as a second, smaller kink
-		double slow = 1.0 + hash01(seed + 1) * 1.4;
-		double fast = 2.6 + hash01(seed + 2) * 2.4;
-		double slowPhase = hash01(seed + 3) * Math.PI * 2;
-		double fastPhase = hash01(seed + 4) * Math.PI * 2;
-		double lean = hash01(seed + 5) < 0.5 ? -1 : 1;
+		double slow = 1.0 + Paint.hash01(seed + 1) * 1.4;
+		double fast = 2.6 + Paint.hash01(seed + 2) * 2.4;
+		double slowPhase = Paint.hash01(seed + 3) * Math.PI * 2;
+		double fastPhase = Paint.hash01(seed + 4) * Math.PI * 2;
+		double lean = Paint.hash01(seed + 5) < 0.5 ? -1 : 1;
 		double[][] pts = new double[WEAR_STEPS + 1][2];
-		for (int s = 0; s <= WEAR_STEPS; s++)
-		{
+		for (int s = 0; s <= WEAR_STEPS; s++) {
 			double t = (double) s / WEAR_STEPS;
 			double wave = 0.66 * Math.sin(slow * Math.PI * t + slowPhase)
 				+ 0.34 * Math.sin(fast * Math.PI * t + fastPhase);
 			// grit is a fifth of the wave at most: enough to roughen the line,
 			// never enough to become the line
-			double grit = (hash01(seed + s * 31 + 7) - 0.5) * 0.22;
+			double grit = (Paint.hash01(seed + s * 31 + 7) - 0.5) * 0.22;
 			double offset = lean * amp * Math.sin(Math.PI * t) * (wave + grit);
 			pts[s][0] = ax + dx * t + nx * offset;
 			pts[s][1] = ay + dy * t + ny * offset;
@@ -679,51 +630,45 @@ public final class CardRenderer
 	 * never-obscure guarantee by sweeping sizes and seeds rather than by eye.
 	 */
 	static List<int[]> wearSegments(int x, int y, int w, int h, @Nullable CardWear wear,
-		int seed, @Nullable Rectangle[] protect)
-	{
+		int seed, @Nullable Rectangle[] protect) {
 		List<int[]> out = new ArrayList<>();
-		if (wear == null || w <= 0 || h <= 0)
-		{
+		if (wear == null || w <= 0 || h <= 0) {
 			return out;
 		}
 		float pad = wearInkReach(w);
 		int[] band = wearOpenBand(protect, y, h);
 
 		double creaseAmp = Math.min(w, h) * 0.035;
-		for (int k = 0; k < creaseCount(wear); k++)
-		{
+		for (int k = 0; k < creaseCount(wear); k++) {
 			int cs = seed + k * 977;
 			int entry;
 			int exit;
-			if (k == 0)
-			{
+			if (k == 0) {
 				entry = 3;
 				exit = 1;
 			}
-			else
-			{
-				entry = (int) (hash01(cs + 1) * 4) & 3;
+			else {
+				entry = (int) (Paint.hash01(cs + 1) * 4) & 3;
 				// +1.. so the exit can never land back on the entry edge, which
 				// would give a fold that leaves and returns through the same side
-				exit = (entry + 1 + (int) (hash01(cs + 2) * 3)) & 3;
+				exit = (entry + 1 + (int) (Paint.hash01(cs + 2) * 3)) & 3;
 			}
-			double[] a = wearEdgePoint(x, y, w, h, band, entry, hash01(cs + 3), pad);
-			double[] b = wearEdgePoint(x, y, w, h, band, exit, hash01(cs + 4), pad);
+			double[] a = wearEdgePoint(x, y, w, h, band, entry, Paint.hash01(cs + 3), pad);
+			double[] b = wearEdgePoint(x, y, w, h, band, exit, Paint.hash01(cs + 4), pad);
 			emitSeam(out, clampPath(wearSeamPath(a[0], a[1], b[0], b[1], cs + 5, creaseAmp),
 				x, y, w, h, pad), pad, protect, KIND_CREASE);
 		}
 
 		// one shuffle direction per card, shared by all of its scratches
-		double lean = hash01(seed + 61) * Math.PI;
-		for (int k = 0; k < scratchCount(wear); k++)
-		{
+		double lean = Paint.hash01(seed + 61) * Math.PI;
+		for (int k = 0; k < scratchCount(wear); k++) {
 			int ss = seed + 4099 + k * 613;
-			double angle = lean + (hash01(ss + 1) - 0.5) * 0.7;
+			double angle = lean + (Paint.hash01(ss + 1) - 0.5) * 0.7;
 			// SQUARED, so most scratches are short and the occasional one is long.
 			// A uniform draw gave every card several near-full-length lines, and
 			// half a dozen long strokes at matched angles reads as straw laid on
 			// the card rather than as a surface that has been rubbed.
-			double r = hash01(ss + 2);
+			double r = Paint.hash01(ss + 2);
 			double half = Math.min(w, h) * (0.07 + 0.30 * r * r) / 2;
 			// How far the drawn scratch actually reaches from its centre on each
 			// axis. WANDER covers the meander wearSeamPath adds perpendicular to
@@ -738,19 +683,18 @@ public final class CardRenderer
 			// half-eaten by the name band is a scratch this card silently did not
 			// get, and the stage would stop reading at a glance.
 			double roomY = (band[1] - band[0]) / 2.0 - pad;
-			if (half * rise > roomY)
-			{
+			if (half * rise > roomY) {
 				// an open band shorter than the scratch: shorten the scratch, since
 				// the alternative is to draw it somewhere it will be thrown away
 				half = Math.max(1, roomY / rise);
 			}
 			double loY = band[0] + pad + half * rise;
 			double hiY = band[1] - pad - half * rise;
-			double cy = loY + hash01(ss + 4) * Math.max(0, hiY - loY);
+			double cy = loY + Paint.hash01(ss + 4) * Math.max(0, hiY - loY);
 			double loX = x + pad + half * run;
 			double hiX = x + w - pad - half * run;
 			double cx = loX <= hiX
-				? loX + hash01(ss + 3) * (hiX - loX)
+				? loX + Paint.hash01(ss + 3) * (hiX - loX)
 				: x + w / 2.0;
 			double hx = Math.cos(angle) * half;
 			double hy = Math.sin(angle) * half;
@@ -776,19 +720,16 @@ public final class CardRenderer
 	 * over the edge by half a pixel; clamping at 11 cannot, since rounding never
 	 * moves a value below its own floor.
 	 */
-	private static double[][] clampPath(double[][] path, int x, int y, int w, int h, float pad)
-	{
+	private static double[][] clampPath(double[][] path, int x, int y, int w, int h, float pad) {
 		double loX = Math.ceil(x + pad);
 		double hiX = Math.floor(x + w - pad);
 		double loY = Math.ceil(y + pad);
 		double hiY = Math.floor(y + h - pad);
-		if (loX > hiX || loY > hiY)
-		{
+		if (loX > hiX || loY > hiY) {
 			// a card too small to hold even one padded pixel; nothing legal to draw
 			return path;
 		}
-		for (double[] p : path)
-		{
+		for (double[] p : path) {
 			p[0] = Math.max(loX, Math.min(hiX, p[0]));
 			p[1] = Math.max(loY, Math.min(hiY, p[1]));
 		}
@@ -804,16 +745,13 @@ public final class CardRenderer
 	 * relief over the top of the rarity label on a small card.
 	 */
 	private static void emitSeam(List<int[]> out, double[][] path, float pad,
-		@Nullable Rectangle[] protect, int kind)
-	{
-		for (int s = 1; s < path.length; s++)
-		{
+		@Nullable Rectangle[] protect, int kind) {
+		for (int s = 1; s < path.length; s++) {
 			int ax = (int) Math.round(path[s - 1][0]);
 			int ay = (int) Math.round(path[s - 1][1]);
 			int bx = (int) Math.round(path[s][0]);
 			int by = (int) Math.round(path[s][1]);
-			if (!blocked(protect, ax, ay, bx, by, pad))
-			{
+			if (!blocked(protect, ax, ay, bx, by, pad)) {
 				out.add(new int[]{ax, ay, bx, by, kind});
 			}
 		}
@@ -821,10 +759,8 @@ public final class CardRenderer
 
 	/** True when a stroked segment, padded, would touch anything protected. */
 	static boolean blocked(@Nullable Rectangle[] protect, double ax, double ay,
-		double bx, double by, float pad)
-	{
-		if (protect == null)
-		{
+		double bx, double by, float pad) {
+		if (protect == null) {
 			return false;
 		}
 		int x0 = (int) Math.floor(Math.min(ax, bx) - pad);
@@ -832,10 +768,8 @@ public final class CardRenderer
 		int x1 = (int) Math.ceil(Math.max(ax, bx) + pad);
 		int y1 = (int) Math.ceil(Math.max(ay, by) + pad);
 		Rectangle box = new Rectangle(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
-		for (Rectangle r : protect)
-		{
-			if (r != null && r.intersects(box))
-			{
+		for (Rectangle r : protect) {
+			if (r != null && r.intersects(box)) {
 				return true;
 			}
 		}
@@ -849,11 +783,9 @@ public final class CardRenderer
 	 * middle without anything having to know where the art actually is.
 	 */
 	private static void drawWearGrime(Graphics2D g2, Shape clip, int x, int y, int w, int h,
-		CardWear wear, int seed)
-	{
+		CardWear wear, int seed) {
 		int alpha = grimeAlpha(wear);
-		if (alpha <= 0 || w <= 0 || h <= 0)
-		{
+		if (alpha <= 0 || w <= 0 || h <= 0) {
 			return;
 		}
 		Graphics2D gg = (Graphics2D) g2.create();
@@ -884,15 +816,13 @@ public final class CardRenderer
 		// jump as an outline.
 		int blotches = Math.max(1, edgeNicks(wear) / 4);
 		int rings = 6;
-		for (int i = 0; i < blotches; i++)
-		{
+		for (int i = 0; i < blotches; i++) {
 			int bs = seed + i * 613;
-			int d = (int) (Math.min(w, h) * (0.34f + 0.40f * hash01(bs + 3)));
-			int bx = x + (int) (hash01(bs + 1) * w) - d / 2;
-			int by = y + (int) (hash01(bs + 2) * h) - d / 2;
+			int d = (int) (Math.min(w, h) * (0.34f + 0.40f * Paint.hash01(bs + 3)));
+			int bx = x + (int) (Paint.hash01(bs + 1) * w) - d / 2;
+			int by = y + (int) (Paint.hash01(bs + 2) * h) - d / 2;
 			gg.setColor(new Color(r, gr, b, Math.max(1, alpha / (rings * 2))));
-			for (int ring = rings; ring >= 1; ring--)
-			{
+			for (int ring = rings; ring >= 1; ring--) {
 				int rd = Math.max(1, d * ring / rings);
 				gg.fillOval(bx + (d - rd) / 2, by + (d - rd) / 2, rd, rd);
 			}
@@ -923,10 +853,8 @@ public final class CardRenderer
 	 * the clearance the tests assert cannot drift apart.
 	 */
 	private static void drawWearLines(Graphics2D g2, Shape clip, int w, CardWear wear,
-		List<int[]> segments)
-	{
-		if (segments.isEmpty())
-		{
+		List<int[]> segments) {
+		if (segments.isEmpty()) {
 			return;
 		}
 		List<int[]> creases = ofKind(segments, KIND_CREASE);
@@ -936,8 +864,7 @@ public final class CardRenderer
 		gw.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		float line = wearStroke(w);
 		int alpha = wearAlpha(wear);
-		if (!creases.isEmpty())
-		{
+		if (!creases.isEmpty()) {
 			strokePass(gw, creases, new BasicStroke(wearInkReach(w) * 2f,
 				BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND), alpha(WEAR_SHADOW, alpha / 4));
 			// the dark side and the lit side sit either side of the fold line, half
@@ -964,13 +891,10 @@ public final class CardRenderer
 		gw.dispose();
 	}
 
-	private static List<int[]> ofKind(List<int[]> segments, int kind)
-	{
+	private static List<int[]> ofKind(List<int[]> segments, int kind) {
 		List<int[]> out = new ArrayList<>();
-		for (int[] seg : segments)
-		{
-			if (seg[4] == kind)
-			{
+		for (int[] seg : segments) {
+			if (seg[4] == kind) {
 				out.add(seg);
 			}
 		}
@@ -978,16 +902,13 @@ public final class CardRenderer
 	}
 
 	private static void strokePass(Graphics2D gw, List<int[]> segments, BasicStroke stroke,
-		Color color)
-	{
-		if (segments.isEmpty())
-		{
+		Color color) {
+		if (segments.isEmpty()) {
 			return;
 		}
 		gw.setStroke(stroke);
 		gw.setColor(color);
-		for (int[] seg : segments)
-		{
+		for (int[] seg : segments) {
 			gw.drawLine(seg[0], seg[1], seg[2], seg[3]);
 		}
 	}
@@ -1005,17 +926,14 @@ public final class CardRenderer
 	 * is no half pixel spare, so nothing may round.
 	 */
 	private static void ridgePass(Graphics2D gw, List<int[]> segments, BasicStroke stroke,
-		Color color, float off)
-	{
+		Color color, float off) {
 		gw.setStroke(stroke);
 		gw.setColor(color);
-		for (int[] seg : segments)
-		{
+		for (int[] seg : segments) {
 			double dx = seg[2] - seg[0];
 			double dy = seg[3] - seg[1];
 			double len = Math.hypot(dx, dy);
-			if (len < 1e-6)
-			{
+			if (len < 1e-6) {
 				continue;
 			}
 			double nx = -dy / len * off;
@@ -1053,11 +971,9 @@ public final class CardRenderer
 	 * so without the clip a card drawn next to another would fray its neighbour.
 	 */
 	private static void drawWearEdge(Graphics2D g2, Shape clip, int x, int y, int w, int h,
-		CardWear wear, int seed)
-	{
+		CardWear wear, int seed) {
 		int marks = edgeNicks(wear);
-		if (marks == 0 || w <= 0 || h <= 0)
-		{
+		if (marks == 0 || w <= 0 || h <= 0) {
 			return;
 		}
 		Graphics2D ge = (Graphics2D) g2.create();
@@ -1070,20 +986,18 @@ public final class CardRenderer
 		// read. The fringe has to be finer than the frame it is eating.
 		float base = Math.max(1f, w / 70f);
 		double cornerSpan = Math.min(w, h) * 0.30;
-		for (int i = 0; i < marks; i++)
-		{
+		for (int i = 0; i < marks; i++) {
 			int ns = seed + i * 401;
 			// walked round the perimeter in even steps with a jittered offset, so
 			// the fringe spreads over all four sides instead of clumping on one
-			double at = ((i + hash01(ns + 1) * 0.85) / marks) * perimeter;
+			double at = ((i + Paint.hash01(ns + 1) * 0.85) / marks) * perimeter;
 			double px;
 			double py;
 			double tx;
 			double ty;
 			double inx;
 			double iny;
-			if (at < w)
-			{
+			if (at < w) {
 				px = x + at;
 				py = y;
 				tx = 1;
@@ -1091,8 +1005,7 @@ public final class CardRenderer
 				inx = 0;
 				iny = 1;
 			}
-			else if (at < w + h)
-			{
+			else if (at < w + h) {
 				px = x + w;
 				py = y + (at - w);
 				tx = 0;
@@ -1100,8 +1013,7 @@ public final class CardRenderer
 				inx = -1;
 				iny = 0;
 			}
-			else if (at < 2 * w + h)
-			{
+			else if (at < 2 * w + h) {
 				px = x + w - (at - w - h);
 				py = y + h;
 				tx = -1;
@@ -1109,8 +1021,7 @@ public final class CardRenderer
 				inx = 0;
 				iny = -1;
 			}
-			else
-			{
+			else {
 				px = x;
 				py = y + h - (at - 2 * w - h);
 				tx = 0;
@@ -1122,35 +1033,33 @@ public final class CardRenderer
 				Math.min(Math.abs(at - (w + h)),
 					Math.min(Math.abs(at - (2 * w + h)), perimeter - at)));
 			double boost = 1.0 + 1.6 * Math.max(0, 1 - corner / cornerSpan);
-			float th = (float) (base * (0.55 + 0.65 * hash01(ns + 3)) * Math.min(1.5, boost));
-			int a = (int) (alpha * (0.6 + 0.4 * hash01(ns + 5)));
+			float th = (float) (base * (0.55 + 0.65 * Paint.hash01(ns + 3)) * Math.min(1.5, boost));
+			int a = (int) (alpha * (0.6 + 0.4 * Paint.hash01(ns + 5)));
 			// Roughly a third of the fringe bites INWARD across the rim instead of
 			// lying along it. A rim of pure tangential dashes reads as a drawn
 			// outline however ragged the lengths are; the perpendicular ones are
 			// what break the frame into teeth, and teeth are what a shelf-worn
 			// edge actually has.
-			boolean bite = hash01(ns + 6) < 0.34;
+			boolean bite = Paint.hash01(ns + 6) < 0.34;
 			double len;
 			double dx;
 			double dy;
 			double depth;
-			if (bite)
-			{
-				len = base * (1.6 + 3.4 * hash01(ns + 2)) * boost;
+			if (bite) {
+				len = base * (1.6 + 3.4 * Paint.hash01(ns + 2)) * boost;
 				dx = inx;
 				dy = iny;
 				// anchored just outside the rim so the bite starts in the frame and
 				// runs in, rather than floating in the middle of the border
 				depth = -base * 0.5;
 			}
-			else
-			{
-				len = base * (2.0 + 5.5 * hash01(ns + 2)) * boost;
+			else {
+				len = base * (2.0 + 5.5 * Paint.hash01(ns + 2)) * boost;
 				dx = tx;
 				dy = ty;
 				// a little in or a little out: the ones sitting proud of the rim get
 				// halved by the clip, which is what stops the band looking ruled
-				depth = base * (hash01(ns + 4) * 0.9 - 0.3);
+				depth = base * (Paint.hash01(ns + 4) * 0.9 - 0.3);
 			}
 			double ax = px + inx * depth - dx * len / 2 + (bite ? dx * len / 2 : 0);
 			double ay = py + iny * depth - dy * len / 2 + (bite ? dy * len / 2 : 0);
@@ -1170,13 +1079,11 @@ public final class CardRenderer
 		// card gets a hint of it and a SHATTERED one gets a rounded-off corner.
 		int d = Math.max(3, (int) (w * (0.035f + 0.045f * marks / 60f)));
 		int steps = 5;
-		for (int c = 0; c < 4; c++)
-		{
+		for (int c = 0; c < 4; c++) {
 			int cx = (c & 1) == 0 ? x : x + w;
 			int cy = (c & 2) == 0 ? y : y + h;
 			ge.setColor(alpha(WEAR_STOCK, Math.max(1, alpha / (steps * 6))));
-			for (int s = steps; s >= 1; s--)
-			{
+			for (int s = steps; s >= 1; s--) {
 				int rd = Math.max(2, d * s / steps);
 				ge.fillOval(cx - rd / 2, cy - rd / 2, rd, rd);
 			}
@@ -1184,35 +1091,23 @@ public final class CardRenderer
 		ge.dispose();
 	}
 
-	private static Color alpha(Color base, int a)
-	{
+	private static Color alpha(Color base, int a) {
 		return new Color(base.getRed(), base.getGreen(), base.getBlue(),
 			Math.max(0, Math.min(255, a)));
 	}
 
-	public static Color prismaticColor(long timeMs, int offsetDeg)
-	{
+	public static Color prismaticColor(long timeMs, int offsetDeg) {
 		float hue = ((timeMs / 22) % 360 + offsetDeg) % 360 / 360f;
 		return Color.getHSBColor(hue, 0.65f, 1f);
 	}
 
-	private static float hash01(int n)
-	{
-		int h = n * 0x9E3779B9;
-		h ^= h >>> 16;
-		h *= 0x85EBCA6B;
-		h ^= h >>> 13;
-		return (h & 0x7FFFFFFF) / (float) 0x7FFFFFFF;
-	}
 
-	private static Font serviceFont(int w)
-	{
+	private static Font serviceFont(int w) {
 		return new Font(Font.SANS_SERIF, Font.BOLD, Math.max(8, w / 13));
 	}
 
 	/** Left edge of the service badge pill. */
-	static int serviceBadgeX(int x, int w)
-	{
+	static int serviceBadgeX(int x, int w) {
 		return x + Math.max(3, w / 22);
 	}
 
@@ -1222,20 +1117,17 @@ public final class CardRenderer
 	 * it — two copies of this expression would drift and let a crack cross the
 	 * pill.
 	 */
-	static int serviceBadgeY(int y, int h)
-	{
+	static int serviceBadgeY(int y, int h) {
 		return y + Math.max(3, h / 26);
 	}
 
 	/** Horizontal padding inside the pill, one side. */
-	static int serviceBadgePadX(int w)
-	{
+	static int serviceBadgePadX(int w) {
 		return Math.max(3, w / 24);
 	}
 
 	/** Full width of the pill for a badge whose text measured badgeTextWidth. */
-	static int serviceBadgeWidth(int w, int badgeTextWidth)
-	{
+	static int serviceBadgeWidth(int w, int badgeTextWidth) {
 		return badgeTextWidth + serviceBadgePadX(w) * 2;
 	}
 
@@ -1247,10 +1139,8 @@ public final class CardRenderer
 	 * <p>Derived from the SAME geometry drawServiceBadge draws with, so the
 	 * clearance is guaranteed by construction rather than by measurement luck.
 	 */
-	static int rarityLabelLeft(int x, int w, int badgeTextWidth)
-	{
-		if (badgeTextWidth < 0)
-		{
+	static int rarityLabelLeft(int x, int w, int badgeTextWidth) {
+		if (badgeTextWidth < 0) {
 			return x + 4;
 		}
 		return serviceBadgeX(x, w) + serviceBadgeWidth(w, badgeTextWidth) + Math.max(4, w / 20);
@@ -1261,26 +1151,21 @@ public final class CardRenderer
 	 * Integer math only — no locale, no rounding drift, and only ASCII digits,
 	 * '.', 'k' and 'm' come out, so there is no missing-glyph hazard.
 	 */
-	static String serviceText(int killsServed)
-	{
-		if (killsServed < 1000)
-		{
+	static String serviceText(int killsServed) {
+		if (killsServed < 1000) {
 			return Integer.toString(killsServed);
 		}
-		if (killsServed < 10000)
-		{
+		if (killsServed < 10000) {
 			return killsServed / 1000 + "." + killsServed % 1000 / 100 + "k";
 		}
-		if (killsServed < 1000000)
-		{
+		if (killsServed < 1000000) {
 			return killsServed / 1000 + "k";
 		}
 		return killsServed / 1000000 + "m";
 	}
 
 	/** Top-left pill: a worn brass service tag. */
-	private static void drawServiceBadge(Graphics2D g2, int x, int y, int w, int h, String text)
-	{
+	private static void drawServiceBadge(Graphics2D g2, int x, int y, int w, int h, String text) {
 		g2.setFont(serviceFont(w));
 		FontMetrics fm = g2.getFontMetrics();
 		int padX = serviceBadgePadX(w);
@@ -1297,16 +1182,13 @@ public final class CardRenderer
 		g2.drawString(text, bx + padX, by + fm.getAscent() - 1);
 	}
 
-	private static void drawCenteredString(Graphics2D g, String text, int cx, int cy, int maxWidth)
-	{
+	private static void drawCenteredString(Graphics2D g, String text, int cx, int cy, int maxWidth) {
 		FontMetrics fm = g.getFontMetrics();
 		String drawn = text;
-		while (fm.stringWidth(drawn) > maxWidth && drawn.length() > 4)
-		{
+		while (fm.stringWidth(drawn) > maxWidth && drawn.length() > 4) {
 			drawn = drawn.substring(0, drawn.length() - 2);
 		}
-		if (!drawn.equals(text))
-		{
+		if (!drawn.equals(text)) {
 			drawn = drawn.substring(0, Math.max(1, drawn.length() - 1)) + "…";
 		}
 		g.drawString(drawn, cx - fm.stringWidth(drawn) / 2, cy + fm.getAscent() / 2 - 1);
@@ -1317,12 +1199,10 @@ public final class CardRenderer
 	 * text fits; only at the floor does it fall back to ellipsizing.
 	 */
 	private static void drawFittedString(Graphics2D g, String text, int cx, int cy, int maxWidth,
-		Font baseFont, int minSize)
-	{
+		Font baseFont, int minSize) {
 		Font font = baseFont;
 		g.setFont(font);
-		while (g.getFontMetrics().stringWidth(text) > maxWidth && font.getSize() > minSize)
-		{
+		while (g.getFontMetrics().stringWidth(text) > maxWidth && font.getSize() > minSize) {
 			font = font.deriveFont((float) (font.getSize() - 1));
 			g.setFont(font);
 		}
@@ -1334,18 +1214,14 @@ public final class CardRenderer
 	 * sprites pad their content unevenly; cropping first makes centering
 	 * center the visible art, not the padding.
 	 */
-	private static BufferedImage cropToOpaqueBounds(BufferedImage image)
-	{
+	private static BufferedImage cropToOpaqueBounds(BufferedImage image) {
 		int minX = image.getWidth();
 		int minY = image.getHeight();
 		int maxX = -1;
 		int maxY = -1;
-		for (int py = 0; py < image.getHeight(); py++)
-		{
-			for (int px = 0; px < image.getWidth(); px++)
-			{
-				if ((image.getRGB(px, py) >>> 24) > 8)
-				{
+		for (int py = 0; py < image.getHeight(); py++) {
+			for (int px = 0; px < image.getWidth(); px++) {
+				if ((image.getRGB(px, py) >>> 24) > 8) {
 					minX = Math.min(minX, px);
 					minY = Math.min(minY, py);
 					maxX = Math.max(maxX, px);
@@ -1354,8 +1230,7 @@ public final class CardRenderer
 			}
 		}
 		if (maxX < 0 || (minX == 0 && minY == 0
-			&& maxX == image.getWidth() - 1 && maxY == image.getHeight() - 1))
-		{
+			&& maxX == image.getWidth() - 1 && maxY == image.getHeight() - 1)) {
 			return image; // fully transparent or already tight
 		}
 		return image.getSubimage(minX, minY, maxX - minX + 1, maxY - minY + 1);

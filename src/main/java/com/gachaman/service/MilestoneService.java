@@ -4,6 +4,7 @@ import com.gachaman.Tuning;
 import com.gachaman.model.GachaState;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.Experience;
@@ -14,32 +15,21 @@ import net.runelite.client.eventbus.Subscribe;
 /** Awards one in-reveal reroll token per full +10 combat levels gained. */
 @Slf4j
 @Singleton
-public class MilestoneService
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class MilestoneService {
 	private final Client client;
 	private final GachaStateService stateService;
 	private final CeremonyBus ceremonyBus;
 
-	@Inject
-	public MilestoneService(Client client, GachaStateService stateService, CeremonyBus ceremonyBus)
-	{
-		this.client = client;
-		this.stateService = stateService;
-		this.ceremonyBus = ceremonyBus;
-	}
-
 	@Subscribe
-	public void onStatChanged(StatChanged event)
-	{
+	public void onStatChanged(StatChanged event) {
 		GachaState state = stateService.get();
-		if (state == null)
-		{
+		if (state == null) {
 			return;
 		}
 		int cb = combatLevel();
 		int last = state.getLastTokenCombatLevel();
-		if (cb >= last + Tuning.TOKEN_CB_INTERVAL)
-		{
+		if (cb >= last + Tuning.TOKEN_CB_INTERVAL) {
 			int tokens = (cb - last) / Tuning.TOKEN_CB_INTERVAL;
 			int newLast = last + tokens * Tuning.TOKEN_CB_INTERVAL;
 			stateService.mutate(s -> s
@@ -51,8 +41,7 @@ public class MilestoneService
 		}
 	}
 
-	public int combatLevel()
-	{
+	public int combatLevel() {
 		return Experience.getCombatLevel(
 			client.getRealSkillLevel(Skill.ATTACK),
 			client.getRealSkillLevel(Skill.STRENGTH),

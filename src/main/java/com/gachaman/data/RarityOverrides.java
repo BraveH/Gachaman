@@ -1,11 +1,7 @@
 package com.gachaman.data;
 
 import com.gachaman.model.Rarity;
-import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -25,49 +21,39 @@ import lombok.extern.slf4j.Slf4j;
  * boss, set, tier and quest tables already use.
  */
 @Slf4j
-public final class RarityOverrides
-{
-	private static final Map<String, Rarity> OVERRIDES = load();
+public final class RarityOverrides {
+	private static final Map<String, Rarity> OVERRIDES = index();
 
-	private static Map<String, Rarity> load()
-	{
-		try (InputStream in = RarityOverrides.class.getResourceAsStream(
-			"/com/gachaman/data/rarity-overrides.json"))
-		{
-			if (in == null)
-			{
-				log.warn("rarity-overrides.json missing — every card falls back to the stat heuristic");
-				return Collections.emptyMap();
+	private static Map<String, Rarity> index() {
+		Map<String, List<String>> byRarity = DataJson.load("rarity-overrides",
+			new TypeToken<Map<String, List<String>>>() {
+			}.getType(), Collections.emptyMap());
+		Map<String, Rarity> index = new HashMap<>();
+		for (Map.Entry<String, List<String>> entry : byRarity.entrySet()) {
+			// A key that is not a Rarity is skipped, not thrown on. This runs in a
+			// static initializer, so an exception here does not degrade the
+			// heuristic — it fails the whole class and takes the plugin with it.
+			// The other data files carry a "_comment" key by convention, and the
+			// first person to add one here must not be able to do that.
+			Rarity rarity;
+			try {
+				rarity = Rarity.valueOf(entry.getKey());
 			}
-			Map<String, List<String>> byRarity = new Gson().fromJson(
-				new InputStreamReader(in, StandardCharsets.UTF_8),
-				new TypeToken<Map<String, List<String>>>()
-				{
-				}.getType());
-			Map<String, Rarity> index = new HashMap<>();
-			for (Map.Entry<String, List<String>> entry : byRarity.entrySet())
-			{
-				Rarity rarity = Rarity.valueOf(entry.getKey());
-				for (String name : entry.getValue())
-				{
-					index.put(name, rarity);
-				}
+			catch (IllegalArgumentException e) {
+				log.warn("rarity-overrides.json: '{}' is not a rarity — skipped", entry.getKey());
+				continue;
 			}
-			return Collections.unmodifiableMap(index);
+			for (String name : entry.getValue()) {
+				index.put(name, rarity);
+			}
 		}
-		catch (Exception e)
-		{
-			log.error("Failed to load rarity-overrides.json", e);
-			return Collections.emptyMap();
-		}
+		return Collections.unmodifiableMap(index);
 	}
 
-	private RarityOverrides()
-	{
+	private RarityOverrides() {
 	}
 
-	public static Rarity lookup(String cleanName)
-	{
+	public static Rarity lookup(String cleanName) {
 		return OVERRIDES.get(cleanName);
 	}
 }

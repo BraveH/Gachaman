@@ -11,10 +11,8 @@ import java.util.Map;
  * All economy/RNG constants in one place. Values are deliberate tuning
  * decisions, not config — the gamemode is meant to be consistent.
  */
-public final class Tuning
-{
-	private Tuning()
-	{
+public final class Tuning {
+	private Tuning() {
 	}
 
 	// --- Task rewards (GC) ---
@@ -53,10 +51,8 @@ public final class Tuning
 	public static final int LOWLEVEL_CEILING = 70;
 	public static final double LOWLEVEL_MAX_BONUS = 1.5;
 
-	public static double lowLevelMultiplier(int playerCb)
-	{
-		if (playerCb >= LOWLEVEL_CEILING)
-		{
+	public static double lowLevelMultiplier(int playerCb) {
+		if (playerCb >= LOWLEVEL_CEILING) {
 			return 1.0;
 		}
 		double fraction = (double) (LOWLEVEL_CEILING - playerCb) / (LOWLEVEL_CEILING - 3);
@@ -77,14 +73,11 @@ public final class Tuning
 	public static final int COMBO_FADE_START_CB = 25;
 	public static final int COMBO_FADE_END_CB = 45;
 
-	public static double comboMaxBonus(int playerCb)
-	{
-		if (playerCb <= COMBO_FADE_START_CB)
-		{
+	public static double comboMaxBonus(int playerCb) {
+		if (playerCb <= COMBO_FADE_START_CB) {
 			return COMBO_MAX_BONUS_LOW;
 		}
-		if (playerCb >= COMBO_FADE_END_CB)
-		{
+		if (playerCb >= COMBO_FADE_END_CB) {
 			return COMBO_MAX_BONUS_FLOOR;
 		}
 		double fraction = (double) (playerCb - COMBO_FADE_START_CB)
@@ -92,25 +85,21 @@ public final class Tuning
 		return COMBO_MAX_BONUS_LOW - (COMBO_MAX_BONUS_LOW - COMBO_MAX_BONUS_FLOOR) * fraction;
 	}
 
-	public static double comboMultiplier(int stacks, int playerCb)
-	{
+	public static double comboMultiplier(int stacks, int playerCb) {
 		int capped = Math.max(0, Math.min(COMBO_MAX_STACKS, stacks));
 		return 1.0 + comboMaxBonus(playerCb) * capped / COMBO_MAX_STACKS;
 	}
 
-	public static double killCbMultiplier(int playerCb, int npcCb)
-	{
+	public static double killCbMultiplier(int playerCb, int npcCb) {
 		int diff = npcCb - playerCb;
-		if (diff >= 0)
-		{
+		if (diff >= 0) {
 			double over = (double) npcCb / Math.max(1, playerCb) - 1.0;
 			double mult = 1.0 + KILL_DIFF_EQUAL_BONUS
 				+ over * KILL_RATIO_LINEAR
 				+ over * over * KILL_RATIO_QUAD;
 			return Math.min(KILL_DIFF_CAP, mult);
 		}
-		if (diff >= -KILL_DIFF_GRACE)
-		{
+		if (diff >= -KILL_DIFF_GRACE) {
 			return 1.0;
 		}
 		return Math.max(KILL_DIFF_FLOOR, 1.0 + (diff + KILL_DIFF_GRACE) * KILL_DIFF_UNDER_RATE);
@@ -145,8 +134,7 @@ public final class Tuning
 	public static final double REDEMPTION_KILL_MULT = 1.4;
 
 	// --- Chests ---
-	public enum Chest
-	{
+	public enum Chest {
 		RUSTY, BATTERED, GILDED, ORNATE
 	}
 
@@ -207,13 +195,10 @@ public final class Tuning
 	 */
 	public static final double HOUSE_LEAN_HEADROOM_WEIGHT = 0.35;
 
-	public static int maxRankForLevel(int level)
-	{
+	public static int maxRankForLevel(int level) {
 		int rank = 1;
-		for (int i = 0; i < TIER_RANK_LEVELS.length; i++)
-		{
-			if (level >= TIER_RANK_LEVELS[i])
-			{
+		for (int i = 0; i < TIER_RANK_LEVELS.length; i++) {
+			if (level >= TIER_RANK_LEVELS[i]) {
 				rank = i + 1;
 			}
 		}
@@ -227,8 +212,7 @@ public final class Tuning
 	 * would be vacuously green.
 	 */
 	public static boolean withinReach(int primaryLevel, int defenceLevel,
-		int reqPrimary, int reqDefence, int headroom)
-	{
+		int reqPrimary, int reqDefence, int headroom) {
 		return primaryLevel + headroom >= reqPrimary && defenceLevel + headroom >= reqDefence;
 	}
 
@@ -236,11 +220,9 @@ public final class Tuning
 	public static final int PITY_SOFT_START = 12;
 	public static final double PITY_BONUS_PER_OPEN = 2.0; // additive % points to Epic+ mass
 	public static final int PITY_HARD_CAP = 30;
-	public static final int PITY_HARD_CAP_PRESTIGE2 = 26;
 
 	// --- Jackpot ---
 	public static final double JACKPOT_CHANCE = 1.0 / 100;
-	public static final double JACKPOT_CHANCE_PRESTIGE3 = 1.0 / 60;
 
 	// --- Deeds ---
 	public static final Map<Chest, Double> DEED_CHANCE = new EnumMap<>(Map.of(
@@ -260,10 +242,8 @@ public final class Tuning
 	public static final int FRAGMENT_WINDOW_TASKS = 5;
 	public static final int FRAGMENTS_REQUIRED = 10;
 
-	public static int fragmentsFor(TaskDifficulty difficulty)
-	{
-		switch (difficulty)
-		{
+	public static int fragmentsFor(TaskDifficulty difficulty) {
+		switch (difficulty) {
 			case MEDIUM:
 				return 1;
 			case HARD:
@@ -290,47 +270,6 @@ public final class Tuning
 		Rarity.RARE, 4000,
 		Rarity.EPIC, 9000,
 		Rarity.LEGENDARY, 20000));
-
-	// --- The Charter Office ---
-	/**
-	 * Kills banked on a species before its contract may be chartered. Read off
-	 * the journal's existing per-monster tally, so nothing new is counted.
-	 */
-	public static final int CHARTER_KILLS_REQUIRED = 25;
-	public static final int CHARTER_PRICE_MIN_GC = 800;
-	public static final int CHARTER_PRICE_MAX_GC = 2500;
-	/** A deed is quoted in round numbers — never 1637 GC. */
-	public static final int CHARTER_PRICE_STEP_GC = 10;
-	/** How long an unaccepted deed sits on the board before the GC comes back. */
-	public static final int CHARTER_HOLD_TICKS = 500;
-	/**
-	 * The hold deadline is stored as WALL CLOCK, not as a tick countdown: a
-	 * persisted counter would need a mutate every single tick, and every mutate
-	 * re-gzips and re-hashes the entire state. 500 ticks at 600ms each.
-	 */
-	public static final long CHARTER_HOLD_MS = CHARTER_HOLD_TICKS * 600L;
-
-	/**
-	 * A deed costs what the target is worth relative to the buyer: the target's
-	 * combat level as a fraction of the player's, clamped to the same band the
-	 * contract board already uses (EASY's cap fraction at the bottom, INSANE's at
-	 * the top), interpolated across the price range and rounded off.
-	 *
-	 * Scaling by RATIO rather than by absolute level is what keeps the price
-	 * honest at both ends of the game: a level-3 chicken is never worth INSANE
-	 * money to anyone, and a target the player can only just legally be offered
-	 * costs full price whether they are combat 40 or combat 126.
-	 */
-	public static int charterPriceGc(int playerCb, int npcCb)
-	{
-		double lo = TaskDifficulty.EASY.getCbCapFraction();
-		double hi = TaskDifficulty.INSANE.getCbCapFraction();
-		double ratio = Math.max(0, npcCb) / (double) Math.max(1, playerCb);
-		double t = (Math.max(lo, Math.min(hi, ratio)) - lo) / (hi - lo);
-		double raw = CHARTER_PRICE_MIN_GC + t * (CHARTER_PRICE_MAX_GC - CHARTER_PRICE_MIN_GC);
-		long stepped = Math.round(raw / CHARTER_PRICE_STEP_GC) * (long) CHARTER_PRICE_STEP_GC;
-		return (int) Math.max(CHARTER_PRICE_MIN_GC, Math.min(CHARTER_PRICE_MAX_GC, stepped));
-	}
 
 	// --- Reroll tokens ---
 	public static final int TOKEN_CB_INTERVAL = 10;
@@ -510,12 +449,6 @@ public final class Tuning
 	/** Stardust needed to bless the next chest with double shiny attempts. */
 	public static final int STARDUST_REQUIRED = 8;
 
-	// --- Prestige ---
-	public static final int PRESTIGE_TASKS_REQUIRED = 250;
-	public static final double PRESTIGE_COLLECTION_FRACTION = 0.90;
-	public static final int PRESTIGE_GC_COST = 25000;
-	public static final double PRESTIGE_GC_BONUS_PER_RANK = 0.05;
-
 	// --- Card wear (cosmetic) ---
 	/**
 	 * Service Record kills a card must have carried to earn each wear stage.
@@ -536,18 +469,14 @@ public final class Tuning
 	 * The whole rule. Saturates at the top stage and floors at NONE, so a
 	 * corrupt or absent record paints nothing rather than inventing history.
 	 */
-	public static CardWear cardWear(int killsServed)
-	{
-		if (killsServed >= WEAR_SHATTERED_KILLS)
-		{
+	public static CardWear cardWear(int killsServed) {
+		if (killsServed >= WEAR_SHATTERED_KILLS) {
 			return CardWear.SHATTERED;
 		}
-		if (killsServed >= WEAR_CRACKED_KILLS)
-		{
+		if (killsServed >= WEAR_CRACKED_KILLS) {
 			return CardWear.CRACKED;
 		}
-		if (killsServed >= WEAR_HAIRLINE_KILLS)
-		{
+		if (killsServed >= WEAR_HAIRLINE_KILLS) {
 			return CardWear.HAIRLINE;
 		}
 		return CardWear.NONE;
@@ -560,10 +489,8 @@ public final class Tuning
 	 * uses it; nothing in normal play sets a service record, it is only ever
 	 * counted up one kill at a time.
 	 */
-	public static int wearKills(CardWear wear)
-	{
-		switch (wear)
-		{
+	public static int wearKills(CardWear wear) {
+		switch (wear) {
 			case SHATTERED:
 				return WEAR_SHATTERED_KILLS;
 			case CRACKED:

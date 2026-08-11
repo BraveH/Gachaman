@@ -3,6 +3,7 @@ package com.gachaman.ui.loadout;
 import com.gachaman.GachamanConfig;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.SpriteID;
@@ -24,8 +25,8 @@ import net.runelite.client.eventbus.Subscribe;
  */
 @Slf4j
 @Singleton
-public class LoadoutTabButton
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class LoadoutTabButton {
 	/** Worn-equipment interface group (387). */
 	private static final int WORNITEMS_GROUP = InterfaceID.Wornitems.UNIVERSE >> 16;
 	/** Icon: the Training sword item sprite (a starter card, fittingly). */
@@ -42,21 +43,9 @@ public class LoadoutTabButton
 	private Widget button;
 	private Widget buttonParent;
 
-	@Inject
-	public LoadoutTabButton(Client client, ClientThread clientThread, LoadoutOverlay loadoutOverlay,
-		GachamanConfig config)
-	{
-		this.client = client;
-		this.clientThread = clientThread;
-		this.loadoutOverlay = loadoutOverlay;
-		this.config = config;
-	}
-
 	@Subscribe
-	public void onWidgetLoaded(WidgetLoaded event)
-	{
-		if (event.getGroupId() == WORNITEMS_GROUP)
-		{
+	public void onWidgetLoaded(WidgetLoaded event) {
+		if (event.getGroupId() == WORNITEMS_GROUP) {
 			// interface (re)built: any previous children are gone with it
 			tile = null;
 			button = null;
@@ -66,23 +55,18 @@ public class LoadoutTabButton
 	}
 
 	/** Idempotent; call on startUp too in case the interface is already loaded. */
-	public void create()
-	{
-		if (!config.oneCardPerSlot())
-		{
+	public void create() {
+		if (!config.oneCardPerSlot()) {
 			return; // loadout system disabled — no button on the equipment page
 		}
 		Widget parent = client.getWidget(InterfaceID.Wornitems.UNIVERSE);
-		if (parent == null)
-		{
+		if (parent == null) {
 			return;
 		}
-		if (button != null && buttonParent == parent)
-		{
+		if (button != null && buttonParent == parent) {
 			return; // already attached to this incarnation of the interface
 		}
-		try
-		{
+		try {
 			int tileSize = 36;
 			int x = Math.max(0, parent.getWidth() - tileSize - MARGIN);
 			int y = MARGIN;
@@ -119,25 +103,19 @@ public class LoadoutTabButton
 			buttonParent = parent;
 			log.debug("Gachaman loadout widget button attached to equipment page");
 		}
-		catch (Exception e)
-		{
+		catch (Exception e) {
 			log.warn("Failed to attach loadout button widget", e);
 		}
 	}
 
 	/** shutDown cleanup (client thread): hide our children so nothing lingers. */
-	public void remove()
-	{
-		for (Widget w : new Widget[]{button, tile})
-		{
-			if (w != null)
-			{
-				try
-				{
+	public void remove() {
+		for (Widget w : new Widget[]{button, tile}) {
+			if (w != null) {
+				try {
 					w.setHidden(true);
 				}
-				catch (Exception e)
-				{
+				catch (Exception e) {
 					log.debug("loadout button widget already gone", e);
 				}
 			}

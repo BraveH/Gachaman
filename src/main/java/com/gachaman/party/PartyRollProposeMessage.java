@@ -21,8 +21,7 @@ import net.runelite.client.party.messages.PartyMemberMessage;
 @EqualsAndHashCode(callSuper = false)
 @NoArgsConstructor
 @AllArgsConstructor
-public class PartyRollProposeMessage extends PartyMemberMessage
-{
+public class PartyRollProposeMessage extends PartyMemberMessage {
 	private long proposalId;
 	private long seedCandidate;
 	private boolean members;

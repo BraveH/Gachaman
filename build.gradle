@@ -42,3 +42,13 @@ tasks.register('run', JavaExec) {
 	jvmArgs "-ea", "-Xmx768m"
 	args "--developer-mode", "--debug"
 }
+
+tasks.register('iconArt', JavaExec) {
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.gachaman.tools.IconArt'
+}
+
+tasks.register('attackAnims', JavaExec) {
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.gachaman.tools.AttackAnims'
+}

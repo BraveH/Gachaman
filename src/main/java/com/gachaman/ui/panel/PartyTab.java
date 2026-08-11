@@ -51,8 +51,7 @@ import net.runelite.client.ui.PluginPanel;
  * value, so a hostile client cannot reach the layout through here.
  */
 @Singleton
-public class PartyTab extends JPanel
-{
+public class PartyTab extends JPanel {
 	/**
 	 * Pre-realization fallback only: the 242px non-wrapped PluginPanel minus
 	 * its 6px borders and a full stock 17px scrollbar — the NARROWEST the
@@ -95,8 +94,7 @@ public class PartyTab extends JPanel
 	 * than copied: a pip beside a name and that name's row on the other tab
 	 * describe the same mark, and two palettes would eventually disagree.
 	 */
-	static Color patronColor(int count)
-	{
+	static Color patronColor(int count) {
 		return PATRON_COLORS[Math.min(PatronMark.tierFor(count), PATRON_COLORS.length - 1)];
 	}
 
@@ -117,15 +115,13 @@ public class PartyTab extends JPanel
 	private Supplier<PartyRollService.VoteView> voteViewSupplier;
 
 	public void setVoteViewSupplier(
-		@Nullable Supplier<PartyRollService.VoteView> supplier)
-	{
+		@Nullable Supplier<PartyRollService.VoteView> supplier) {
 		this.voteViewSupplier = supplier;
 	}
 
 	@Inject
 	public PartyTab(PartyPresenceService presenceService, GachaStateService stateService,
-		GachamanConfig config)
-	{
+		GachamanConfig config) {
 		this.presenceService = presenceService;
 		this.stateService = stateService;
 		this.config = config;
@@ -141,46 +137,37 @@ public class PartyTab extends JPanel
 	 * first paint. The width comparison lives in the resize listener instead,
 	 * which is also what stops a resize storm looping.
 	 */
-	void rebuild()
-	{
+	void rebuild() {
 		int width = measuredWidth();
 		builtWidth = width;
 		int inner = width - SECTION_PADDING;
 		removeAll();
 
 		JPanel section = GachamanPanel.section("Party");
-		if (!config.partyRollsEnabled())
-		{
+		if (!config.partyRollsEnabled()) {
 			section.add(textBlock("Party contracts are turned off in your Gachaman settings,"
 				+ " so nothing is broadcast and nothing is shown here.", MUTED, inner));
 		}
-		else
-		{
+		else {
 			List<PartyPresenceService.Row> rows = presenceService.getRows();
-			if (rows.isEmpty())
-			{
+			if (rows.isEmpty()) {
 				section.add(textBlock("Join a RuneLite Party to see everyone's style, level"
 					+ " and contract progress here.", MUTED, inner));
 			}
-			else
-			{
+			else {
 				// counted over ROWS, not over a group's members: a group is on
 				// contract when its quota is, and saying so about a member whose
 				// own line reports nothing would be inventing their state
 				int onContract = 0;
-				for (PartyPresenceService.Row row : rows)
-				{
-					if (row.getKillsRequired() > 0)
-					{
+				for (PartyPresenceService.Row row : rows) {
+					if (row.getKillsRequired() > 0) {
 						onContract++;
 					}
 				}
 				List<PartyPresenceService.Group> groups = PartyPresenceService.group(rows);
 				int shared = 0;
-				for (PartyPresenceService.Group group : groups)
-				{
-					if (group.isShared())
-					{
+				for (PartyPresenceService.Group group : groups) {
+					if (group.isShared()) {
 						shared++;
 					}
 				}
@@ -191,8 +178,7 @@ public class PartyTab extends JPanel
 						+ (rows.size() == 1 ? " member · " : " members · ")
 						+ onContract + " on contract",
 					ColorScheme.LIGHT_GRAY_COLOR));
-				if (shared > 0)
-				{
+				if (shared > 0) {
 					section.add(GachamanPanel.smallLine(shared
 							+ (shared == 1 ? " shared contract" : " shared contracts"),
 						ColorScheme.LIGHT_GRAY_COLOR));
@@ -207,8 +193,7 @@ public class PartyTab extends JPanel
 				// either side of an incoming ballot
 				PartyRollService.VoteView votes =
 					voteViewSupplier == null ? null : voteViewSupplier.get();
-				for (PartyPresenceService.Group group : groups)
-				{
+				for (PartyPresenceService.Group group : groups) {
 					section.add(buildGroup(group, inner, marks, votes));
 					section.add(Box.createVerticalStrut(8));
 				}
@@ -233,13 +218,10 @@ public class PartyTab extends JPanel
 	 * The names stack; the meter does not.
 	 */
 	private JComponent buildGroup(PartyPresenceService.Group group, int w, Marks marks,
-		@Nullable PartyRollService.VoteView votes)
-	{
-		JPanel outer = new JPanel()
-		{
+		@Nullable PartyRollService.VoteView votes) {
+		JPanel outer = new JPanel() {
 			@Override
-			public Dimension getMaximumSize()
-			{
+			public Dimension getMaximumSize() {
 				return new Dimension(w, getPreferredSize().height);
 			}
 		};
@@ -249,17 +231,14 @@ public class PartyTab extends JPanel
 
 		List<PartyPresenceService.Row> members = group.getMembers();
 		boolean live = false;
-		for (int i = 0; i < members.size(); i++)
-		{
+		for (int i = 0; i < members.size(); i++) {
 			PartyPresenceService.Row row = members.get(i);
-			if (i > 0)
-			{
+			if (i > 0) {
 				outer.add(Box.createVerticalStrut(2));
 			}
 			outer.add(memberHeader(row, w, marks, votes));
 			live |= row.isHeard() && row.isLoggedIn();
-			if (!group.isOnContract())
-			{
+			if (!group.isOnContract()) {
 				// a group with no quota is a single member by construction —
 				// only a contract collapses rows together — but writing it
 				// per-member means the page degrades to one line each rather
@@ -268,8 +247,7 @@ public class PartyTab extends JPanel
 			}
 		}
 
-		if (group.isOnContract())
-		{
+		if (group.isOnContract()) {
 			// a null task name alongside a real quota only reaches us from a
 			// malformed or hostile client, and the block still has to lay out
 			String quarry = group.getTaskName() == null ? "A contract" : group.getTaskName();
@@ -291,10 +269,8 @@ public class PartyTab extends JPanel
 	 * the clash bonus pays for — so colouring the pooled bar after whichever
 	 * row happened to be first would credit the quota to one of them.
 	 */
-	private static Color barColor(PartyPresenceService.Group group)
-	{
-		if (group.isShared())
-		{
+	private static Color barColor(PartyPresenceService.Group group) {
+		if (group.isShared()) {
 			return ColorScheme.BRAND_ORANGE;
 		}
 		PartyPresenceService.Row only = group.getMembers().get(0);
@@ -303,14 +279,11 @@ public class PartyTab extends JPanel
 
 	/** One member's line: style chip, name and level, their vote, then their badges. */
 	private static JComponent memberHeader(PartyPresenceService.Row row, int w, Marks marks,
-		@Nullable PartyRollService.VoteView votes)
-	{
+		@Nullable PartyRollService.VoteView votes) {
 		boolean live = row.isHeard() && row.isLoggedIn();
-		JPanel header = new JPanel(new BorderLayout(6, 0))
-		{
+		JPanel header = new JPanel(new BorderLayout(6, 0)) {
 			@Override
-			public Dimension getMaximumSize()
-			{
+			public Dimension getMaximumSize() {
 				return new Dimension(w, getPreferredSize().height);
 			}
 		};
@@ -323,8 +296,7 @@ public class PartyTab extends JPanel
 		left.setOpaque(false);
 		left.add(new Swatch(row.getStyle() == null ? MUTED : row.getStyle().getColor()),
 			BorderLayout.WEST);
-		if (row.getAvatar() != null)
-		{
+		if (row.getAvatar() != null) {
 			left.add(new Face(row.getAvatar(), live), BorderLayout.EAST);
 		}
 		header.add(left, BorderLayout.WEST);
@@ -351,10 +323,8 @@ public class PartyTab extends JPanel
 	 * member can see what the party is converging on without reopening it.
 	 */
 	private static String voteSuffix(PartyPresenceService.Row row,
-		@Nullable PartyRollService.VoteView votes)
-	{
-		if (votes == null)
-		{
+		@Nullable PartyRollService.VoteView votes) {
+		if (votes == null) {
 			return "";
 		}
 		String label = votes.getLabelByMember().get(row.getMemberId());
@@ -367,15 +337,12 @@ public class PartyTab extends JPanel
 	 * someone from a party roll: without this the party proposes, that member
 	 * is auto-excused, and nothing on the page ever said why.
 	 */
-	private static JLabel statusLine(PartyPresenceService.Row row)
-	{
-		if (!row.isHeard())
-		{
+	private static JLabel statusLine(PartyPresenceService.Row row) {
+		if (!row.isHeard()) {
 			// "- " marker only: the RuneScape TTFs have no bullet glyph
 			return GachamanPanel.smallLine("- No signal", MUTED);
 		}
-		if (row.isUndecidedOffers())
-		{
+		if (row.isUndecidedOffers()) {
 			JLabel line = GachamanPanel.smallLine("- Undecided board", TAINT_RED);
 			// your own row is on this page too, and third-person copy pointed at
 			// yourself reads as a bug rather than as a description of you
@@ -395,12 +362,10 @@ public class PartyTab extends JPanel
 	 * field on GachaPresenceMessage) rather than adding a column, so every row
 	 * keeps one layout however many features land.
 	 */
-	private static JPanel badges(PartyPresenceService.Row row, Marks marks)
-	{
+	private static JPanel badges(PartyPresenceService.Row row, Marks marks) {
 		JPanel strip = new JPanel(new FlowLayout(FlowLayout.RIGHT, 3, 0));
 		strip.setOpaque(false);
-		if (row.isTainted())
-		{
+		if (row.isTainted()) {
 			JLabel taint = GachamanPanel.line("*", TAINT_RED, FontManager.getRunescapeSmallFont());
 			taint.setToolTipText(row.isSelf()
 				? "Tainted — your income is halved until you work it off."
@@ -408,8 +373,7 @@ public class PartyTab extends JPanel
 			strip.add(taint);
 		}
 		PatronRecord record = marks.recordFor(row);
-		if (record != null)
-		{
+		if (record != null) {
 			int count = record.getCount();
 			boolean top = marks.isTop(row);
 			Pip pip = new Pip(patronColor(count), top);
@@ -429,15 +393,13 @@ public class PartyTab extends JPanel
 	 * per row would let a shared contract complete mid-rebuild and hand two
 	 * rows two different owners of a mark that only has one.
 	 */
-	private static final class Marks
-	{
+	private static final class Marks {
 		@Nullable
 		private final Map<String, PatronRecord> ledger;
 		@Nullable
 		private final String topKey;
 
-		Marks(@Nullable Map<String, PatronRecord> ledger)
-		{
+		Marks(@Nullable Map<String, PatronRecord> ledger) {
 			this.ledger = ledger;
 			this.topKey = PatronMark.topKey(ledger);
 		}
@@ -449,21 +411,18 @@ public class PartyTab extends JPanel
 		 * the party wear the same person's mark.
 		 */
 		@Nullable
-		PatronRecord recordFor(PartyPresenceService.Row row)
-		{
+		PatronRecord recordFor(PartyPresenceService.Row row) {
 			return PatronMark.recordFor(ledger, row.getAccountKey());
 		}
 
 		/** False whenever either side is unknown — see {@link AccountKey#same}. */
-		boolean isTop(PartyPresenceService.Row row)
-		{
+		boolean isTop(PartyPresenceService.Row row) {
 			return AccountKey.same(row.getAccountKey(), topKey);
 		}
 	}
 
 	/** The ledger as of now; empty when the save has not loaded yet. */
-	private Marks marks()
-	{
+	private Marks marks() {
 		GachaState state = stateService.get();
 		return new Marks(state == null ? null : state.getPatrons());
 	}
@@ -471,14 +430,11 @@ public class PartyTab extends JPanel
 	// --- Layout plumbing ---
 
 	/** The scroll viewport's ACTUAL extent width — the only trustworthy budget. */
-	private int measuredWidth()
-	{
+	private int measuredWidth() {
 		Container ancestor = SwingUtilities.getAncestorOfClass(JViewport.class, this);
-		if (ancestor instanceof JViewport)
-		{
+		if (ancestor instanceof JViewport) {
 			int width = ((JViewport) ancestor).getExtentSize().width;
-			if (width > 0)
-			{
+			if (width > 0) {
 				return width;
 			}
 		}
@@ -486,25 +442,20 @@ public class PartyTab extends JPanel
 	}
 
 	@Override
-	public void addNotify()
-	{
+	public void addNotify() {
 		super.addNotify();
 		Container ancestor = SwingUtilities.getAncestorOfClass(JViewport.class, this);
-		if (!viewportHooked && ancestor instanceof JViewport)
-		{
+		if (!viewportHooked && ancestor instanceof JViewport) {
 			// the viewport narrows when the scrollbar appears (and would widen if
 			// the LAF ever changed its width) — re-measure and rebuild. rebuild()
 			// itself cannot carry the equal-width guard here (it must always
 			// rebuild), so the guard sits in the listener or a resize loops.
 			viewportHooked = true;
-			ancestor.addComponentListener(new ComponentAdapter()
-			{
+			ancestor.addComponentListener(new ComponentAdapter() {
 				@Override
-				public void componentResized(ComponentEvent e)
-				{
+				public void componentResized(ComponentEvent e) {
 					SwingUtilities.invokeLater(() -> {
-						if (measuredWidth() != builtWidth)
-						{
+						if (measuredWidth() != builtWidth) {
 							rebuild();
 						}
 					});
@@ -514,12 +465,10 @@ public class PartyTab extends JPanel
 	}
 
 	/** A drawn colour chip: the RuneScape TTFs have no block glyph to type. */
-	private static final class Swatch extends JComponent
-	{
+	private static final class Swatch extends JComponent {
 		private final Color color;
 
-		Swatch(Color color)
-		{
+		Swatch(Color color) {
 			this.color = color;
 			Dimension d = new Dimension(SWATCH, SWATCH);
 			setPreferredSize(d);
@@ -528,8 +477,7 @@ public class PartyTab extends JPanel
 		}
 
 		@Override
-		protected void paintComponent(Graphics g)
-		{
+		protected void paintComponent(Graphics g) {
 			g.setColor(color);
 			g.fillRect(0, Math.max(0, getHeight() / 2 - SWATCH / 2), SWATCH, SWATCH);
 		}
@@ -548,13 +496,11 @@ public class PartyTab extends JPanel
 	 * greys out — the face should not be the one part of a stale row that still
 	 * looks live.
 	 */
-	private static final class Face extends JComponent
-	{
+	private static final class Face extends JComponent {
 		private final BufferedImage image;
 		private final boolean live;
 
-		Face(BufferedImage image, boolean live)
-		{
+		Face(BufferedImage image, boolean live) {
 			this.image = image;
 			this.live = live;
 			Dimension d = new Dimension(FACE, FACE);
@@ -564,23 +510,19 @@ public class PartyTab extends JPanel
 		}
 
 		@Override
-		protected void paintComponent(Graphics g)
-		{
+		protected void paintComponent(Graphics g) {
 			Graphics2D g2 = (Graphics2D) g.create();
-			try
-			{
+			try {
 				g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
 					RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-				if (!live)
-				{
+				if (!live) {
 					g2.setComposite(AlphaComposite.getInstance(
 						AlphaComposite.SRC_OVER, 0.45f));
 				}
 				int y = Math.max(0, getHeight() / 2 - FACE / 2);
 				g2.drawImage(image, 0, y, FACE, FACE, null);
 			}
-			finally
-			{
+			finally {
 				g2.dispose();
 			}
 		}
@@ -593,14 +535,12 @@ public class PartyTab extends JPanel
 	 * box. A diamond needs no glyph at all, and it cannot be confused with the
 	 * taint badge's "*" sitting beside it.
 	 */
-	private static final class Pip extends JComponent
-	{
+	private static final class Pip extends JComponent {
 		private final Color color;
 		/** This is the mark's owner: outline it so one pip still stands out. */
 		private final boolean owner;
 
-		Pip(Color color, boolean owner)
-		{
+		Pip(Color color, boolean owner) {
 			this.color = color;
 			this.owner = owner;
 			Dimension d = new Dimension(PIP, PIP);
@@ -610,11 +550,9 @@ public class PartyTab extends JPanel
 		}
 
 		@Override
-		protected void paintComponent(Graphics g)
-		{
+		protected void paintComponent(Graphics g) {
 			Graphics2D g2 = (Graphics2D) g.create();
-			try
-			{
+			try {
 				g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
 					RenderingHints.VALUE_ANTIALIAS_ON);
 				int top = Math.max(0, getHeight() / 2 - PIP / 2);
@@ -626,8 +564,7 @@ public class PartyTab extends JPanel
 				g2.setColor(owner ? MARK_OWNER : color.darker());
 				g2.drawPolygon(xs, ys, 4);
 			}
-			finally
-			{
+			finally {
 				g2.dispose();
 			}
 		}
@@ -643,8 +580,7 @@ public class PartyTab extends JPanel
 	 * A private twin of HelpTab's; sharing one copy means promoting HelpTab's
 	 * out of private, which is a docs-owned file this round.
 	 */
-	private static JTextArea textBlock(String text, Color color, int width)
-	{
+	private static JTextArea textBlock(String text, Color color, int width) {
 		JTextArea area = new JTextArea(text);
 		area.setEditable(false);
 		area.setFocusable(false);
@@ -668,12 +604,10 @@ public class PartyTab extends JPanel
 	 * measured viewport width. A private twin of HelpTab's, for the same reason
 	 * as {@link #textBlock}.
 	 */
-	private static final class WidthCap extends JPanel
-	{
+	private static final class WidthCap extends JPanel {
 		private final int cap;
 
-		WidthCap(JComponent inner, int cap)
-		{
+		WidthCap(JComponent inner, int cap) {
 			super(new BorderLayout());
 			this.cap = cap;
 			setOpaque(false);
@@ -682,15 +616,13 @@ public class PartyTab extends JPanel
 		}
 
 		@Override
-		public Dimension getPreferredSize()
-		{
+		public Dimension getPreferredSize() {
 			Dimension d = super.getPreferredSize();
 			return new Dimension(Math.min(d.width, cap), d.height);
 		}
 
 		@Override
-		public Dimension getMaximumSize()
-		{
+		public Dimension getMaximumSize() {
 			return new Dimension(cap, getPreferredSize().height);
 		}
 	}

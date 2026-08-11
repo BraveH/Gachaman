@@ -14,6 +14,7 @@ import java.util.Set;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -53,27 +54,19 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Singleton
-public class ServiceRecordService implements KillTracker.KillListener, TaskService.Listener
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class ServiceRecordService implements KillTracker.KillListener, TaskService.Listener {
 	private final GachaStateService stateService;
 
 	/** owned-card uuid -> kills tallied since the last flush. Never persisted. */
 	private final Map<String, Integer> pending = new HashMap<>();
 
-	@Inject
-	public ServiceRecordService(GachaStateService stateService)
-	{
-		this.stateService = stateService;
-	}
-
 	// --- KillTracker.KillListener ---
 
 	@Override
-	public synchronized void onKill(KillTracker.Kill kill)
-	{
+	public synchronized void onKill(KillTracker.Kill kill) {
 		GachaState state = stateService.get();
-		if (state != null)
-		{
+		if (state != null) {
 			creditKill(pending, state.getLoadout());
 		}
 	}
@@ -81,30 +74,10 @@ public class ServiceRecordService implements KillTracker.KillListener, TaskServi
 	// --- TaskService.Listener ---
 
 	@Override
-	public void onTaskCompleted(TaskService.TaskCompletionSummary summary)
-	{
+	public void onTaskCompleted(TaskService.TaskCompletionSummary summary) {
 		flush();
 	}
 
-	@Override
-	public void onKillFeedback(TaskService.KillFeedback feedback)
-	{
-	}
-
-	@Override
-	public void onSideBetHit(SideBet bet, String monsterName)
-	{
-	}
-
-	@Override
-	public void onOffersRolled(List<TaskOffer> offers)
-	{
-	}
-
-	@Override
-	public void onPartyProgress(ActiveTask task)
-	{
-	}
 
 	// --- flush boundaries ---
 
@@ -113,10 +86,8 @@ public class ServiceRecordService implements KillTracker.KillListener, TaskServi
 	 * completion and at the exit boundaries (logout, plugin shutdown, client
 	 * shutdown), never per kill.
 	 */
-	public synchronized void flush()
-	{
-		if (pending.isEmpty())
-		{
+	public synchronized void flush() {
+		if (pending.isEmpty()) {
 			return;
 		}
 		Map<String, Integer> tally = new HashMap<>(pending);
@@ -136,14 +107,12 @@ public class ServiceRecordService implements KillTracker.KillListener, TaskServi
 	 * account that earned them; writing them would credit another character's
 	 * cards. The LOGIN_SCREEN handler already flushed under the right key.
 	 */
-	public synchronized void drop()
-	{
+	public synchronized void drop() {
 		pending.clear();
 	}
 
 	/** Kills tallied for an owned card but not yet written. */
-	public synchronized int pendingFor(String ownedCardUuid)
-	{
+	public synchronized int pendingFor(String ownedCardUuid) {
 		return pending.getOrDefault(ownedCardUuid, 0);
 	}
 
@@ -153,8 +122,7 @@ public class ServiceRecordService implements KillTracker.KillListener, TaskServi
 	 * unwritten would land on top of the number afterwards and the card would
 	 * quietly drift off the stage the player set.
 	 */
-	public synchronized void debugSetServed(Set<String> uuids, int killsServed)
-	{
+	public synchronized void debugSetServed(Set<String> uuids, int killsServed) {
 		flush();
 		stateService.mutate(s -> {
 			List<OwnedCard> updated = setServed(s.getOwnedCards(), uuids, killsServed);
@@ -168,16 +136,12 @@ public class ServiceRecordService implements KillTracker.KillListener, TaskServi
 	 * +1 kill of service for every card assigned to a loadout slot, distinct by
 	 * uuid: a card that somehow occupied two slots still served one kill.
 	 */
-	static void creditKill(Map<String, Integer> tally, @Nullable Map<String, String> loadout)
-	{
-		if (loadout == null || loadout.isEmpty())
-		{
+	static void creditKill(Map<String, Integer> tally, @Nullable Map<String, String> loadout) {
+		if (loadout == null || loadout.isEmpty()) {
 			return;
 		}
-		for (String uuid : new HashSet<>(loadout.values()))
-		{
-			if (uuid != null)
-			{
+		for (String uuid : new HashSet<>(loadout.values())) {
+			if (uuid != null) {
 				tally.merge(uuid, 1, Integer::sum);
 			}
 		}
@@ -190,24 +154,19 @@ public class ServiceRecordService implements KillTracker.KillListener, TaskServi
 	 * dropped — their service died with them.
 	 */
 	@Nullable
-	static List<OwnedCard> applyTally(@Nullable List<OwnedCard> cards, Map<String, Integer> tally)
-	{
-		if (cards == null || cards.isEmpty() || tally.isEmpty())
-		{
+	static List<OwnedCard> applyTally(@Nullable List<OwnedCard> cards, Map<String, Integer> tally) {
+		if (cards == null || cards.isEmpty() || tally.isEmpty()) {
 			return null;
 		}
 		List<OwnedCard> out = new ArrayList<>(cards.size());
 		boolean changed = false;
-		for (OwnedCard card : cards)
-		{
+		for (OwnedCard card : cards) {
 			int add = tally.getOrDefault(card.getUuid(), 0);
-			if (add > 0)
-			{
+			if (add > 0) {
 				out.add(card.withKillsServed(card.getKillsServed() + add));
 				changed = true;
 			}
-			else
-			{
+			else {
 				out.add(card);
 			}
 		}
@@ -230,23 +189,18 @@ public class ServiceRecordService implements KillTracker.KillListener, TaskServi
 	 */
 	@Nullable
 	static List<OwnedCard> setServed(@Nullable List<OwnedCard> cards, Set<String> uuids,
-		int killsServed)
-	{
-		if (cards == null || cards.isEmpty() || uuids.isEmpty())
-		{
+		int killsServed) {
+		if (cards == null || cards.isEmpty() || uuids.isEmpty()) {
 			return null;
 		}
 		List<OwnedCard> out = new ArrayList<>(cards.size());
 		boolean changed = false;
-		for (OwnedCard card : cards)
-		{
-			if (uuids.contains(card.getUuid()) && card.getKillsServed() != killsServed)
-			{
+		for (OwnedCard card : cards) {
+			if (uuids.contains(card.getUuid()) && card.getKillsServed() != killsServed) {
 				out.add(card.withKillsServed(killsServed));
 				changed = true;
 			}
-			else
-			{
+			else {
 				out.add(card);
 			}
 		}
@@ -261,15 +215,11 @@ public class ServiceRecordService implements KillTracker.KillListener, TaskServi
 	 * against their own kill count. Holograms are excluded — they carry cardId
 	 * -1 and never enter the grid.
 	 */
-	public static Map<Integer, Integer> bestByCardId(@Nullable List<OwnedCard> cards)
-	{
+	public static Map<Integer, Integer> bestByCardId(@Nullable List<OwnedCard> cards) {
 		Map<Integer, Integer> best = new HashMap<>();
-		if (cards != null)
-		{
-			for (OwnedCard card : cards)
-			{
-				if (!card.isHologram())
-				{
+		if (cards != null) {
+			for (OwnedCard card : cards) {
+				if (!card.isHologram()) {
 					best.merge(card.getCardId(), card.getKillsServed(), Math::max);
 				}
 			}

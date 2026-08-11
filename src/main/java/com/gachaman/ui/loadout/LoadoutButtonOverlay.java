@@ -35,8 +35,7 @@ import net.runelite.client.ui.overlay.OverlayPosition;
  * loadout board left open stays open and usable.
  */
 @Singleton
-public class LoadoutButtonOverlay extends Overlay
-{
+public class LoadoutButtonOverlay extends Overlay {
 	public static final String TOGGLE_OPTION = "Toggle";
 	public static final String OVERLAY_TARGET = "Gachaman loadout";
 
@@ -91,8 +90,7 @@ public class LoadoutButtonOverlay extends Overlay
 
 	@Inject
 	public LoadoutButtonOverlay(Client client, GachaStateService stateService,
-		LoadoutOverlay loadoutOverlay)
-	{
+		LoadoutOverlay loadoutOverlay) {
 		this.client = client;
 		this.stateService = stateService;
 		this.loadoutOverlay = loadoutOverlay;
@@ -106,15 +104,13 @@ public class LoadoutButtonOverlay extends Overlay
 	}
 
 	@Override
-	public Rectangle getBounds()
-	{
+	public Rectangle getBounds() {
 		// copy: the renderer mutates whatever this returns
 		return new Rectangle(buttonRect);
 	}
 
 	/** One-line diagnostics for the ::gachabutton debug command. */
-	public String diagnostics()
-	{
+	public String diagnostics() {
 		long age = lastRenderMs == 0 ? -1 : System.currentTimeMillis() - lastRenderMs;
 		return (age < 0 ? "render NEVER called" : "last render " + age + "ms ago")
 			+ " | " + lastExitReason + " | rect " + buttonRect.x + "," + buttonRect.y
@@ -122,12 +118,10 @@ public class LoadoutButtonOverlay extends Overlay
 	}
 
 	@Override
-	public Dimension render(Graphics2D graphics)
-	{
+	public Dimension render(Graphics2D graphics) {
 		lastRenderMs = System.currentTimeMillis();
 		GachaState state = stateService.get();
-		if (state == null)
-		{
+		if (state == null) {
 			lastExitReason = "state not loaded";
 			buttonRect.setBounds(0, 0, 0, 0);
 			return null;
@@ -140,8 +134,7 @@ public class LoadoutButtonOverlay extends Overlay
 		Widget rootWidget = client.getWidget(InterfaceID.Wornitems.UNIVERSE);
 		Widget slotWidget = client.getWidget(InterfaceID.Wornitems.SLOT0);
 		if (rootWidget == null || rootWidget.isHidden()
-			|| slotWidget == null || slotWidget.isHidden())
-		{
+			|| slotWidget == null || slotWidget.isHidden()) {
 			lastExitReason = "equipment page not visible";
 			buttonRect.setBounds(0, 0, 0, 0);
 			return null;
@@ -150,8 +143,7 @@ public class LoadoutButtonOverlay extends Overlay
 		Rectangle slot = slotWidget.getBounds();
 		if (root == null || root.width < 100 || root.height < 100
 			|| slot == null || slot.width <= 0 || slot.height <= 0
-			|| !root.contains(slot.x + slot.width / 2, slot.y + slot.height / 2))
-		{
+			|| !root.contains(slot.x + slot.width / 2, slot.y + slot.height / 2)) {
 			lastExitReason = "equipment widget bounds insane (root " + root
 				+ ", slot " + slot + ")";
 			buttonRect.setBounds(0, 0, 0, 0);
@@ -182,8 +174,7 @@ public class LoadoutButtonOverlay extends Overlay
 	}
 
 	/** Draws the stone in local coordinates (graphics already translated). */
-	private void drawButton(Graphics2D graphics, GachaState state, boolean pressed, boolean hovered)
-	{
+	private void drawButton(Graphics2D graphics, GachaState state, boolean pressed, boolean hovered) {
 		Graphics2D g = (Graphics2D) graphics.create();
 		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
@@ -212,15 +203,13 @@ public class LoadoutButtonOverlay extends Overlay
 		g.drawRoundRect(cx - 6, cy - 9, 12, 18, 3, 3);
 		g.rotate(Math.toRadians(12), cx, cy);
 
-		if (hovered && !pressed)
-		{
+		if (hovered && !pressed) {
 			g.setColor(HOVER_WASH);
 			g.fillRoundRect(1, 1, BUTTON_W - 2, BUTTON_H - 2, 6, 6);
 		}
 
 		// pulsing deed badge when a deed is waiting to be claimed
-		if (state.getPendingDeeds() > 0)
-		{
+		if (state.getPendingDeeds() > 0) {
 			float pulse = (float) (0.55 + 0.45 * Math.sin(System.currentTimeMillis() / 220.0));
 			g.setColor(new Color(DEED_R, DEED_G, DEED_B, (int) (120 + 135 * pulse)));
 			g.fillOval(BUTTON_W - 11, 0, 11, 11);

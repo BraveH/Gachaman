@@ -8,8 +8,7 @@ import net.runelite.client.config.ConfigSection;
 import net.runelite.client.config.Range;
 
 @ConfigGroup(GachamanConfig.GROUP)
-public interface GachamanConfig extends Config
-{
+public interface GachamanConfig extends Config {
 	String GROUP = "gachaman";
 
 	@ConfigSection(
@@ -41,31 +40,6 @@ public interface GachamanConfig extends Config
 	String advancedSection = "advanced";
 
 	@ConfigItem(
-		keyName = "soundsEnabled",
-		name = "Sounds",
-		description = "Play ceremony and reward sounds",
-		section = generalSection,
-		position = 0
-	)
-	default boolean soundsEnabled()
-	{
-		return true;
-	}
-
-	@Range(min = 0, max = 100)
-	@ConfigItem(
-		keyName = "soundVolume",
-		name = "Sound volume",
-		description = "Ceremony sound volume",
-		section = generalSection,
-		position = 1
-	)
-	default int soundVolume()
-	{
-		return 70;
-	}
-
-	@ConfigItem(
 		keyName = "chatPings",
 		name = "Chat notifications",
 		description = "Informational chat lines (starter grants, vouchers, milestones)."
@@ -74,8 +48,7 @@ public interface GachamanConfig extends Config
 		section = generalSection,
 		position = 2
 	)
-	default boolean chatPings()
-	{
+	default boolean chatPings() {
 		return true;
 	}
 
@@ -88,8 +61,7 @@ public interface GachamanConfig extends Config
 		section = generalSection,
 		position = 3
 	)
-	default boolean highlightTaskNpc()
-	{
+	default boolean highlightTaskNpc() {
 		return true;
 	}
 
@@ -100,8 +72,7 @@ public interface GachamanConfig extends Config
 		section = generalSection,
 		position = 4
 	)
-	default boolean oneCardPerSlot()
-	{
+	default boolean oneCardPerSlot() {
 		return true;
 	}
 
@@ -115,8 +86,7 @@ public interface GachamanConfig extends Config
 		section = generalSection,
 		position = 5
 	)
-	default boolean anteEnabled()
-	{
+	default boolean anteEnabled() {
 		return false;
 	}
 
@@ -128,8 +98,7 @@ public interface GachamanConfig extends Config
 		section = enforcementSection,
 		position = 0
 	)
-	default int styleWarningSeconds()
-	{
+	default int styleWarningSeconds() {
 		return 60;
 	}
 
@@ -143,8 +112,7 @@ public interface GachamanConfig extends Config
 		section = partySection,
 		position = 0
 	)
-	default boolean partyRollsEnabled()
-	{
+	default boolean partyRollsEnabled() {
 		return true;
 	}
 
@@ -161,8 +129,7 @@ public interface GachamanConfig extends Config
 		section = partySection,
 		position = 1
 	)
-	default PartySizing partySizing()
-	{
+	default PartySizing partySizing() {
 		return PartySizing.FIGHTING_WEIGHT;
 	}
 
@@ -173,8 +140,7 @@ public interface GachamanConfig extends Config
 		section = advancedSection,
 		position = 0
 	)
-	default boolean safeModeAbort()
-	{
+	default boolean safeModeAbort() {
 		return true;
 	}
 
@@ -185,8 +151,7 @@ public interface GachamanConfig extends Config
 		section = advancedSection,
 		position = 1
 	)
-	default boolean debugCommands()
-	{
+	default boolean debugCommands() {
 		return false;
 	}
 }

@@ -17,8 +17,7 @@ import lombok.With;
 @Value
 @With
 @Builder(toBuilder = true)
-public class GachaState
-{
+public class GachaState {
 	public static final int SCHEMA_VERSION = 1;
 
 	// --- Collection ---
@@ -51,20 +50,6 @@ public class GachaState
 	int deedMilestonesClaimed;
 	/** Deeds granted but not yet spent on a slot choice. */
 	int pendingDeeds;
-	/**
-	 * The Charter Office's open escrow, or null when nothing is held. Deliberately
-	 * NOT backfilled by normalized(): a save written before this field existed
-	 * deserializes it as null, and null is exactly right — that account never
-	 * bought a deed, so it is owed nothing.
-	 */
-	CharterHold charterHold;
-	/**
-	 * The day key ("2026-D220") on which a deed was last chartered — one per UTC
-	 * day. Derived and compared, never counted: like the weekly shop's rotation
-	 * this needs no server and no clock sync, and a null (pre-field save, or a
-	 * player who has never chartered) simply means "not yet today".
-	 */
-	String charterDayKey;
 
 	// --- Pity / chests ---
 	int opensSinceEpic;
@@ -78,7 +63,6 @@ public class GachaState
 
 	// --- Meta ---
 	Set<String> completedSets;
-	int prestigeRank;
 	/** weekKey ("2026-W32") -> set of purchased shop slot indexes. */
 	Map<String, Set<Integer>> weeklyShopPurchases;
 	/** "bossSetTag:milestone" claims, e.g. "zulrah:50". */
@@ -156,8 +140,7 @@ public class GachaState
 	 */
 	List<ContractRecord> contractLog;
 
-	public static GachaState fresh(int combatLevel)
-	{
+	public static GachaState fresh(int combatLevel) {
 		// weapon + body + ammo: melee AND ranged are trainable from the start
 		Set<String> deeded = new HashSet<>();
 		deeded.add(GearSlot.WEAPON.name());
@@ -184,15 +167,12 @@ public class GachaState
 			.totalTasksCompleted(0)
 			.deedMilestonesClaimed(0)
 			.pendingDeeds(0)
-			.charterHold(null)
-			.charterDayKey(null)
 			.opensSinceEpic(0)
 			.chestsOpenedByTier(new HashMap<>())
 			.pendingChestBlob(null)
 			.monsterStats(new HashMap<>())
 			.personalBests(new HashMap<>())
 			.completedSets(new HashSet<>())
-			.prestigeRank(0)
 			.weeklyShopPurchases(new HashMap<>())
 			.bossKcClaims(new HashSet<>())
 			.queuedThemedChests(new ArrayList<>())
@@ -220,79 +200,60 @@ public class GachaState
 	 * copy with every null collection replaced by an empty one so consumers
 	 * never need per-site guards. Applied once at load.
 	 */
-	public GachaState normalized()
-	{
+	public GachaState normalized() {
 		GachaStateBuilder b = toBuilder();
-		if (ownedCards == null)
-		{
+		if (ownedCards == null) {
 			b.ownedCards(new ArrayList<>());
 		}
-		if (loadout == null)
-		{
+		if (loadout == null) {
 			b.loadout(new HashMap<>());
 		}
-		if (deededSlots == null)
-		{
+		if (deededSlots == null) {
 			b.deededSlots(new HashSet<>());
 		}
-		if (pendingOffers == null)
-		{
+		if (pendingOffers == null) {
 			b.pendingOffers(new ArrayList<>());
 		}
-		if (tasksCompletedByDifficulty == null)
-		{
+		if (tasksCompletedByDifficulty == null) {
 			b.tasksCompletedByDifficulty(new HashMap<>());
 		}
-		if (chestsOpenedByTier == null)
-		{
+		if (chestsOpenedByTier == null) {
 			b.chestsOpenedByTier(new HashMap<>());
 		}
-		if (monsterStats == null)
-		{
+		if (monsterStats == null) {
 			b.monsterStats(new HashMap<>());
 		}
-		if (personalBests == null)
-		{
+		if (personalBests == null) {
 			b.personalBests(new HashMap<>());
 		}
-		if (completedSets == null)
-		{
+		if (completedSets == null) {
 			b.completedSets(new HashSet<>());
 		}
-		if (weeklyShopPurchases == null)
-		{
+		if (weeklyShopPurchases == null) {
 			b.weeklyShopPurchases(new HashMap<>());
 		}
-		if (bossKcClaims == null)
-		{
+		if (bossKcClaims == null) {
 			b.bossKcClaims(new HashSet<>());
 		}
-		if (queuedThemedChests == null)
-		{
+		if (queuedThemedChests == null) {
 			b.queuedThemedChests(new ArrayList<>());
 		}
-		if (firstsClaimed == null)
-		{
+		if (firstsClaimed == null) {
 			b.firstsClaimed(new HashSet<>());
 		}
-		if (speciesDiscovered == null)
-		{
+		if (speciesDiscovered == null) {
 			b.speciesDiscovered(new HashSet<>());
 		}
-		if (slotBestTierRank == null)
-		{
+		if (slotBestTierRank == null) {
 			b.slotBestTierRank(new HashMap<>());
 		}
-		if (timeline == null)
-		{
+		if (timeline == null) {
 			b.timeline(new ArrayList<>());
 		}
-		if (patrons == null)
-		{
+		if (patrons == null) {
 			b.patrons(new HashMap<>());
 		}
-		if (contractLog == null)
-		{
+		if (contractLog == null) {
 			b.contractLog(new ArrayList<>());
 		}
 		return b.build();

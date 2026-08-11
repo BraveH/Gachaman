@@ -8,6 +8,7 @@ import javax.inject.Singleton;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.client.input.MouseListener;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Non-modal, selective mouse listener (the plugin registers it on
@@ -22,8 +23,8 @@ import net.runelite.client.input.MouseListener;
  * clicks on "Click here to play" with nothing on screen to explain it.
  */
 @Singleton
-public class LoadoutInputListener implements MouseListener
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class LoadoutInputListener implements MouseListener {
 	private final Client client;
 	private final LoadoutButtonOverlay buttonOverlay;
 	private final LoadoutOverlay loadoutOverlay;
@@ -31,36 +32,23 @@ public class LoadoutInputListener implements MouseListener
 	private boolean swallowRelease;
 	private boolean swallowClick;
 
-	@Inject
-	public LoadoutInputListener(Client client, LoadoutButtonOverlay buttonOverlay,
-		LoadoutOverlay loadoutOverlay)
-	{
-		this.client = client;
-		this.buttonOverlay = buttonOverlay;
-		this.loadoutOverlay = loadoutOverlay;
-	}
-
 	@Override
-	public MouseEvent mousePressed(MouseEvent event)
-	{
+	public MouseEvent mousePressed(MouseEvent event) {
 		if (event == null || event.isConsumed()
 			|| event.getButton() != MouseEvent.BUTTON1
 			|| event.isAltDown() // Alt = RuneLite overlay-managing mode (drag)
-			|| client.getGameState() != GameState.LOGGED_IN)
-		{
+			|| client.getGameState() != GameState.LOGGED_IN) {
 			return event;
 		}
 		Point point = event.getPoint();
-		if (inBounds(buttonOverlay.getBounds(), point))
-		{
+		if (inBounds(buttonOverlay.getBounds(), point)) {
 			loadoutOverlay.toggle();
 			swallowRelease = true;
 			swallowClick = true;
 			event.consume();
 			return event;
 		}
-		if (loadoutOverlay.containsCanvasPoint(point))
-		{
+		if (loadoutOverlay.containsCanvasPoint(point)) {
 			loadoutOverlay.handleClick(point);
 			swallowRelease = true;
 			swallowClick = true;
@@ -71,10 +59,8 @@ public class LoadoutInputListener implements MouseListener
 	}
 
 	@Override
-	public MouseEvent mouseReleased(MouseEvent event)
-	{
-		if (event != null && swallowRelease && event.getButton() == MouseEvent.BUTTON1)
-		{
+	public MouseEvent mouseReleased(MouseEvent event) {
+		if (event != null && swallowRelease && event.getButton() == MouseEvent.BUTTON1) {
 			swallowRelease = false;
 			event.consume();
 		}
@@ -82,10 +68,8 @@ public class LoadoutInputListener implements MouseListener
 	}
 
 	@Override
-	public MouseEvent mouseClicked(MouseEvent event)
-	{
-		if (event != null && swallowClick && event.getButton() == MouseEvent.BUTTON1)
-		{
+	public MouseEvent mouseClicked(MouseEvent event) {
+		if (event != null && swallowClick && event.getButton() == MouseEvent.BUTTON1) {
 			swallowClick = false;
 			event.consume();
 		}
@@ -93,10 +77,8 @@ public class LoadoutInputListener implements MouseListener
 	}
 
 	@Override
-	public MouseEvent mouseMoved(MouseEvent event)
-	{
-		if (event != null)
-		{
+	public MouseEvent mouseMoved(MouseEvent event) {
+		if (event != null) {
 			// hover feedback only; never consumed
 			loadoutOverlay.setHoverCanvasPoint(event.getPoint());
 		}
@@ -104,29 +86,24 @@ public class LoadoutInputListener implements MouseListener
 	}
 
 	@Override
-	public MouseEvent mouseDragged(MouseEvent event)
-	{
+	public MouseEvent mouseDragged(MouseEvent event) {
 		return event;
 	}
 
 	@Override
-	public MouseEvent mouseEntered(MouseEvent event)
-	{
+	public MouseEvent mouseEntered(MouseEvent event) {
 		return event;
 	}
 
 	@Override
-	public MouseEvent mouseExited(MouseEvent event)
-	{
-		if (event != null)
-		{
+	public MouseEvent mouseExited(MouseEvent event) {
+		if (event != null) {
 			loadoutOverlay.setHoverCanvasPoint(null);
 		}
 		return event;
 	}
 
-	private static boolean inBounds(Rectangle bounds, Point point)
-	{
+	private static boolean inBounds(Rectangle bounds, Point point) {
 		return bounds != null && bounds.width > 0 && bounds.height > 0 && bounds.contains(point);
 	}
 }

@@ -153,20 +153,6 @@ contract shows its docket state.
 </details>
 
 <details>
-<summary><b>The Charter Office</b> — buy one contract a day</summary>
-
-Instead of waiting for the board to offer what you want, buy it. A target must be **familiar** — 25
-banked kills, read straight off your journal — and must pass every gate a normal roll applies
-(combat, slayer, members, quests), so a deed can never buy past a rule — banked kills on a monster
-whose quest you never finished still won't put it on the counter. Price scales with how far you're
-punching up: **800 – 2,500 GC** in round tens.
-
-The GC is **held in escrow, not spent**. The deed joins your board as an extra offer for ~5 minutes,
-and if you don't sign it the money comes back in full. The daily lock rolls over at **UTC midnight**.
-The counter is closed while a party roll is live — a party's board isn't one player's to add to.
-</details>
-
-<details>
 <summary><b>The Ante</b> — a voluntary stake (off by default)</summary>
 
 Before you accept an **Insane** contract you may stake 10–50% of your purse (capped at 5,000 GC; no
@@ -289,7 +275,7 @@ Every card wears differently, and every card at the same stage carries the same 
 counts and opacities are fixed per stage, so a *Shattered* card reads as *Shattered* at a glance —
 only where the creases enter, which way the scratches lean and where the rim thins are per-card.
 
-No rule anywhere reads it. A worn card rolls, equips, completes sets, burns at prestige and prices in
+No rule anywhere reads it. A worn card rolls, equips, completes sets and prices in
 the shop exactly like a pristine one. It's a veteran's stripe, not a durability system.
 
 ![The album](docs/screenshots/album.png)
@@ -407,8 +393,6 @@ something would make farming a friend the correct play.
   member card of their tier for completion purposes.
 - **The weekly shop.** A personal rotation of three direct-buy cards, one biased toward what you're
   missing.
-- **Prestige.** When you've done everything: burn your common/uncommon collection for a permanent
-  rank and compounding bonuses.
 
 ---
 
@@ -503,8 +487,6 @@ Overview tab, marked as a manual override, so you can always see what you left o
 <details>
 <summary><b>General</b></summary>
 
-- **Sounds** *(on)* — play ceremony and reward sounds
-- **Sound volume** *(70)* — ceremony sound volume, 0–100
 - **Chat notifications** *(on)* — informational chat lines (starter grants, vouchers, milestones).
   Enforcement feedback — style penalties, pardons, tainted and assisted kills, blocked equips — always
   shows regardless

@@ -4,6 +4,7 @@ import com.gachaman.model.ActiveTask;
 import com.gachaman.model.SideBet;
 import com.gachaman.model.TaskOffer;
 import com.gachaman.service.TaskService;
+import com.gachaman.ui.Paint;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -34,8 +35,7 @@ import net.runelite.client.ui.overlay.OverlayPosition;
  */
 @Slf4j
 @Singleton
-public class KillJuiceOverlay extends Overlay implements TaskService.Listener
-{
+public class KillJuiceOverlay extends Overlay implements TaskService.Listener {
 	private static final int POOL_SIZE = 16;
 	private static final long FLOAT_MS = 1500;
 	private static final long BURST_MS = 1100;
@@ -54,8 +54,7 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener
 	private static final Color TAINT_RED = new Color(170, 30, 30);
 
 	/** Preallocated floating-text slot; mutated in place, never allocated in render. */
-	private static final class Note
-	{
+	private static final class Note {
 		boolean active;
 		int kind;
 		long startMs;
@@ -71,11 +70,9 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener
 	private int noteCursor;
 
 	@Inject
-	public KillJuiceOverlay(Client client)
-	{
+	public KillJuiceOverlay(Client client) {
 		this.client = client;
-		for (int i = 0; i < notes.length; i++)
-		{
+		for (int i = 0; i < notes.length; i++) {
 			notes[i] = new Note();
 		}
 		setPosition(OverlayPosition.DYNAMIC);
@@ -86,86 +83,57 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener
 	// --- TaskService.Listener (events arrive on the client thread) ---
 
 	@Override
-	public void onKillFeedback(TaskService.KillFeedback feedback)
-	{
-		if (feedback == null)
-		{
+	public void onKillFeedback(TaskService.KillFeedback feedback) {
+		if (feedback == null) {
 			return;
 		}
 		// capture the canvas point NOW, while the death location is fresh
 		Point canvas = null;
-		if (feedback.getDeathLocation() != null)
-		{
-			try
-			{
+		if (feedback.getDeathLocation() != null) {
+			try {
 				canvas = Perspective.localToCanvas(client, feedback.getDeathLocation(),
 					client.getTopLevelWorldView().getPlane());
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				canvas = null;
 			}
 		}
 		int x;
 		int y;
-		if (canvas != null)
-		{
+		if (canvas != null) {
 			x = canvas.getX();
 			y = canvas.getY();
 		}
-		else
-		{
+		else {
 			x = client.getCanvasWidth() / 2;
 			y = client.getCanvasHeight() / 2;
 		}
 		long now = System.currentTimeMillis();
 
-		if (!feedback.isOnTask())
-		{
+		if (!feedback.isOnTask()) {
 			spawn(KIND_OFF_TASK, x, y, "x", now);
 			return;
 		}
-		if (feedback.isTainted())
-		{
+		if (feedback.isTainted()) {
 			spawn(KIND_TAINTED, x, y, "TAINTED +1 taint", now);
 		}
-		else if (feedback.getGcAwarded() > 0)
-		{
+		else if (feedback.getGcAwarded() > 0) {
 			spawn(KIND_GC, x, y, "+" + feedback.getGcAwarded() + " GC", now);
 		}
-		if (feedback.isFinalKill())
-		{
+		if (feedback.isFinalKill()) {
 			spawn(KIND_BURST, x, y, null, now);
 		}
 	}
 
-	@Override
-	public void onSideBetHit(SideBet bet, String monsterName)
-	{
-		// side bets celebrate through the ceremony fanfare pipeline
-	}
 
 	@Override
-	public void onTaskCompleted(TaskService.TaskCompletionSummary summary)
-	{
+	public void onTaskCompleted(TaskService.TaskCompletionSummary summary) {
 		// the docked TaskProgressOverlay tracks progress; completion fanfare
 		// is the final-kill burst plus the ceremony pipeline
 	}
 
-	@Override
-	public void onOffersRolled(List<TaskOffer> offers)
-	{
-		// nothing to juice
-	}
 
-	@Override
-	public void onPartyProgress(ActiveTask task)
-	{
-		// partner progress pulses could go here later
-	}
-
-	private synchronized void spawn(int kind, int x, int y, String text, long now)
-	{
+	private synchronized void spawn(int kind, int x, int y, String text, long now) {
 		Note note = notes[noteCursor];
 		noteCursor = (noteCursor + 1) % notes.length;
 		note.active = true;
@@ -180,8 +148,7 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener
 	// --- render (zero allocation) ---
 
 	@Override
-	public Dimension render(Graphics2D g)
-	{
+	public Dimension render(Graphics2D g) {
 		long now = System.currentTimeMillis();
 		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
@@ -189,24 +156,19 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener
 		return null;
 	}
 
-	private void drawNotes(Graphics2D g, long now)
-	{
-		for (int i = 0; i < notes.length; i++)
-		{
+	private void drawNotes(Graphics2D g, long now) {
+		for (int i = 0; i < notes.length; i++) {
 			Note note = notes[i];
-			if (!note.active)
-			{
+			if (!note.active) {
 				continue;
 			}
 			long el = now - note.startMs;
 			long life = note.kind == KIND_BURST ? BURST_MS : FLOAT_MS;
-			if (el < 0 || el >= life)
-			{
+			if (el < 0 || el >= life) {
 				note.active = false;
 				continue;
 			}
-			if (note.kind == KIND_BURST)
-			{
+			if (note.kind == KIND_BURST) {
 				drawBurst(g, note, el);
 				continue;
 			}
@@ -216,75 +178,56 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener
 
 			Font font;
 			Color color;
-			if (note.kind == KIND_GC)
-			{
+			if (note.kind == KIND_GC) {
 				font = FONT_GC;
 				color = GC_GOLD;
 			}
-			else if (note.kind == KIND_TAINTED)
-			{
+			else if (note.kind == KIND_TAINTED) {
 				font = FONT_GC;
 				color = TAINT_RED;
 			}
-			else
-			{
+			else {
 				font = FONT_SMALL;
 				color = OFF_GREY;
 			}
 			g.setFont(font);
 			FontMetrics fm = g.getFontMetrics();
 			int x = note.x - fm.stringWidth(note.text) / 2;
-			g.setColor(withAlpha(Color.BLACK, alpha * 0.8f));
+			g.setColor(Paint.withAlpha(Color.BLACK, alpha * 0.8f));
 			g.drawString(note.text, x + 1, y + 1);
-			g.setColor(withAlpha(color, alpha));
+			g.setColor(Paint.withAlpha(color, alpha));
 			g.drawString(note.text, x, y);
 		}
 	}
 
-	private void drawBurst(Graphics2D g, Note note, long el)
-	{
+	private void drawBurst(Graphics2D g, Note note, long el) {
 		float u = el / (float) BURST_MS;
 		double ts = el / 1000.0;
-		for (int p = 0; p < 14; p++)
-		{
-			float h1 = hash01(note.seed + p * 3);
-			float h2 = hash01(note.seed + p * 3 + 1);
-			float h3 = hash01(note.seed + p * 3 + 2);
+		for (int p = 0; p < 14; p++) {
+			float h1 = Paint.hash01(note.seed + p * 3);
+			float h2 = Paint.hash01(note.seed + p * 3 + 1);
+			float h3 = Paint.hash01(note.seed + p * 3 + 2);
 			double ang = h1 * Math.PI * 2;
 			double speed = 40 + h2 * 150;
 			int px = note.x + (int) (Math.cos(ang) * speed * ts);
 			int py = note.y + (int) (Math.sin(ang) * speed * ts * 0.8 + 240 * ts * ts);
 			int size = 2 + (int) (h3 * 2);
-			g.setColor(withAlpha(p % 3 == 0 ? Color.WHITE : GC_GOLD, 1f - u));
+			g.setColor(Paint.withAlpha(p % 3 == 0 ? Color.WHITE : GC_GOLD, 1f - u));
 			g.fillRect(px, py, size, size);
 		}
 		// small expanding halo
 		int r = (int) (10 + 34 * easeOut(u));
-		g.setColor(withAlpha(GC_GOLD, (1f - u) * 0.7f));
+		g.setColor(Paint.withAlpha(GC_GOLD, (1f - u) * 0.7f));
 		g.setStroke(STROKE_2);
 		g.drawOval(note.x - r, note.y - r, r * 2, r * 2);
 	}
 
 	private static final BasicStroke STROKE_2 = new BasicStroke(2f);
 
-	private static float easeOut(float t)
-	{
+	private static float easeOut(float t) {
 		float inv = 1 - Math.max(0f, Math.min(1f, t));
 		return 1 - inv * inv;
 	}
 
-	private static float hash01(int n)
-	{
-		int h = n * 0x9E3779B9;
-		h ^= h >>> 16;
-		h *= 0x85EBCA6B;
-		h ^= h >>> 13;
-		return (h & 0x7FFFFFFF) / (float) 0x7FFFFFFF;
-	}
 
-	private static Color withAlpha(Color c, float alpha)
-	{
-		int a = Math.max(0, Math.min(255, Math.round(alpha * 255f)));
-		return new Color(c.getRed(), c.getGreen(), c.getBlue(), a);
-	}
 }

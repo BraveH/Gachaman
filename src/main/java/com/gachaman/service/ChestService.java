@@ -28,6 +28,8 @@ import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import lombok.With;
 import lombok.extern.slf4j.Slf4j;
@@ -42,12 +44,11 @@ import net.runelite.api.Skill;
  */
 @Slf4j
 @Singleton
-public class ChestService
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class ChestService {
 	@Value
 	@With
-	public static class RolledSlot
-	{
+	public static class RolledSlot {
 		Rarity rarity;
 		int cardId;             // -1 for hologram slots
 		@Nullable
@@ -59,8 +60,7 @@ public class ChestService
 	}
 
 	@Value
-	public static class ChestOpenResult
-	{
+	public static class ChestOpenResult {
 		Tuning.Chest purchasedTier;
 		Tuning.Chest effectiveTier;
 		boolean jackpotUpgraded;
@@ -83,8 +83,7 @@ public class ChestService
 	 * disclosure can never drift from the roll.
 	 */
 	@Value
-	public static class RollBucket
-	{
+	public static class RollBucket {
 		List<CardDefinition> cards;
 		/** True when the proximity gate ran, which is exactly when the lean applies. */
 		boolean leaned;
@@ -92,8 +91,7 @@ public class ChestService
 
 	/** One disclosure row: a tier ladder in one reach band, with its real odds. */
 	@Value
-	public static class TierOdds
-	{
+	public static class TierOdds {
 		/** tierKey, or RollOdds.UNTIERED. */
 		String tierKey;
 		String displayName;
@@ -113,8 +111,7 @@ public class ChestService
 
 	/** Everything the Chest Odds panel prints, computed from the roll's own code. */
 	@Value
-	public static class OddsDisclosure
-	{
+	public static class OddsDisclosure {
 		Tuning.Chest tier;
 		/** Post-pity rarity split, percent, order C/U/R/E/L. */
 		double[] rarityPercent;
@@ -141,8 +138,7 @@ public class ChestService
 	private final TierTable tierTable;
 
 	/** Commit-time hooks (Firsts Journal stamps chest events through this). */
-	public interface ChestListener
-	{
+	public interface ChestListener {
 		void onChestCommitted(ChestOpenResult result, long dupeGc);
 
 		void onDeedClaimed(GearSlot slot);
@@ -154,35 +150,18 @@ public class ChestService
 
 	/** The single pending (uncommitted) open, if any. */
 	@Nullable
+	@Getter
 	private ChestOpenResult pending;
 	private boolean rerollUsedThisReveal;
 
-	public void addChestListener(ChestListener listener)
-	{
-		if (!chestListeners.contains(listener))
-		{
+	public void addChestListener(ChestListener listener) {
+		if (!chestListeners.contains(listener)) {
 			chestListeners.add(listener);
 		}
 	}
 
-	public void removeChestListener(ChestListener listener)
-	{
+	public void removeChestListener(ChestListener listener) {
 		chestListeners.remove(listener);
-	}
-
-	@Inject
-	public ChestService(GachaStateService stateService, CreditSink creditSink,
-		CardDatabase cardDatabase, CeremonyBus ceremonyBus, GachaRng rng, com.google.gson.Gson gson,
-		Client client, TierTable tierTable)
-	{
-		this.stateService = stateService;
-		this.creditSink = creditSink;
-		this.cardDatabase = cardDatabase;
-		this.ceremonyBus = ceremonyBus;
-		this.rng = rng;
-		this.gson = gson;
-		this.client = client;
-		this.tierTable = tierTable;
 	}
 
 	/**
@@ -190,75 +169,61 @@ public class ChestService
 	 * serialized in state. Auto-commit it on the next load so the purchase is
 	 * never lost.
 	 */
-	public synchronized void recoverPending()
-	{
+	public synchronized void recoverPending() {
 		var state = stateService.get();
-		if (pending != null || state == null || state.getPendingChestBlob() == null)
-		{
+		if (pending != null || state == null || state.getPendingChestBlob() == null) {
 			return;
 		}
-		try
-		{
+		try {
 			pending = gson.fromJson(state.getPendingChestBlob(), ChestOpenResult.class);
 		}
-		catch (Exception e)
-		{
+		catch (Exception e) {
 			log.warn("Failed to recover pending chest; discarding", e);
 			stateService.mutate(s -> s.withPendingChestBlob(null));
 			return;
 		}
-		if (pending != null)
-		{
+		if (pending != null) {
 			log.info("Recovering interrupted chest open ({})", pending.getEffectiveTier());
 			commitPending();
 		}
 	}
 
-	private void persistPending()
-	{
+	private void persistPending() {
 		String blob = pending == null ? null : gson.toJson(pending);
 		stateService.mutate(s -> s.withPendingChestBlob(blob));
 	}
 
 	// --- Opening ---
 
-	public boolean canAfford(Tuning.Chest tier)
-	{
+	public boolean canAfford(Tuning.Chest tier) {
 		GachaState state = stateService.get();
 		return state != null && state.getGc() >= Tuning.CHEST_PRICE_GC.get(tier);
 	}
 
 	/** Lifetime Rusty opens so far (the starter tier retires after the cap). */
-	public int rustyChestsOpened()
-	{
+	public int rustyChestsOpened() {
 		GachaState state = stateService.get();
-		if (state == null || state.getChestsOpenedByTier() == null)
-		{
+		if (state == null || state.getChestsOpenedByTier() == null) {
 			return 0;
 		}
 		return state.getChestsOpenedByTier().getOrDefault(Tuning.Chest.RUSTY.name(), 0);
 	}
 
-	public boolean rustyAvailable()
-	{
+	public boolean rustyAvailable() {
 		return rustyChestsOpened() < Tuning.RUSTY_LIFETIME_CAP;
 	}
 
 	/** Buy and roll a chest; queues the ceremony. Null when unaffordable/busy/DB not ready. */
 	@Nullable
-	public synchronized ChestOpenResult openChest(Tuning.Chest tier)
-	{
-		if (pending != null || !cardDatabase.isReady())
-		{
+	public synchronized ChestOpenResult openChest(Tuning.Chest tier) {
+		if (pending != null || !cardDatabase.isReady()) {
 			return null;
 		}
-		if (tier == Tuning.Chest.RUSTY && !rustyAvailable())
-		{
+		if (tier == Tuning.Chest.RUSTY && !rustyAvailable()) {
 			return null;
 		}
 		long price = Tuning.CHEST_PRICE_GC.get(tier);
-		if (!creditSink.spend(price))
-		{
+		if (!creditSink.spend(price)) {
 			return null;
 		}
 		ChestOpenResult result = roll(tier, null, null, price);
@@ -274,15 +239,12 @@ public class ChestService
 	 * gear slot's pool (Gilded odds; pity applies; no jackpot upgrade).
 	 */
 	@Nullable
-	public synchronized ChestOpenResult openSlotChest(GearSlot slot)
-	{
-		if (pending != null || !cardDatabase.isReady() || slot == null)
-		{
+	public synchronized ChestOpenResult openSlotChest(GearSlot slot) {
+		if (pending != null || !cardDatabase.isReady() || slot == null) {
 			return null;
 		}
 		long price = Tuning.CHEST_PRICE_GC.get(Tuning.Chest.GILDED);
-		if (!creditSink.spend(price))
-		{
+		if (!creditSink.spend(price)) {
 			return null;
 		}
 		ChestOpenResult result = roll(Tuning.Chest.GILDED, null, slot, price);
@@ -295,12 +257,10 @@ public class ChestService
 
 	/** Open a queued boss-themed chest (free). */
 	@Nullable
-	public synchronized ChestOpenResult openThemedChest(String setTag)
-	{
+	public synchronized ChestOpenResult openThemedChest(String setTag) {
 		GachaState state = stateService.get();
 		if (pending != null || state == null || !cardDatabase.isReady()
-			|| !state.getQueuedThemedChests().contains(setTag))
-		{
+			|| !state.getQueuedThemedChests().contains(setTag)) {
 			return null;
 		}
 		stateService.mutate(s -> {
@@ -326,8 +286,7 @@ public class ChestService
 	 * blob over it would silently destroy one the player paid for; and rolling
 	 * before the card database is ready would draw from an empty pool.
 	 */
-	static boolean firstColoursDue(@Nullable GachaState state, boolean revealPending, boolean dbReady)
-	{
+	static boolean firstColoursDue(@Nullable GachaState state, boolean revealPending, boolean dbReady) {
 		return state != null
 			&& state.isFirstColoursChestOwed()
 			&& !revealPending
@@ -351,11 +310,9 @@ public class ChestService
 	 * recoverPending() to finish the job.
 	 */
 	@Nullable
-	public synchronized ChestOpenResult openFirstColoursChest(@Nullable Set<Integer> preferredCardIds)
-	{
+	public synchronized ChestOpenResult openFirstColoursChest(@Nullable Set<Integer> preferredCardIds) {
 		GachaState state = stateService.get();
-		if (!firstColoursDue(state, pending != null, cardDatabase.isReady()))
-		{
+		if (!firstColoursDue(state, pending != null, cardDatabase.isReady())) {
 			return null;
 		}
 		Predicate<CardDefinition> require =
@@ -374,8 +331,7 @@ public class ChestService
 	}
 
 	ChestOpenResult roll(Tuning.Chest tier, @Nullable String themedSetTag,
-		@Nullable GearSlot targetSlot, long price)
-	{
+		@Nullable GearSlot targetSlot, long price) {
 		return roll(tier, themedSetTag, targetSlot, price, null);
 	}
 
@@ -386,10 +342,8 @@ public class ChestService
 	 */
 	ChestOpenResult roll(Tuning.Chest tier, @Nullable String themedSetTag,
 		@Nullable GearSlot targetSlot, long price,
-		@Nullable Predicate<CardDefinition> require)
-	{
+		@Nullable Predicate<CardDefinition> require) {
 		GachaState state = stateService.get();
-		int prestige = state == null ? 0 : state.getPrestigeRank();
 		int opensSinceEpic = state == null ? 0 : state.getOpensSinceEpic();
 		boolean rusty = tier == Tuning.Chest.RUSTY;
 
@@ -398,8 +352,7 @@ public class ChestService
 		// through untouched. The flag clears at roll time (persisted
 		// immediately) so a crash cannot re-arm.
 		boolean blessed = themedSetTag == null && state != null && state.isStardustBlessArmed();
-		if (blessed)
-		{
+		if (blessed) {
 			stateService.mutate(s -> s.withStardustBlessArmed(false));
 		}
 
@@ -407,58 +360,48 @@ public class ChestService
 		// never upgrades — it must stay the humblest box in the shop)
 		Tuning.Chest effective = tier;
 		boolean jackpot = false;
-		if (themedSetTag == null && targetSlot == null && !rusty)
-		{
-			double jackpotChance = prestige >= 3 ? Tuning.JACKPOT_CHANCE_PRESTIGE3 : Tuning.JACKPOT_CHANCE;
-			if (rng.chance(jackpotChance))
-			{
+		if (themedSetTag == null && targetSlot == null && !rusty) {
+			double jackpotChance = Tuning.JACKPOT_CHANCE;
+			if (rng.chance(jackpotChance)) {
 				jackpot = true;
-				if (tier == Tuning.Chest.BATTERED)
-				{
+				if (tier == Tuning.Chest.BATTERED) {
 					effective = Tuning.Chest.GILDED;
 				}
-				else if (tier == Tuning.Chest.GILDED)
-				{
+				else if (tier == Tuning.Chest.GILDED) {
 					effective = Tuning.Chest.ORNATE;
 				}
 			}
 		}
 		int cardCount = targetSlot != null ? 1 : Tuning.CHEST_CARDS.get(effective);
-		if (jackpot && tier == Tuning.Chest.ORNATE)
-		{
+		if (jackpot && tier == Tuning.Chest.ORNATE) {
 			cardCount++; // ornate jackpot: 4th card
 		}
 
 		// pity (themed chests are free rewards and sit outside pity; Rusty can
 		// never pay Epic+ so it neither benefits from nor advances pity)
 		boolean pityEligible = themedSetTag == null && !rusty;
-		int hardCap = prestige >= 2 ? Tuning.PITY_HARD_CAP_PRESTIGE2 : Tuning.PITY_HARD_CAP;
+		int hardCap = Tuning.PITY_HARD_CAP;
 		boolean pityBreak = pityEligible && opensSinceEpic + 1 >= hardCap;
 		double pityBonus = pityEligible
 			? Math.max(0, opensSinceEpic - Tuning.PITY_SOFT_START) * Tuning.PITY_BONUS_PER_OPEN
 			: 0;
 
 		List<CardDefinition> pool;
-		if (targetSlot != null)
-		{
+		if (targetSlot != null) {
 			pool = cardDatabase.all().values().stream()
 				.filter(c -> c.getSlot() == targetSlot)
 				.collect(Collectors.toList());
 		}
-		else if (themedSetTag != null)
-		{
+		else if (themedSetTag != null) {
 			pool = cardDatabase.setMembers(themedSetTag);
 		}
-		else if (rusty)
-		{
+		else if (rusty) {
 			pool = rustyPool(state);
 		}
-		else
-		{
+		else {
 			pool = new ArrayList<>(cardDatabase.all().values());
 		}
-		if (pool.isEmpty())
-		{
+		if (pool.isEmpty()) {
 			// crash-guard only — a themed tag landing here means bosses.json
 			// references a set that sets.json does not define (integrity-tested)
 			log.warn("empty chest pool (themedSetTag={}, targetSlot={}) — falling back to all cards",
@@ -474,11 +417,9 @@ public class ChestService
 		int shinyAttempts = blessed ? 2 : 1;
 		Set<String> ownedKeys = ownedKeys(state);
 		List<RolledSlot> slots = new ArrayList<>(cardCount);
-		for (int i = 0; i < cardCount; i++)
-		{
+		for (int i = 0; i < cardCount; i++) {
 			final Predicate<CardDefinition> steer = i == 0 ? require : null;
-			if (i == 0 && pityBreak)
-			{
+			if (i == 0 && pityBreak) {
 				RolledSlot slot = rollSlot(pool, Rarity.LEGENDARY, hologramsAllowed,
 					shinyChance, shinyAttempts, ownedKeys, steer);
 				slots.add(slot.withPityLocked(true));
@@ -490,8 +431,7 @@ public class ChestService
 		}
 
 		boolean deed = false;
-		if (themedSetTag == null && rng.chance(Tuning.DEED_CHANCE.getOrDefault(tier, 0.0)))
-		{
+		if (themedSetTag == null && rng.chance(Tuning.DEED_CHANCE.getOrDefault(tier, 0.0))) {
 			deed = true;
 		}
 
@@ -499,8 +439,7 @@ public class ChestService
 			targetSlot == null ? null : targetSlot.name(), slots, price, blessed);
 	}
 
-	Rarity rollRarity(double[] odds, double pityBonusPercent)
-	{
+	Rarity rollRarity(double[] odds, double pityBonusPercent) {
 		// shift pity bonus into EPIC+LEGENDARY mass, taken from COMMON. Shared with
 		// the odds disclosure so the panel cannot quote a different pity curve than
 		// the one the roll runs; the cumulative walk below stays here on purpose,
@@ -509,17 +448,14 @@ public class ChestService
 		// depends on exactly that).
 		double[] adjusted = RollOdds.adjustOdds(odds, pityBonusPercent);
 		double total = 0;
-		for (double odd : adjusted)
-		{
+		for (double odd : adjusted) {
 			total += odd;
 		}
 		double roll = rng.nextDouble() * total;
 		double cumulative = 0;
-		for (int i = 0; i < adjusted.length; i++)
-		{
+		for (int i = 0; i < adjusted.length; i++) {
 			cumulative += adjusted[i];
-			if (roll < cumulative)
-			{
+			if (roll < cumulative) {
 				return Rarity.values()[i];
 			}
 		}
@@ -527,18 +463,15 @@ public class ChestService
 	}
 
 	RolledSlot rollSlot(List<CardDefinition> pool, Rarity rarity, boolean hologramsAllowed,
-		double shinyChance, int shinyAttempts, Set<String> ownedKeys)
-	{
+		double shinyChance, int shinyAttempts, Set<String> ownedKeys) {
 		return rollSlot(pool, rarity, hologramsAllowed, shinyChance, shinyAttempts, ownedKeys, null);
 	}
 
 	RolledSlot rollSlot(List<CardDefinition> pool, Rarity rarity, boolean hologramsAllowed,
 		double shinyChance, int shinyAttempts, Set<String> ownedKeys,
-		@Nullable Predicate<CardDefinition> require)
-	{
+		@Nullable Predicate<CardDefinition> require) {
 		// hologram replaces the card entirely
-		if (hologramsAllowed && !cardDatabase.holograms().isEmpty() && rng.chance(Tuning.HOLOGRAM_CHANCE))
-		{
+		if (hologramsAllowed && !cardDatabase.holograms().isEmpty() && rng.chance(Tuning.HOLOGRAM_CHANCE)) {
 			HologramDefinition holo = pickHologram();
 			boolean dupe = ownedKeys.contains("H:" + holo.getTierKey());
 			return new RolledSlot(holo.getRarity(), -1, holo.getTierKey(), Variant.HOLOGRAM, dupe, false, false);
@@ -546,22 +479,18 @@ public class ChestService
 		CardDefinition card = pickCardOfRarity(pool, rarity, require);
 		Variant variant = Variant.NORMAL;
 		boolean nearMiss = false;
-		if (shinyChance > 0 && card.isShinyEligible())
-		{
+		if (shinyChance > 0 && card.isShinyEligible()) {
 			// the raw roll is captured (not chance()) so the near-miss band is
 			// observable; draw count is unchanged except for blessed retries
 			double band = shinyChance * Tuning.STARDUST_NEAR_MISS_MULT;
-			for (int attempt = 0; attempt < Math.max(1, shinyAttempts); attempt++)
-			{
+			for (int attempt = 0; attempt < Math.max(1, shinyAttempts); attempt++) {
 				double r = rng.nextDouble();
-				if (r < shinyChance)
-				{
+				if (r < shinyChance) {
 					variant = Variant.SHINY;
 					nearMiss = false;
 					break;
 				}
-				if (r < band)
-				{
+				if (r < band) {
 					nearMiss = true;
 				}
 			}
@@ -570,8 +499,7 @@ public class ChestService
 		return new RolledSlot(card.getRarity(), card.getCardId(), null, variant, duplicate, false, nearMiss);
 	}
 
-	CardDefinition pickCardOfRarity(List<CardDefinition> pool, Rarity rarity)
-	{
+	CardDefinition pickCardOfRarity(List<CardDefinition> pool, Rarity rarity) {
 		return pickCardOfRarity(pool, rarity, null);
 	}
 
@@ -583,14 +511,12 @@ public class ChestService
 	 * seed moves.
 	 */
 	CardDefinition pickCardOfRarity(List<CardDefinition> pool, Rarity rarity,
-		@Nullable Predicate<CardDefinition> require)
-	{
+		@Nullable Predicate<CardDefinition> require) {
 		RollBucket bucket = bucketFor(pool, rarity, require);
 		return bucket.isLeaned() ? pickLeaned(bucket.getCards()) : rng.pick(bucket.getCards());
 	}
 
-	RollBucket bucketFor(List<CardDefinition> pool, Rarity rarity)
-	{
+	RollBucket bucketFor(List<CardDefinition> pool, Rarity rarity) {
 		return bucketFor(pool, rarity, null);
 	}
 
@@ -601,32 +527,27 @@ public class ChestService
 	 * instead of a parallel transcription that would drift.
 	 */
 	RollBucket bucketFor(List<CardDefinition> pool, Rarity rarity,
-		@Nullable Predicate<CardDefinition> require)
-	{
+		@Nullable Predicate<CardDefinition> require) {
 		// Epic+ rolls may land anywhere; below that, stay near what the
 		// player's levels can actually wield (see isReachable for the headroom).
 		boolean proximityGated = !rarity.atLeast(Rarity.EPIC);
-		for (int r = rarity.ordinal(); r >= 0; r--)
-		{
+		for (int r = rarity.ordinal(); r >= 0; r--) {
 			final Rarity target = Rarity.values()[r];
 			List<CardDefinition> candidates = constrained(pool.stream()
 				.filter(c -> c.getRarity() == target)
 				.filter(c -> !proximityGated || isReachable(c))
 				.collect(Collectors.toList()), require);
-			if (!candidates.isEmpty())
-			{
+			if (!candidates.isEmpty()) {
 				return new RollBucket(candidates, proximityGated);
 			}
 		}
 		// gate excluded everything of every rarity — fall back unfiltered
-		for (int r = rarity.ordinal(); r >= 0; r--)
-		{
+		for (int r = rarity.ordinal(); r >= 0; r--) {
 			final Rarity target = Rarity.values()[r];
 			List<CardDefinition> candidates = pool.stream()
 				.filter(c -> c.getRarity() == target)
 				.collect(Collectors.toList());
-			if (!candidates.isEmpty())
-			{
+			if (!candidates.isEmpty()) {
 				return new RollBucket(candidates, false);
 			}
 		}
@@ -646,16 +567,13 @@ public class ChestService
 	 * fixed-seed test byte-identical, because isReachable is uniformly true when
 	 * client is null — which is every headless test.
 	 */
-	private CardDefinition pickLeaned(List<CardDefinition> candidates)
-	{
+	private CardDefinition pickLeaned(List<CardDefinition> candidates) {
 		double[] weights = new double[candidates.size()];
 		double total = 0;
 		int wieldable = 0;
-		for (int i = 0; i < candidates.size(); i++)
-		{
+		for (int i = 0; i < candidates.size(); i++) {
 			boolean now = isReachable(candidates.get(i), false);
-			if (now)
-			{
+			if (now) {
 				wieldable++;
 			}
 			// total is accumulated from the very values the walk below reads, so the
@@ -663,8 +581,7 @@ public class ChestService
 			weights[i] = RollOdds.leanWeight(now);
 			total += weights[i];
 		}
-		if (wieldable == 0 || wieldable == candidates.size())
-		{
+		if (wieldable == 0 || wieldable == candidates.size()) {
 			return rng.pick(candidates);
 		}
 		return candidates.get(RollOdds.weightedIndex(rng.nextDouble() * total, weights));
@@ -677,10 +594,8 @@ public class ChestService
 	 * bound must stay bit-identical to the unconstrained build.
 	 */
 	static List<CardDefinition> constrained(List<CardDefinition> candidates,
-		@Nullable Predicate<CardDefinition> require)
-	{
-		if (require == null || candidates.isEmpty())
-		{
+		@Nullable Predicate<CardDefinition> require) {
+		if (require == null || candidates.isEmpty()) {
 			return candidates;
 		}
 		List<CardDefinition> narrowed = candidates.stream()
@@ -696,8 +611,7 @@ public class ChestService
 	 * clamp on the tier ladders, not a hard wieldability guarantee. Shared by
 	 * roll() and rerollSlot() so the two can never drift.
 	 */
-	private List<CardDefinition> rustyPool(@Nullable GachaState state)
-	{
+	private List<CardDefinition> rustyPool(@Nullable GachaState state) {
 		Set<String> deeded = state == null || state.getDeededSlots() == null
 			? Set.of() : state.getDeededSlots();
 		return cardDatabase.all().values().stream()
@@ -707,8 +621,7 @@ public class ChestService
 	}
 
 	/** Is this card's tier within reach of the player's levels (+headroom)? */
-	boolean isReachable(CardDefinition card)
-	{
+	boolean isReachable(CardDefinition card) {
 		return isReachable(card, true);
 	}
 
@@ -716,23 +629,18 @@ public class ChestService
 	 * Headroom is a flag rather than a number because the two branches below measure
 	 * it in different units — metal in tier ranks, dhide/robes in skill levels.
 	 */
-	boolean isReachable(CardDefinition card, boolean allowHeadroom)
-	{
-		if (card.getTierKey() == null || client == null || tierTable == null)
-		{
+	boolean isReachable(CardDefinition card, boolean allowHeadroom) {
+		if (card.getTierKey() == null || client == null || tierTable == null) {
 			return true; // untiered gear (or headless tests) is never proximity-gated
 		}
 		String ladder = tierTable.ladderOf(card.getTierKey());
-		if (ladder == null)
-		{
+		if (ladder == null) {
 			return true;
 		}
-		switch (ladder)
-		{
+		switch (ladder) {
 			case "metal":
 				RangedMetal ranged = RangedMetal.of(card.getName());
-				if (ranged != null)
-				{
+				if (ranged != null) {
 					// Arrows, bolts, javelins, crossbows, darts, knives and thrownaxes wear a
 					// metal prefix but are Ranged gear, and mostly not on the ladder's numbers
 					// (a rune crossbow is 61, not 40). Measured in levels like dhide/robes, so
@@ -773,8 +681,7 @@ public class ChestService
 	 * ladders, while d'hide chaps and vambraces carry none and would otherwise be
 	 * over-gated for a low-Defence ranger.
 	 */
-	private boolean ladderWithinReach(CardDefinition card, int primaryLevel, boolean allowHeadroom)
-	{
+	private boolean ladderWithinReach(CardDefinition card, int primaryLevel, boolean allowHeadroom) {
 		int reqDefence = card.getSlot() == GearSlot.BODY
 			? tierTable.reqDefenceOf(card.getTierKey())
 			: 1;
@@ -784,37 +691,31 @@ public class ChestService
 			allowHeadroom ? Tuning.ROLL_LEVEL_HEADROOM : 0);
 	}
 
-	HologramDefinition pickHologram()
-	{
+	HologramDefinition pickHologram() {
 		List<HologramDefinition> holos = new ArrayList<>(cardDatabase.holograms().values());
 		int maxRank = 1;
-		for (HologramDefinition holo : holos)
-		{
+		for (HologramDefinition holo : holos) {
 			maxRank = Math.max(maxRank, rankOf(holo));
 		}
 		List<Double> weights = new ArrayList<>(holos.size());
 		double total = 0;
-		for (HologramDefinition holo : holos)
-		{
+		for (HologramDefinition holo : holos) {
 			double weight = Math.pow(maxRank - rankOf(holo) + 1, 2);
 			weights.add(weight);
 			total += weight;
 		}
 		double roll = rng.nextDouble() * total;
 		double cumulative = 0;
-		for (int i = 0; i < holos.size(); i++)
-		{
+		for (int i = 0; i < holos.size(); i++) {
 			cumulative += weights.get(i);
-			if (roll < cumulative)
-			{
+			if (roll < cumulative) {
 				return holos.get(i);
 			}
 		}
 		return holos.get(holos.size() - 1);
 	}
 
-	private int rankOf(HologramDefinition holo)
-	{
+	private int rankOf(HologramDefinition holo) {
 		return holo.getRarity().ordinal() * 2 + 1; // proxy: rarity encodes rank band
 	}
 
@@ -836,15 +737,13 @@ public class ChestService
 	 * `pending` nor state, so the lock would buy nothing but contention with a reveal
 	 * in flight.
 	 */
-	public OddsDisclosure oddsFor(Tuning.Chest tier)
-	{
+	public OddsDisclosure oddsFor(Tuning.Chest tier) {
 		GachaState state = stateService.get();
 		// these five mirror roll() exactly — keep them adjacent so a reviewer can
 		// diff the two blocks by eye
 		boolean rusty = tier == Tuning.Chest.RUSTY;
-		int prestige = state == null ? 0 : state.getPrestigeRank();
 		int opensSinceEpic = state == null ? 0 : state.getOpensSinceEpic();
-		int hardCap = prestige >= 2 ? Tuning.PITY_HARD_CAP_PRESTIGE2 : Tuning.PITY_HARD_CAP;
+		int hardCap = Tuning.PITY_HARD_CAP;
 		double pityBonus = rusty
 			? 0
 			: Math.max(0, opensSinceEpic - Tuning.PITY_SOFT_START) * Tuning.PITY_BONUS_PER_OPEN;
@@ -853,16 +752,14 @@ public class ChestService
 		List<CardDefinition> pool = rusty
 			? rustyPool(state)
 			: new ArrayList<>(cardDatabase.all().values());
-		if (pool.isEmpty())
-		{
+		if (pool.isEmpty()) {
 			pool = new ArrayList<>(cardDatabase.all().values());
 		}
 
 		// one pass, not five: the rarity buckets walk down and revisit cards, and
 		// cardId is the key of cardDatabase.all() so it is unique per definition
 		Map<Integer, Boolean> wieldableByCardId = new HashMap<>();
-		for (CardDefinition card : pool)
-		{
+		for (CardDefinition card : pool) {
 			wieldableByCardId.put(card.getCardId(), isReachable(card, false));
 		}
 
@@ -873,30 +770,25 @@ public class ChestService
 		// leaves out of reach. Sorted and de-duplicated: a card can be revisited
 		// across rarity buckets, and an arbitrary order would reshuffle every rebuild.
 		Map<RollOdds.TierBand, SortedSet<String>> namesByBand = new HashMap<>();
-		for (Rarity rarity : Rarity.values())
-		{
+		for (Rarity rarity : Rarity.values()) {
 			double share = rarityShare[rarity.ordinal()];
-			if (share <= 0)
-			{
+			if (share <= 0) {
 				continue;
 			}
 			RollBucket bucket = bucketFor(pool, rarity);
 			List<CardDefinition> cards = bucket.getCards();
 			boolean[] flags = new boolean[cards.size()];
-			for (int i = 0; i < cards.size(); i++)
-			{
+			for (int i = 0; i < cards.size(); i++) {
 				flags[i] = wieldableByCardId.getOrDefault(cards.get(i).getCardId(), true);
 			}
-			for (int i = 0; i < cards.size(); i++)
-			{
+			for (int i = 0; i < cards.size(); i++) {
 				namesByBand
 					.computeIfAbsent(RollOdds.bandOf(cards.get(i), flags[i]),
 						k -> new TreeSet<>(String.CASE_INSENSITIVE_ORDER))
 					.add(cards.get(i).getName());
 			}
 			for (Map.Entry<RollOdds.TierBand, Double> entry
-				: RollOdds.tierShares(cards, flags, bucket.isLeaned()).entrySet())
-			{
+				: RollOdds.tierShares(cards, flags, bucket.isLeaned()).entrySet()) {
 				totals.merge(entry.getKey(), entry.getValue() * share, Double::sum);
 			}
 		}
@@ -905,25 +797,20 @@ public class ChestService
 		double wieldableTotal = 0;
 		double headroomTotal = 0;
 		double untieredTotal = 0;
-		for (Map.Entry<RollOdds.TierBand, Double> entry : totals.entrySet())
-		{
+		for (Map.Entry<RollOdds.TierBand, Double> entry : totals.entrySet()) {
 			double probability = entry.getValue();
-			if (probability <= 0)
-			{
+			if (probability <= 0) {
 				continue;
 			}
 			RollOdds.TierBand band = entry.getKey();
 			boolean untiered = RollOdds.UNTIERED.equals(band.getTierKey());
-			if (untiered)
-			{
+			if (untiered) {
 				untieredTotal += probability;
 			}
-			else if (band.isWieldableNow())
-			{
+			else if (band.isWieldableNow()) {
 				wieldableTotal += probability;
 			}
-			else
-			{
+			else {
 				headroomTotal += probability;
 			}
 			String display = untiered || tierTable == null
@@ -936,8 +823,7 @@ public class ChestService
 		rows.sort(Comparator.comparingDouble(TierOdds::getProbability).reversed());
 
 		double[] rarityPercent = new double[rarityShare.length];
-		for (int i = 0; i < rarityShare.length; i++)
-		{
+		for (int i = 0; i < rarityShare.length; i++) {
 			rarityPercent[i] = rarityShare[i] * 100;
 		}
 		return new OddsDisclosure(tier, rarityPercent, rows, wieldableTotal, headroomTotal,
@@ -946,8 +832,7 @@ public class ChestService
 
 	// --- In-reveal reroll ---
 
-	public synchronized boolean canReroll(int slotIndex)
-	{
+	public synchronized boolean canReroll(int slotIndex) {
 		GachaState state = stateService.get();
 		return pending != null && !rerollUsedThisReveal
 			&& state != null && state.getRerollTokens() > 0
@@ -957,10 +842,8 @@ public class ChestService
 
 	/** Spend a reroll token to re-flip one slot; returns the new slot or null. */
 	@Nullable
-	public synchronized RolledSlot rerollSlot(int slotIndex)
-	{
-		if (!canReroll(slotIndex))
-		{
+	public synchronized RolledSlot rerollSlot(int slotIndex) {
+		if (!canReroll(slotIndex)) {
 			return null;
 		}
 		GachaState state = stateService.get();
@@ -969,27 +852,22 @@ public class ChestService
 
 		boolean rusty = pending.getPurchasedTier() == Tuning.Chest.RUSTY;
 		List<CardDefinition> pool;
-		if (pending.getTargetSlot() != null)
-		{
+		if (pending.getTargetSlot() != null) {
 			GearSlot slot = GearSlot.valueOf(pending.getTargetSlot());
 			pool = cardDatabase.all().values().stream()
 				.filter(c -> c.getSlot() == slot)
 				.collect(Collectors.toList());
 		}
-		else if (pending.getThemedSetTag() != null)
-		{
+		else if (pending.getThemedSetTag() != null) {
 			pool = cardDatabase.setMembers(pending.getThemedSetTag());
 		}
-		else if (rusty)
-		{
+		else if (rusty) {
 			pool = rustyPool(state);
-			if (pool.isEmpty())
-			{
+			if (pool.isEmpty()) {
 				pool = new ArrayList<>(cardDatabase.all().values());
 			}
 		}
-		else
-		{
+		else {
 			pool = new ArrayList<>(cardDatabase.all().values());
 		}
 		boolean hologramsAllowed = pending.getThemedSetTag() == null && !rusty;
@@ -1007,14 +885,11 @@ public class ChestService
 			pending.getThemedSetTag(), pending.getTargetSlot(), slots, pending.getPricePaid(),
 			pending.isStardustBlessed());
 		persistPending();
-		for (ChestListener listener : new ArrayList<>(chestListeners))
-		{
-			try
-			{
+		for (ChestListener listener : new ArrayList<>(chestListeners)) {
+			try {
 				listener.onRerollSpent();
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				log.warn("chest listener failed", e);
 			}
 		}
@@ -1024,16 +899,11 @@ public class ChestService
 	// --- Commit (reveal closed or aborted) ---
 
 	@Nullable
-	public ChestOpenResult getPending()
-	{
-		return pending;
-	}
+
 
 	/** Apply the pending open to state. Returns GC gained from duplicates. */
-	public synchronized long commitPending()
-	{
-		if (pending == null)
-		{
+	public synchronized long commitPending() {
+		if (pending == null) {
 			return 0;
 		}
 		ChestOpenResult result = pending;
@@ -1041,10 +911,8 @@ public class ChestService
 
 		long dupeGc = 0;
 		List<OwnedCard> newCards = new ArrayList<>();
-		for (RolledSlot slot : result.getSlots())
-		{
-			if (slot.isDuplicate())
-			{
+		for (RolledSlot slot : result.getSlots()) {
+			if (slot.isDuplicate()) {
 				dupeGc += Tuning.DUPLICATE_GC.get(slot.getRarity());
 				continue;
 			}
@@ -1065,12 +933,10 @@ public class ChestService
 			GachaState next = s.withOwnedCards(owned).withChestsOpenedByTier(byTier)
 				.withPendingChestBlob(null);
 			if (result.getThemedSetTag() == null
-				&& result.getPurchasedTier() != Tuning.Chest.RUSTY)
-			{
+				&& result.getPurchasedTier() != Tuning.Chest.RUSTY) {
 				// pity counts CARDS since the last Epic+ card, in reveal order
 				int counter = s.getOpensSinceEpic();
-				for (RolledSlot slot : result.getSlots())
-				{
+				for (RolledSlot slot : result.getSlots()) {
 					counter = slot.getRarity().atLeast(Rarity.EPIC) ? 0 : counter + 1;
 				}
 				next = next.withOpensSinceEpic(counter);
@@ -1078,29 +944,23 @@ public class ChestService
 			// stardust: near-misses bank at commit (rerolls replaced their slot,
 			// so this can never double-count); 8 banked arms the next chest
 			int nearMisses = 0;
-			for (RolledSlot slot : result.getSlots())
-			{
-				if (slot.isNearMiss())
-				{
+			for (RolledSlot slot : result.getSlots()) {
+				if (slot.isNearMiss()) {
 					nearMisses++;
 				}
 			}
-			if (nearMisses > 0)
-			{
+			if (nearMisses > 0) {
 				int dust = s.getStardust() + nearMisses;
 				boolean armed = s.isStardustBlessArmed();
-				if (!armed && dust >= Tuning.STARDUST_REQUIRED)
-				{
+				if (!armed && dust >= Tuning.STARDUST_REQUIRED) {
 					dust -= Tuning.STARDUST_REQUIRED;
 					armed = true;
 				}
 				next = next.withStardust(dust).withStardustBlessArmed(armed);
 			}
-			if (result.isDeedGranted())
-			{
+			if (result.isDeedGranted()) {
 				boolean saturated = s.getDeededSlots().size() >= GearSlot.values().length;
-				if (!saturated)
-				{
+				if (!saturated) {
 					next = next.withPendingDeeds(s.getPendingDeeds() + 1);
 				}
 			}
@@ -1109,39 +969,31 @@ public class ChestService
 
 		GachaState afterCommit = stateService.get();
 		if (afterCommit != null && afterCommit.isStardustBlessArmed()
-			&& (beforeCommit == null || !beforeCommit.isStardustBlessArmed()))
-		{
+			&& (beforeCommit == null || !beforeCommit.isStardustBlessArmed())) {
 			ceremonyBus.submit(CeremonyBus.Type.FANFARE, new CeremonyBus.Fanfare(
 				CeremonyBus.Fanfare.Size.SMALL, "Stardust blessing!",
 				Tuning.STARDUST_REQUIRED + " stardust consumed — your next chest rolls shiny twice per card.",
 				null));
 		}
 
-		if (dupeGc > 0)
-		{
+		if (dupeGc > 0) {
 			creditSink.award(dupeGcFinal, new CreditSink.GcContext(CreditSink.Source.DUPLICATE, null, null));
 		}
-		if (result.isDeedGranted())
-		{
+		if (result.isDeedGranted()) {
 			GachaState state = stateService.get();
-			if (state != null && state.getDeededSlots().size() >= GearSlot.values().length)
-			{
+			if (state != null && state.getDeededSlots().size() >= GearSlot.values().length) {
 				creditSink.award(Tuning.DEED_SATURATED_GC,
 					new CreditSink.GcContext(CreditSink.Source.DEED_SATURATED, null, null));
 			}
-			else
-			{
+			else {
 				ceremonyBus.submit(CeremonyBus.Type.DEED_CHOICE, 0);
 			}
 		}
-		for (ChestListener listener : new ArrayList<>(chestListeners))
-		{
-			try
-			{
+		for (ChestListener listener : new ArrayList<>(chestListeners)) {
+			try {
 				listener.onChestCommitted(result, dupeGc);
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				log.warn("chest listener failed", e);
 			}
 		}
@@ -1150,12 +1002,10 @@ public class ChestService
 
 	// --- Deed choice ---
 
-	public boolean claimDeed(GearSlot slot)
-	{
+	public boolean claimDeed(GearSlot slot) {
 		GachaState state = stateService.get();
 		if (state == null || state.getPendingDeeds() <= 0
-			|| state.getDeededSlots().contains(slot.name()))
-		{
+			|| state.getDeededSlots().contains(slot.name())) {
 			return false;
 		}
 		stateService.mutate(s -> {
@@ -1166,14 +1016,11 @@ public class ChestService
 		ceremonyBus.submit(CeremonyBus.Type.FANFARE, new CeremonyBus.Fanfare(
 			CeremonyBus.Fanfare.Size.LARGE, "Slot Deed: " + slot.getDisplayName(),
 			"The " + slot.getDisplayName() + " slot is now unlocked!", null));
-		for (ChestListener listener : new ArrayList<>(chestListeners))
-		{
-			try
-			{
+		for (ChestListener listener : new ArrayList<>(chestListeners)) {
+			try {
 				listener.onDeedClaimed(slot);
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				log.warn("chest listener failed", e);
 			}
 		}
@@ -1181,28 +1028,22 @@ public class ChestService
 	}
 
 	/** Milestone deed from task completion (already counted in TaskService). */
-	public void grantMilestoneDeed()
-	{
+	public void grantMilestoneDeed() {
 		stateService.mutate(s -> s.withPendingDeeds(s.getPendingDeeds() + 1));
 	}
 
 	// --- Helpers ---
 
-	static Set<String> ownedKeys(@Nullable GachaState state)
-	{
+	static Set<String> ownedKeys(@Nullable GachaState state) {
 		Set<String> keys = new HashSet<>();
-		if (state == null)
-		{
+		if (state == null) {
 			return keys;
 		}
-		for (OwnedCard card : state.getOwnedCards())
-		{
-			if (card.isHologram())
-			{
+		for (OwnedCard card : state.getOwnedCards()) {
+			if (card.isHologram()) {
 				keys.add("H:" + card.getTierKey());
 			}
-			else if (card.getVariant() == Variant.NORMAL)
-			{
+			else if (card.getVariant() == Variant.NORMAL) {
 				keys.add("C:" + card.getCardId());
 			}
 		}

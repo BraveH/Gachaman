@@ -17,10 +17,8 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Singleton
-public class CeremonyBus
-{
-	public enum Type
-	{
+public class CeremonyBus {
+	public enum Type {
 		CHEST_OPEN,      // payload: ChestOpenResult
 		THEMED_CHEST,    // payload: ChestOpenResult (boss KC reward)
 		STYLE_ROLL,      // payload: StyleRollResult
@@ -31,17 +29,14 @@ public class CeremonyBus
 	}
 
 	@Value
-	public static class Request
-	{
+	public static class Request {
 		Type type;
 		Object payload;
 	}
 
 	@Value
-	public static class Fanfare
-	{
-		public enum Size
-		{
+	public static class Fanfare {
+		public enum Size {
 			SMALL, MEDIUM, LARGE
 		}
 
@@ -52,14 +47,12 @@ public class CeremonyBus
 		Integer iconItemId;
 	}
 
-	public interface Renderer
-	{
+	public interface Renderer {
 		/** Return true when the request was claimed for animated presentation. */
 		boolean present(Request request);
 	}
 
-	public interface FallbackHandler
-	{
+	public interface FallbackHandler {
 		/** Headless presentation (chat message) when no renderer claims it. */
 		void presentFallback(Request request);
 	}
@@ -70,85 +63,68 @@ public class CeremonyBus
 	private final List<Consumer<Request>> taps = new ArrayList<>();
 	private FallbackHandler fallback;
 
-	public synchronized void addTap(Consumer<Request> tap)
-	{
-		if (!taps.contains(tap))
-		{
+	public synchronized void addTap(Consumer<Request> tap) {
+		if (!taps.contains(tap)) {
 			taps.add(tap);
 		}
 	}
 
-	public synchronized void removeTap(Consumer<Request> tap)
-	{
+	public synchronized void removeTap(Consumer<Request> tap) {
 		taps.remove(tap);
 	}
 
-	public synchronized void setFallback(FallbackHandler handler)
-	{
+	public synchronized void setFallback(FallbackHandler handler) {
 		this.fallback = handler;
 	}
 
-	public synchronized void addRenderer(Renderer renderer)
-	{
+	public synchronized void addRenderer(Renderer renderer) {
 		renderers.add(renderer);
 	}
 
-	public synchronized void removeRenderer(Renderer renderer)
-	{
+	public synchronized void removeRenderer(Renderer renderer) {
 		renderers.remove(renderer);
 	}
 
 	/** Drop everything still queued (plugin shutdown — renderer is being torn down). */
-	public synchronized void clear()
-	{
+	public synchronized void clear() {
 		queue.clear();
 	}
 
-	public void submit(Type type, Object payload)
-	{
+	public void submit(Type type, Object payload) {
 		// taps run OUTSIDE the bus monitor: they mutate game state, and holding
 		// this lock across a state mutation would nest monitors across threads
 		Request request = new Request(type, payload);
 		List<Consumer<Request>> tapsCopy;
-		synchronized (this)
-		{
+		synchronized (this) {
 			tapsCopy = taps.isEmpty() ? List.of() : new ArrayList<>(taps);
 		}
-		for (Consumer<Request> tap : tapsCopy)
-		{
-			try
-			{
+		for (Consumer<Request> tap : tapsCopy) {
+			try {
 				tap.accept(request);
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				log.warn("ceremony tap failed", e);
 			}
 		}
 		enqueue(type, payload);
 	}
 
-	private synchronized void enqueue(Type type, Object payload)
-	{
+	private synchronized void enqueue(Type type, Object payload) {
 		// Coalesce SMALL fanfare floods (early game fires many): once two SMALLs
 		// are already waiting, further SMALLs merge into the last one instead of
 		// stacking seconds of banners. MEDIUM/LARGE are rare and never coalesce.
 		if (type == Type.FANFARE && payload instanceof Fanfare
-			&& ((Fanfare) payload).getSize() == Fanfare.Size.SMALL)
-		{
+			&& ((Fanfare) payload).getSize() == Fanfare.Size.SMALL) {
 			Request lastSmall = null;
 			int queuedSmall = 0;
-			for (Request queued : queue)
-			{
+			for (Request queued : queue) {
 				if (queued.getType() == Type.FANFARE && queued.getPayload() instanceof Fanfare
-					&& ((Fanfare) queued.getPayload()).getSize() == Fanfare.Size.SMALL)
-				{
+					&& ((Fanfare) queued.getPayload()).getSize() == Fanfare.Size.SMALL) {
 					queuedSmall++;
 					lastSmall = queued;
 				}
 			}
-			if (queuedSmall >= 2 && lastSmall != null)
-			{
+			if (queuedSmall >= 2 && lastSmall != null) {
 				Fanfare last = (Fanfare) lastSmall.getPayload();
 				queue.remove(lastSmall);
 				queue.add(new Request(Type.FANFARE, new Fanfare(Fanfare.Size.SMALL,
@@ -162,46 +138,35 @@ public class CeremonyBus
 	}
 
 	/** Called by the overlay layer when it becomes free to present the next request. */
-	public synchronized void drain()
-	{
-		while (!queue.isEmpty())
-		{
+	public synchronized void drain() {
+		while (!queue.isEmpty()) {
 			Request request = queue.peek();
 			boolean claimed = false;
-			for (Renderer renderer : renderers)
-			{
-				try
-				{
-					if (renderer.present(request))
-					{
+			for (Renderer renderer : renderers) {
+				try {
+					if (renderer.present(request)) {
 						claimed = true;
 						break;
 					}
 				}
-				catch (Exception e)
-				{
+				catch (Exception e) {
 					log.warn("ceremony renderer failed", e);
 				}
 			}
-			if (claimed)
-			{
+			if (claimed) {
 				queue.poll();
 				return; // renderer presents one at a time; it calls drain() when done
 			}
-			if (fallback != null)
-			{
+			if (fallback != null) {
 				queue.poll();
-				try
-				{
+				try {
 					fallback.presentFallback(request);
 				}
-				catch (Exception e)
-				{
+				catch (Exception e) {
 					log.warn("ceremony fallback failed", e);
 				}
 			}
-			else
-			{
+			else {
 				return; // nothing can present yet; keep queued
 			}
 		}

@@ -6,8 +6,7 @@ import lombok.RequiredArgsConstructor;
 
 @Getter
 @RequiredArgsConstructor
-public enum Rarity
-{
+public enum Rarity {
 	COMMON("Common", new Color(176, 176, 176)),
 	UNCOMMON("Uncommon", new Color(94, 204, 94)),
 	RARE("Rare", new Color(86, 146, 255)),
@@ -17,8 +16,7 @@ public enum Rarity
 	private final String displayName;
 	private final Color color;
 
-	public boolean atLeast(Rarity other)
-	{
+	public boolean atLeast(Rarity other) {
 		return ordinal() >= other.ordinal();
 	}
 }

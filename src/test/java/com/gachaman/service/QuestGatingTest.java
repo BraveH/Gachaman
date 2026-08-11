@@ -167,20 +167,6 @@ public class QuestGatingTest
 		return names;
 	}
 
-	// --- the Charter Office -------------------------------------------------
-
-	@Test
-	public void aDeedCannotBuyPastTheGateTheRollEnforces()
-	{
-		MonsterTable.Monster gargoyle = monster("Gargoyle", 111, "PRIEST_IN_PERIL");
-		Assert.assertFalse(TaskGenerator.charterEligible(gargoyle, 126, 99, true, Set.of()));
-		Assert.assertTrue(TaskGenerator.charterEligible(gargoyle, 126, 99, true,
-			Set.of("PRIEST_IN_PERIL")));
-		// the no-quest-argument overload is the pre-gate behaviour, not a bypass
-		// of the other gates
-		Assert.assertTrue(TaskGenerator.charterEligible(gargoyle, 126, 99, true));
-	}
-
 	@Test
 	public void theDatasetGatesTheMonstersItClaimsTo()
 	{

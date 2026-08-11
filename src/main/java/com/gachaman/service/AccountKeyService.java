@@ -4,6 +4,7 @@ import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import net.runelite.api.Client;
+import lombok.RequiredArgsConstructor;
 
 /**
  * The local player's {@link AccountKey}, cached and self-invalidating.
@@ -22,8 +23,8 @@ import net.runelite.api.Client;
  * bought for the price of one SHA-256 per login.
  */
 @Singleton
-public class AccountKeyService
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class AccountKeyService {
 	private final Client client;
 
 	/**
@@ -35,12 +36,6 @@ public class AccountKeyService
 	@Nullable
 	private volatile String cachedKey;
 
-	@Inject
-	public AccountKeyService(Client client)
-	{
-		this.client = client;
-	}
-
 	/**
 	 * The local account's key, or null when nobody is logged in.
 	 *
@@ -51,20 +46,16 @@ public class AccountKeyService
 	 * becomes the same person.
 	 */
 	@Nullable
-	public String key()
-	{
+	public String key() {
 		long hash;
-		try
-		{
+		try {
 			hash = client.getAccountHash();
 		}
-		catch (Exception e)
-		{
+		catch (Exception e) {
 			// the API can be called before the client is fully constructed
 			return null;
 		}
-		if (hash != cachedHash)
-		{
+		if (hash != cachedHash) {
 			// key FIRST, then the hash that publishes it: a thread that sees the
 			// new hash is guaranteed by the volatile write to see the matching
 			// key, so a concurrent reader can never pair a fresh hash with the

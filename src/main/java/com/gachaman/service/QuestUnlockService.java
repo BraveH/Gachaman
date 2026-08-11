@@ -30,8 +30,7 @@ import net.runelite.api.QuestState;
  */
 @Slf4j
 @Singleton
-public class QuestUnlockService
-{
+public class QuestUnlockService {
 	/**
 	 * Quest state is a client script, not a field read. Recomputing the whole
 	 * gating set on every panel repaint would be silly, and the only thing a
@@ -52,28 +51,22 @@ public class QuestUnlockService
 	private int cachedAtTick = Integer.MIN_VALUE;
 
 	@Inject
-	public QuestUnlockService(Client client, MonsterTable monsterTable)
-	{
+	public QuestUnlockService(Client client, MonsterTable monsterTable) {
 		this.client = client;
 		Set<String> names = new TreeSet<>();
-		for (MonsterTable.Monster monster : monsterTable.getMonsters())
-		{
-			if (monster.getQuests() != null)
-			{
+		for (MonsterTable.Monster monster : monsterTable.getMonsters()) {
+			if (monster.getQuests() != null) {
 				names.addAll(monster.getQuests());
 			}
 		}
 		List<Quest> resolved = new ArrayList<>(names.size());
 		Set<String> resolvedNames = new LinkedHashSet<>();
-		for (String name : names)
-		{
-			try
-			{
+		for (String name : names) {
+			try {
 				resolved.add(Quest.valueOf(name));
 				resolvedNames.add(name);
 			}
-			catch (IllegalArgumentException e)
-			{
+			catch (IllegalArgumentException e) {
 				// Deliberately NOT added: a name Quest cannot resolve can never
 				// enter the completed set, so every monster requiring it stays
 				// locked forever. That is the safe direction, and the dataset
@@ -94,20 +87,16 @@ public class QuestUnlockService
 	 * every quest-locked monster out. Null is reserved for "gating disabled" and
 	 * this method does not produce it.
 	 */
-	public Set<String> completedQuests()
-	{
-		if (gatingQuests.isEmpty())
-		{
+	public Set<String> completedQuests() {
+		if (gatingQuests.isEmpty()) {
 			return Collections.emptySet();
 		}
 		int tick = client.getTickCount();
 		if (cachedAtTick != Integer.MIN_VALUE && tick - cachedAtTick < CACHE_TTL_TICKS
-			&& tick >= cachedAtTick)
-		{
+			&& tick >= cachedAtTick) {
 			return cached;
 		}
-		if (client.getGameState() != GameState.LOGGED_IN)
-		{
+		if (client.getGameState() != GameState.LOGGED_IN) {
 			// Quest varbits are not populated yet, so every quest would read as
 			// NOT_STARTED. Answer "none finished" — which locks quest monsters
 			// rather than unlocking them — and do NOT cache it, so the first
@@ -115,17 +104,13 @@ public class QuestUnlockService
 			return Collections.emptySet();
 		}
 		Set<String> finished = new HashSet<>();
-		for (Quest quest : gatingQuests)
-		{
-			try
-			{
-				if (quest.getState(client) == QuestState.FINISHED)
-				{
+		for (Quest quest : gatingQuests) {
+			try {
+				if (quest.getState(client) == QuestState.FINISHED) {
 					finished.add(quest.name());
 				}
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				// A quest-state script hiccup is not evidence of completion.
 				// Leaving it out withholds a contract; putting it in would hand
 				// out one the player cannot start.
@@ -145,14 +130,12 @@ public class QuestUnlockService
 	 * but a stable encoding makes a desync report readable instead of a diff of
 	 * two shuffled arrays.
 	 */
-	public List<String> completedQuestsForWire()
-	{
+	public List<String> completedQuestsForWire() {
 		return Collections.unmodifiableList(new ArrayList<>(new TreeSet<>(completedQuests())));
 	}
 
 	/** Quest names that lock at least one monster in the table. */
-	public Set<String> gatingQuestNames()
-	{
+	public Set<String> gatingQuestNames() {
 		return gatingNames;
 	}
 }

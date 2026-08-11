@@ -5,10 +5,8 @@ import lombok.With;
 
 @Value
 @With
-public class SideBet
-{
-	public enum Kind
-	{
+public class SideBet {
+	public enum Kind {
 		BIG_HIT,        // land a single hit >= threshold
 		DAMAGELESS_KILL,// complete one kill without taking damage
 		SPEED_KILLS,    // K kills within T ticks

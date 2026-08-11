@@ -16,8 +16,7 @@ import lombok.Value;
  * renderer, which falls back to a neutral colour.
  */
 @Value
-public class ContractRecord
-{
+public class ContractRecord {
 	long at; // epoch ms, completion
 	String monsterName;
 	/** TaskDifficulty name. */
@@ -47,13 +46,11 @@ public class ContractRecord
 	boolean redemption;
 
 	/** A contract is clean when every kill landed in the allowed style. */
-	public boolean isClean()
-	{
+	public boolean isClean() {
 		return taintedKills <= 0;
 	}
 
-	public boolean isParty()
-	{
+	public boolean isParty() {
 		return party != null;
 	}
 
@@ -67,17 +64,14 @@ public class ContractRecord
 	 * permanently one over.
 	 */
 	public static List<ContractRecord> appendCapped(@Nullable List<ContractRecord> log,
-		ContractRecord record, int max)
-	{
+		ContractRecord record, int max) {
 		List<ContractRecord> next = log == null ? new ArrayList<>() : new ArrayList<>(log);
 		next.add(record);
-		if (max <= 0)
-		{
+		if (max <= 0) {
 			// a nonsensical cap must not produce a log that grows forever
 			return new ArrayList<>();
 		}
-		while (next.size() > max)
-		{
+		while (next.size() > max) {
 			next.remove(0);
 		}
 		return next;

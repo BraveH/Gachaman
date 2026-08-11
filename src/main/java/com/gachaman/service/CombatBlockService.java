@@ -4,6 +4,7 @@ import com.gachaman.model.ActiveTask;
 import com.gachaman.model.GachaState;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
@@ -25,8 +26,8 @@ import net.runelite.client.util.Text;
  */
 @Slf4j
 @Singleton
-public class CombatBlockService
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class CombatBlockService {
 	private final Client client;
 	private final GachaStateService stateService;
 	private final ChatMessageManager chatMessageManager;
@@ -34,75 +35,52 @@ public class CombatBlockService
 
 	private int lastWarnTick = -1;
 
-	@Inject
-	public CombatBlockService(Client client, GachaStateService stateService,
-		ChatMessageManager chatMessageManager, QuestExemptionService questExemptionService)
-	{
-		this.client = client;
-		this.stateService = stateService;
-		this.chatMessageManager = chatMessageManager;
-		this.questExemptionService = questExemptionService;
-	}
-
 	@Subscribe
-	public void onMenuEntryAdded(MenuEntryAdded event)
-	{
+	public void onMenuEntryAdded(MenuEntryAdded event) {
 		MenuEntry entry = event.getMenuEntry();
-		if (!isOffensiveEntry(entry.getOption(), entry.getType()))
-		{
+		if (!isOffensiveEntry(entry.getOption(), entry.getType())) {
 			return;
 		}
-		if (isBlocked(entry))
-		{
+		if (isBlocked(entry)) {
 			client.getMenu().removeMenuEntry(entry);
 		}
 	}
 
 	@Subscribe
-	public void onMenuOptionClicked(MenuOptionClicked event)
-	{
-		if (!isOffensiveEntry(event.getMenuOption(), event.getMenuAction()))
-		{
+	public void onMenuOptionClicked(MenuOptionClicked event) {
+		if (!isOffensiveEntry(event.getMenuOption(), event.getMenuAction())) {
 			return;
 		}
-		if (isBlocked(event.getMenuEntry()))
-		{
+		if (isBlocked(event.getMenuEntry())) {
 			event.consume();
 			warn();
 		}
 	}
 
-	private boolean isBlocked(MenuEntry entry)
-	{
+	private boolean isBlocked(MenuEntry entry) {
 		GachaState state = stateService.get();
-		if (state == null || TutorialGate.onTutorial(client))
-		{
+		if (state == null || TutorialGate.onTutorial(client)) {
 			return false;
 		}
 		ActiveTask task = state.getActiveTask();
 		NPC npc = entry.getNpc();
-		if (npc == null)
-		{
+		if (npc == null) {
 			// player (or unknown) target: never a task target
 			return true;
 		}
 		String name = npc.getName();
-		if (name != null && questExemptionService.isQuestTarget(Text.removeTags(name)))
-		{
+		if (name != null && questExemptionService.isQuestTarget(Text.removeTags(name))) {
 			return false; // an in-progress quest requires fighting this NPC
 		}
-		if (task == null)
-		{
+		if (task == null) {
 			return true; // no task rolled -> no combat at all
 		}
 		return name == null || !Text.removeTags(name).equalsIgnoreCase(task.getMonsterName());
 	}
 
-	private void warn()
-	{
+	private void warn() {
 		int tick = client.getTickCount();
-		if (tick == lastWarnTick)
-		{
+		if (tick == lastWarnTick) {
 			return;
 		}
 		lastWarnTick = tick;
@@ -122,10 +100,8 @@ public class CombatBlockService
 	 * -> <target>" arrives as a WIDGET_TARGET_ON_* action — casting High
 	 * Alchemy on items is a different action type and stays untouched).
 	 */
-	static boolean isOffensiveEntry(String option, MenuAction action)
-	{
-		if ("Attack".equals(option))
-		{
+	static boolean isOffensiveEntry(String option, MenuAction action) {
+		if ("Attack".equals(option)) {
 			return true;
 		}
 		return option != null && option.startsWith("Cast")

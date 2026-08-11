@@ -13,23 +13,21 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
+import lombok.Getter;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 
 /** Curated tier ladders loaded from tiers.json; powers name-prefix classification. */
 @Slf4j
-public class TierTable
-{
+public class TierTable {
 	@Value
-	public static class Match
-	{
+	public static class Match {
 		String tierKey;
 		int rank;
 		String familyKey;
 	}
 
-	private static class TierEntry
-	{
+	private static class TierEntry {
 		String tierKey;
 		int rank;
 		List<String> prefixes;
@@ -44,22 +42,19 @@ public class TierTable
 		Integer reqDefence;
 	}
 
-	private static class Ladder
-	{
+	private static class Ladder {
 		String ladderKey;
 		List<TierEntry> tiers;
 	}
 
-	private static class HoloEntry
-	{
+	private static class HoloEntry {
 		String tierKey;
 		String name;
 		String rarity;
 		String representativeItemName;
 	}
 
-	private static class TiersFile
-	{
+	private static class TiersFile {
 		List<Ladder> ladders;
 		List<HoloEntry> hologramTiers;
 	}
@@ -81,43 +76,35 @@ public class TierTable
 	private final Map<String, String> displayNameByTier = new HashMap<>();
 	/** tierKey -> lowercased families its prefixes must not classify. */
 	private final Map<String, Set<String>> excludedFamiliesByTier = new HashMap<>();
+	@Getter
 	private final List<HologramDefinition> holograms = new ArrayList<>();
 
-	public static TierTable load(Gson gson)
-	{
+	public static TierTable load(Gson gson) {
 		TierTable table = new TierTable();
-		try (InputStream in = TierTable.class.getResourceAsStream("/com/gachaman/data/tiers.json"))
-		{
+		try (InputStream in = TierTable.class.getResourceAsStream("/com/gachaman/data/tiers.json")) {
 			TiersFile file = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), TiersFile.class);
-			for (Ladder ladder : file.ladders)
-			{
-				for (TierEntry tier : ladder.tiers)
-				{
+			for (Ladder ladder : file.ladders) {
+				for (TierEntry tier : ladder.tiers) {
 					table.rankByTier.put(tier.tierKey, tier.rank);
 					table.ladderByTier.put(tier.tierKey, ladder.ladderKey);
-					if (tier.reqLevel == null || tier.reqDefence == null)
-					{
+					if (tier.reqLevel == null || tier.reqDefence == null) {
 						// left absent, the tier falls back to UNKNOWN_REQ and drops out of
 						// every proximity-gated roll — loud, because ChestService's
 						// unfiltered fallback would otherwise mask it as "gate stopped working"
 						log.warn("tier {} has no reqLevel/reqDefence in tiers.json; failing closed", tier.tierKey);
 					}
-					else
-					{
+					else {
 						table.reqLevelByTier.put(tier.tierKey, tier.reqLevel);
 						table.reqDefenceByTier.put(tier.tierKey, tier.reqDefence);
 					}
-					if (tier.excludeFamilies != null && !tier.excludeFamilies.isEmpty())
-					{
+					if (tier.excludeFamilies != null && !tier.excludeFamilies.isEmpty()) {
 						Set<String> excluded = new HashSet<>();
-						for (String family : tier.excludeFamilies)
-						{
+						for (String family : tier.excludeFamilies) {
 							excluded.add(family.toLowerCase(Locale.ROOT));
 						}
 						table.excludedFamiliesByTier.put(tier.tierKey, excluded);
 					}
-					for (String prefix : tier.prefixes)
-					{
+					for (String prefix : tier.prefixes) {
 						table.prefixMatchers.add(Map.entry(prefix + " ",
 							new Match(tier.tierKey, tier.rank, null)));
 					}
@@ -125,10 +112,8 @@ public class TierTable
 			}
 			// longest prefix first so "Black d'hide " beats "Black "
 			table.prefixMatchers.sort((a, b) -> b.getKey().length() - a.getKey().length());
-			if (file.hologramTiers != null)
-			{
-				for (HoloEntry h : file.hologramTiers)
-				{
+			if (file.hologramTiers != null) {
+				for (HoloEntry h : file.hologramTiers) {
 					table.holograms.add(new HologramDefinition(h.tierKey, h.name,
 						Rarity.valueOf(h.rarity), h.representativeItemName));
 					// "Dragon Hologram" is the collection's label for the set; the tier itself
@@ -140,32 +125,26 @@ public class TierTable
 				}
 			}
 		}
-		catch (Exception e)
-		{
+		catch (Exception e) {
 			log.error("Failed to load tiers.json", e);
 		}
 		return table;
 	}
 
 	@Nullable
-	public Match match(String cleanName)
-	{
-		for (Map.Entry<String, Match> entry : prefixMatchers)
-		{
-			if (cleanName.startsWith(entry.getKey()))
-			{
+	public Match match(String cleanName) {
+		for (Map.Entry<String, Match> entry : prefixMatchers) {
+			if (cleanName.startsWith(entry.getKey())) {
 				Match m = entry.getValue();
 				String family = cleanName.substring(entry.getKey().length()).trim()
 					.toLowerCase(Locale.ROOT);
-				if (family.isEmpty())
-				{
+				if (family.isEmpty()) {
 					return null;
 				}
 				// "Black mask" / "Black wizard hat" share the metal prefix but
 				// are not metal gear — excluded families stay untiered
 				Set<String> excluded = excludedFamiliesByTier.get(m.getTierKey());
-				if (excluded != null && excluded.contains(family))
-				{
+				if (excluded != null && excluded.contains(family)) {
 					return null;
 				}
 				return new Match(m.getTierKey(), m.getRank(), family);
@@ -174,15 +153,13 @@ public class TierTable
 		return null;
 	}
 
-	public int rankOf(String tierKey)
-	{
+	public int rankOf(String tierKey) {
 		return rankByTier.getOrDefault(tierKey, 0);
 	}
 
 	/** Ladder key ("metal"/"dhide"/"robes") for a tier, or null when unknown. */
 	@Nullable
-	public String ladderOf(String tierKey)
-	{
+	public String ladderOf(String tierKey) {
 		return ladderByTier.get(tierKey);
 	}
 
@@ -192,14 +169,12 @@ public class TierTable
 	 * metal ladder is still read rank-wise off Tuning.TIER_RANK_LEVELS, which happens
 	 * to transcribe it exactly. The metal values here are documentation.
 	 */
-	public int reqLevelOf(String tierKey)
-	{
+	public int reqLevelOf(String tierKey) {
 		return reqLevelByTier.getOrDefault(tierKey, UNKNOWN_REQ);
 	}
 
 	/** Defence this tier's body piece really needs. See reqLevelOf. */
-	public int reqDefenceOf(String tierKey)
-	{
+	public int reqDefenceOf(String tierKey) {
 		return reqDefenceByTier.getOrDefault(tierKey, UNKNOWN_REQ);
 	}
 
@@ -208,22 +183,17 @@ public class TierTable
 	 * to the raw key, so a tier authored without a hologram still shows up as
 	 * "Frog Leather" in the odds panel instead of leaking "frog_leather" into the UI.
 	 */
-	public String displayNameOf(String tierKey)
-	{
+	public String displayNameOf(String tierKey) {
 		String known = displayNameByTier.get(tierKey);
-		if (known != null)
-		{
+		if (known != null) {
 			return known;
 		}
 		StringBuilder out = new StringBuilder();
-		for (String word : tierKey.split("_"))
-		{
-			if (word.isEmpty())
-			{
+		for (String word : tierKey.split("_")) {
+			if (word.isEmpty()) {
 				continue;
 			}
-			if (out.length() > 0)
-			{
+			if (out.length() > 0) {
 				out.append(' ');
 			}
 			out.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
@@ -231,8 +201,4 @@ public class TierTable
 		return out.length() == 0 ? tierKey : out.toString();
 	}
 
-	public List<HologramDefinition> getHolograms()
-	{
-		return holograms;
-	}
 }

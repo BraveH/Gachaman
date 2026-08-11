@@ -9,8 +9,7 @@ import lombok.RequiredArgsConstructor;
  */
 @Getter
 @RequiredArgsConstructor
-public enum GearSlot
-{
+public enum GearSlot {
 	HEAD(0, "Head"),
 	CAPE(1, "Cape"),
 	AMULET(2, "Amulet"),
@@ -26,12 +25,9 @@ public enum GearSlot
 	private final int slotIndex;
 	private final String displayName;
 
-	public static GearSlot fromSlotIndex(int index)
-	{
-		for (GearSlot s : values())
-		{
-			if (s.slotIndex == index)
-			{
+	public static GearSlot fromSlotIndex(int index) {
+		for (GearSlot s : values()) {
+			if (s.slotIndex == index) {
 				return s;
 			}
 		}

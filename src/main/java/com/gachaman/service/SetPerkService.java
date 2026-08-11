@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -21,44 +22,29 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Singleton
-public class SetPerkService implements GachaStateService.Listener
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class SetPerkService implements GachaStateService.Listener {
 	private final GachaStateService stateService;
 	private final CreditSink creditSink;
 	private final CardDatabase cardDatabase;
 	private final SetTable setTable;
 	private final CeremonyBus ceremonyBus;
 
-	@Inject
-	public SetPerkService(GachaStateService stateService, CreditSink creditSink,
-		CardDatabase cardDatabase, SetTable setTable, CeremonyBus ceremonyBus)
-	{
-		this.stateService = stateService;
-		this.creditSink = creditSink;
-		this.cardDatabase = cardDatabase;
-		this.setTable = setTable;
-		this.ceremonyBus = ceremonyBus;
-	}
-
 	private final CreditSink.Modifier perkModifier = this::perkFactor;
 
-	public void start()
-	{
+	public void start() {
 		stateService.addListener(this);
 		creditSink.registerModifier(perkModifier);
 	}
 
-	public void stop()
-	{
+	public void stop() {
 		stateService.removeListener(this);
 		creditSink.unregisterModifier(perkModifier);
 	}
 
 	@Override
-	public void onStateChanged(GachaState state)
-	{
-		if (!cardDatabase.isReady())
-		{
+	public void onStateChanged(GachaState state) {
+		if (!cardDatabase.isReady()) {
 			return;
 		}
 		Set<Integer> ownedIds = state.getOwnedCards().stream()
@@ -83,22 +69,18 @@ public class SetPerkService implements GachaStateService.Listener
 		// which is precisely what a mega-set is built to do.
 		Set<String> newKeys = new HashSet<>();
 		List<CeremonyBus.Fanfare> fanfares = new ArrayList<>();
-		for (SetTable.CardSet set : setTable.getSets())
-		{
-			if (state.getCompletedSets().contains(set.getSetKey()))
-			{
+		for (SetTable.CardSet set : setTable.getSets()) {
+			if (state.getCompletedSets().contains(set.getSetKey())) {
 				continue;
 			}
 			List<CardDefinition> members = cardDatabase.setMembers(set.getSetKey());
-			if (members.isEmpty() || members.size() < set.getCardNames().size())
-			{
+			if (members.isEmpty() || members.size() < set.getCardNames().size()) {
 				continue; // some names failed to resolve; never complete a partial mapping
 			}
 			boolean complete = members.stream().allMatch(m ->
 				ownedIds.contains(m.getCardId())
 					|| (m.getTierKey() != null && ownedHoloTiers.contains(m.getTierKey())));
-			if (complete)
-			{
+			if (complete) {
 				newKeys.add(set.getSetKey());
 				fanfares.add(new CeremonyBus.Fanfare(
 					CeremonyBus.Fanfare.Size.LARGE, "Set complete: " + set.getName(),
@@ -106,8 +88,7 @@ public class SetPerkService implements GachaStateService.Listener
 				log.debug("Set completed: {}", set.getSetKey());
 			}
 		}
-		if (newKeys.isEmpty())
-		{
+		if (newKeys.isEmpty()) {
 			return;
 		}
 		// This one still re-enters, and is meant to: the nested pass sees every key
@@ -117,43 +98,34 @@ public class SetPerkService implements GachaStateService.Listener
 			done.addAll(newKeys);
 			return s.withCompletedSets(done);
 		});
-		for (CeremonyBus.Fanfare fanfare : fanfares)
-		{
+		for (CeremonyBus.Fanfare fanfare : fanfares) {
 			ceremonyBus.submit(CeremonyBus.Type.FANFARE, fanfare);
 		}
 	}
 
-	double perkFactor(CreditSink.GcContext context)
-	{
+	double perkFactor(CreditSink.GcContext context) {
 		GachaState state = stateService.get();
-		if (state == null || state.getCompletedSets().isEmpty())
-		{
+		if (state == null || state.getCompletedSets().isEmpty()) {
 			return 1.0;
 		}
 		double factor = 1.0;
-		for (SetTable.CardSet set : setTable.getSets())
-		{
-			if (!state.getCompletedSets().contains(set.getSetKey()))
-			{
+		for (SetTable.CardSet set : setTable.getSets()) {
+			if (!state.getCompletedSets().contains(set.getSetKey())) {
 				continue;
 			}
 			SetTable.Perk perk = set.getPerk();
-			if (perk == null || !typeMatches(perk.getType(), context.getSource()))
-			{
+			if (perk == null || !typeMatches(perk.getType(), context.getSource())) {
 				continue;
 			}
-			if (scopeMatches(perk, context))
-			{
+			if (scopeMatches(perk, context)) {
 				factor *= 1.0 + perk.getMagnitudePercent() / 100.0;
 			}
 		}
 		return factor;
 	}
 
-	private static boolean typeMatches(SetTable.PerkType type, CreditSink.Source source)
-	{
-		switch (type)
-		{
+	private static boolean typeMatches(SetTable.PerkType type, CreditSink.Source source) {
+		switch (type) {
 			case KILL_GC_PERCENT:
 				return source == CreditSink.Source.KILL;
 			case COMPLETION_GC_PERCENT:
@@ -165,10 +137,8 @@ public class SetPerkService implements GachaStateService.Listener
 		}
 	}
 
-	private static boolean scopeMatches(SetTable.Perk perk, CreditSink.GcContext context)
-	{
-		switch (perk.getScope())
-		{
+	private static boolean scopeMatches(SetTable.Perk perk, CreditSink.GcContext context) {
+		switch (perk.getScope()) {
 			case GLOBAL:
 				return true;
 			case MONSTER_NAME_SET:
@@ -183,15 +153,12 @@ public class SetPerkService implements GachaStateService.Listener
 		}
 	}
 
-	public static String perkDescription(SetTable.Perk perk)
-	{
-		if (perk == null)
-		{
+	public static String perkDescription(SetTable.Perk perk) {
+		if (perk == null) {
 			return "";
 		}
 		String what;
-		switch (perk.getType())
-		{
+		switch (perk.getType()) {
 			case KILL_GC_PERCENT:
 				what = "kill GC";
 				break;

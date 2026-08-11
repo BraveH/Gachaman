@@ -5,8 +5,7 @@ import lombok.Value;
 
 /** A hologram tier card: represents a whole tier, not a specific item. */
 @Value
-public class HologramDefinition
-{
+public class HologramDefinition {
 	String tierKey;
 	String name; // e.g. "Dragon Hologram"
 	Rarity rarity;

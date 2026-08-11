@@ -17,40 +17,33 @@ import net.runelite.client.ui.overlay.WidgetItemOverlay;
  * bank so the player can see at a glance what their cards do not permit.
  */
 @Singleton
-public class ForbiddenItemOverlay extends WidgetItemOverlay
-{
+public class ForbiddenItemOverlay extends WidgetItemOverlay {
 	private static final int ICON_SIZE = 14;
 
 	private final PermissionService permissionService;
 	private BufferedImage icon;
 
 	@Inject
-	public ForbiddenItemOverlay(PermissionService permissionService)
-	{
+	public ForbiddenItemOverlay(PermissionService permissionService) {
 		this.permissionService = permissionService;
 		showOnInventory();
 		showOnBank();
 	}
 
 	@Override
-	public void renderItemOverlay(Graphics2D graphics, int itemId, WidgetItem widgetItem)
-	{
-		if (!permissionService.isForbidden(itemId))
-		{
+	public void renderItemOverlay(Graphics2D graphics, int itemId, WidgetItem widgetItem) {
+		if (!permissionService.isForbidden(itemId)) {
 			return;
 		}
 		Rectangle bounds = widgetItem.getCanvasBounds();
-		if (bounds == null)
-		{
+		if (bounds == null) {
 			return;
 		}
 		graphics.drawImage(getIcon(), bounds.x + bounds.width - ICON_SIZE, bounds.y, null);
 	}
 
-	private BufferedImage getIcon()
-	{
-		if (icon != null)
-		{
+	private BufferedImage getIcon() {
+		if (icon != null) {
 			return icon;
 		}
 		BufferedImage image = new BufferedImage(ICON_SIZE, ICON_SIZE, BufferedImage.TYPE_INT_ARGB);

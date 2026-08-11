@@ -7,7 +7,6 @@ import com.gachaman.model.GachaState;
 import com.gachaman.party.PartyRollService;
 import com.gachaman.service.GachaStateService;
 import com.gachaman.service.PatronMark;
-import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
@@ -26,12 +25,6 @@ import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.geom.Area;
-import java.awt.geom.Ellipse2D;
-import java.awt.geom.Path2D;
-import java.awt.geom.QuadCurve2D;
-import java.awt.geom.RoundRectangle2D;
-import java.awt.image.BufferedImage;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
@@ -75,6 +68,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
+import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.LinkBrowser;
 
 /**
@@ -86,10 +80,8 @@ import net.runelite.client.util.LinkBrowser;
  */
 @Slf4j
 @Singleton
-public class GachamanPanel extends PluginPanel implements GachaStateService.Listener
-{
-	private enum Tab
-	{
+public class GachamanPanel extends PluginPanel implements GachaStateService.Listener {
+	private enum Tab {
 		OVERVIEW("Overview"),
 		SHOP("Shop"),
 		ALBUM("Album"),
@@ -104,8 +96,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 
 		private final String label;
 
-		Tab(String label)
-		{
+		Tab(String label) {
 			this.label = label;
 		}
 	}
@@ -160,8 +151,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		PatronsTab patronsTab,
 		LoadoutTab loadoutTab,
 		HelpTab helpTab,
-		GachamanConfig config)
-	{
+		GachamanConfig config) {
 		super(false);
 		this.config = config;
 		this.stateService = stateService;
@@ -192,17 +182,16 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		titleRow.add(titleLabel, BorderLayout.CENTER);
 		JPanel links = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
 		links.setOpaque(false);
-		links.add(linkIcon(githubIcon(false), githubIcon(true), GITHUB_URL,
+		links.add(linkIcon(icon("link-github"), icon("link-github-hover"), GITHUB_URL,
 			"Gachaman on GitHub — source, issues and releases"));
-		links.add(linkIcon(kofiIcon(false), kofiIcon(true), KOFI_URL,
+		links.add(linkIcon(icon("link-kofi"), icon("link-kofi-hover"), KOFI_URL,
 			"Support Gachaman on Ko-fi"));
 		titleRow.add(links, BorderLayout.EAST);
 		header.add(titleRow, BorderLayout.NORTH);
 
 		tabRow = new JPanel(new GridLayout(0, 3, 3, 3));
 		tabRow.setOpaque(false);
-		for (Tab tab : Tab.values())
-		{
+		for (Tab tab : Tab.values()) {
 			JButton button = new JButton(tab.label);
 			button.setFont(FontManager.getRunescapeSmallFont());
 			button.setFocusPainted(false);
@@ -242,39 +231,34 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 
 	// --- Lifecycle ---
 
-	public void start()
-	{
+	public void start() {
 		started = true;
 		stateService.addListener(this);
 		cardDatabase.onReady(this::refresh);
 		refresh();
 	}
 
-	public void stop()
-	{
+	public void stop() {
 		started = false;
 		stateService.removeListener(this);
 		stopScanTimer();
 	}
 
 	@Override
-	public void onActivate()
-	{
+	public void onActivate() {
 		active = true;
 		ensureScanTimer();
 		refresh();
 	}
 
 	@Override
-	public void onDeactivate()
-	{
+	public void onDeactivate() {
 		active = false;
 		stopScanTimer();
 	}
 
 	/** Wired later by the plugin: whether the player is in a party (party offers). */
-	public void setInPartySupplier(BooleanSupplier supplier)
-	{
+	public void setInPartySupplier(BooleanSupplier supplier) {
 		overviewTab.setInPartySupplier(supplier);
 	}
 
@@ -287,24 +271,20 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 * that points backwards.
 	 */
 	public void setVoteViewSupplier(
-		Supplier<PartyRollService.VoteView> supplier)
-	{
+		Supplier<PartyRollService.VoteView> supplier) {
 		partyTab.setVoteViewSupplier(supplier);
 	}
 
 	// --- State listener ---
 
 	@Override
-	public void onStateChanged(GachaState newState)
-	{
+	public void onStateChanged(GachaState newState) {
 		refresh();
 	}
 
 	/** EDT-safe, coalesced refresh. Cheap to call from any thread, any rate. */
-	public void refresh()
-	{
-		if (!refreshQueued.compareAndSet(false, true))
-		{
+	public void refresh() {
+		if (!refreshQueued.compareAndSet(false, true)) {
 			return;
 		}
 		SwingUtilities.invokeLater(() -> {
@@ -313,10 +293,8 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		});
 	}
 
-	private void refreshNow()
-	{
-		if (!started)
-		{
+	private void refreshNow() {
+		if (!started) {
 			return;
 		}
 		dirty.addAll(EnumSet.allOf(Tab.class));
@@ -324,16 +302,14 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		// and the first shared one are STATE changes, and a tab the player just
 		// earned should appear on the refresh that earned it
 		updateTabVisibility();
-		if (!cardDatabase.isReady())
-		{
+		if (!cardDatabase.isReady()) {
 			updateScanLabel();
 			contentLayout.show(content, CARD_LOADING);
 			ensureScanTimer();
 			return;
 		}
 		stopScanTimer();
-		if (active || isShowing())
-		{
+		if (active || isShowing()) {
 			rebuildIfDirty(selected);
 		}
 		contentLayout.show(content, selected.name());
@@ -341,12 +317,10 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 
 	// --- Tabs ---
 
-	private void selectTab(Tab tab)
-	{
+	private void selectTab(Tab tab) {
 		selected = tab;
 		updateTabButtonStyles();
-		if (!cardDatabase.isReady())
-		{
+		if (!cardDatabase.isReady()) {
 			contentLayout.show(content, CARD_LOADING);
 			return;
 		}
@@ -354,16 +328,12 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		contentLayout.show(content, tab.name());
 	}
 
-	private void rebuildIfDirty(Tab tab)
-	{
-		if (!dirty.remove(tab))
-		{
+	private void rebuildIfDirty(Tab tab) {
+		if (!dirty.remove(tab)) {
 			return;
 		}
-		try
-		{
-			switch (tab)
-			{
+		try {
+			switch (tab) {
 				case OVERVIEW:
 					overviewTab.rebuild();
 					break;
@@ -399,8 +369,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 					break;
 			}
 		}
-		catch (Exception e)
-		{
+		catch (Exception e) {
 			log.warn("Gachaman tab rebuild failed: {}", tab, e);
 		}
 	}
@@ -419,20 +388,16 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 *
 	 * Safe to call before the constructor finishes wiring: tabRow is the guard.
 	 */
-	public void updateTabVisibility()
-	{
-		if (tabRow == null)
-		{
+	public void updateTabVisibility() {
+		if (tabRow == null) {
 			return;
 		}
 		GachaState state = stateService.get();
 		tabRow.removeAll();
 		boolean selectedSurvives = false;
-		for (Tab tab : Tab.values())
-		{
+		for (Tab tab : Tab.values()) {
 			JButton button = tabButtons.get(tab);
-			if (button == null || !isTabVisible(tab, state))
-			{
+			if (button == null || !isTabVisible(tab, state)) {
 				continue;
 			}
 			tabRow.add(button);
@@ -440,8 +405,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		}
 		tabRow.revalidate();
 		tabRow.repaint();
-		if (!selectedSurvives)
-		{
+		if (!selectedSurvives) {
 			// the page the player was reading just went away — land them somewhere
 			// that always exists rather than on a card with no button to leave it
 			selectTab(Tab.OVERVIEW);
@@ -456,10 +420,8 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 * of the ones that do. Overview is the fallback in
 	 * {@link #updateTabVisibility} and so must never be hidden here.
 	 */
-	private boolean isTabVisible(Tab tab, @Nullable GachaState state)
-	{
-		switch (tab)
-		{
+	private boolean isTabVisible(Tab tab, @Nullable GachaState state) {
+		switch (tab) {
 			case DOSSIER:
 				return hasContracts(state);
 			case PATRONS:
@@ -472,27 +434,21 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	}
 
 	/** True once one contract has been filed — the Dossier's whole content. */
-	private static boolean hasContracts(@Nullable GachaState state)
-	{
+	private static boolean hasContracts(@Nullable GachaState state) {
 		List<ContractRecord> log = state == null ? null : state.getContractLog();
-		if (log == null)
-		{
+		if (log == null) {
 			return false;
 		}
-		for (ContractRecord record : log)
-		{
-			if (record != null)
-			{
+		for (ContractRecord record : log) {
+			if (record != null) {
 				return true; // Gson can hand back a null array element
 			}
 		}
 		return false;
 	}
 
-	private void updateTabButtonStyles()
-	{
-		for (Map.Entry<Tab, JButton> entry : tabButtons.entrySet())
-		{
+	private void updateTabButtonStyles() {
+		for (Map.Entry<Tab, JButton> entry : tabButtons.entrySet()) {
 			boolean isSelected = entry.getKey() == selected;
 			JButton button = entry.getValue();
 			button.setBackground(isSelected ? ColorScheme.BRAND_ORANGE : ColorScheme.DARKER_GRAY_COLOR);
@@ -516,153 +472,72 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 * copy-to-clipboard prompt on a machine with no usable browser handler,
 	 * instead of throwing onto the EDT.
 	 */
-	private static JLabel linkIcon(ImageIcon normal, ImageIcon hover, String url, String tooltip)
-	{
+	/** A flat panel icon, authored by com.gachaman.tools.IconArt. */
+	private static ImageIcon icon(String name) {
+		return new ImageIcon(ImageUtil.loadImageResource(
+			GachamanPanel.class, "/com/gachaman/ui/" + name + ".png"));
+	}
+
+	private static JLabel linkIcon(ImageIcon normal, ImageIcon hover, String url, String tooltip) {
 		JLabel label = new JLabel(normal);
 		label.setToolTipText(tooltip);
 		label.setCursor(new Cursor(Cursor.HAND_CURSOR));
-		label.addMouseListener(new MouseAdapter()
-		{
+		label.addMouseListener(new MouseAdapter() {
 			@Override
-			public void mousePressed(MouseEvent e)
-			{
+			public void mousePressed(MouseEvent e) {
 				LinkBrowser.browse(url);
 			}
 
 			@Override
-			public void mouseEntered(MouseEvent e)
-			{
+			public void mouseEntered(MouseEvent e) {
 				label.setIcon(hover);
 			}
 
 			@Override
-			public void mouseExited(MouseEvent e)
-			{
+			public void mouseExited(MouseEvent e) {
 				label.setIcon(normal);
 			}
 		});
 		return label;
 	}
 
-	/**
-	 * The GitHub mark, drawn as a UNION of primitives rather than a traced bezier.
-	 *
-	 * A hand-transcribed path would be a long opaque string that nobody can review
-	 * and that silently renders as a blob if one control point is wrong; ears, body,
-	 * legs and tail as named shapes stay legible and scale cleanly with
-	 * {@link #LINK_ICON_SIZE}. Drawn rather than shipped as a PNG to match the rest
-	 * of this plugin's icons (see HelpTab's padlock and crossed circle).
-	 */
-	static ImageIcon githubIcon(boolean hover)
-	{
-		BufferedImage image = new BufferedImage(LINK_ICON_SIZE, LINK_ICON_SIZE,
-			BufferedImage.TYPE_INT_ARGB);
-		Graphics2D g = image.createGraphics();
-		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-		double s = LINK_ICON_SIZE / 18.0; // authored at 18px, scaled from there
-		g.scale(s, s);
 
-		// The body sits HIGH and is deliberately shallower than it is wide: the legs
-		// and the tail are what separate the mark from a generic cat face, and a
-		// body deep enough to be circular swallows both of them.
-		Area mark = new Area(new Ellipse2D.Float(1.7f, 4.2f, 14.6f, 10.2f));
-		mark.add(new Area(triangle(3.1f, 6.8f, 3.5f, 1.6f, 7.6f, 4.6f)));   // left ear
-		mark.add(new Area(triangle(14.9f, 6.8f, 14.5f, 1.6f, 10.4f, 4.6f))); // right ear
-		mark.add(new Area(new RoundRectangle2D.Float(
-			5.5f, 11.6f, 2.4f, 5.6f, 1.8f, 1.8f)));                         // left leg
-		mark.add(new Area(new RoundRectangle2D.Float(
-			10.1f, 11.6f, 2.4f, 5.6f, 1.8f, 1.8f)));                        // right leg
 
-		g.setColor(hover ? Color.WHITE : ColorScheme.LIGHT_GRAY_COLOR);
-		g.fill(mark);
-		// The tail starts high on the flank and swings WIDE before dropping, so it
-		// reads as a tail rather than as a third leg next to the other two.
-		g.setStroke(new BasicStroke(2.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-		g.draw(new QuadCurve2D.Float(4.0f, 10.8f, 0.6f, 13.2f, 2.2f, 16.4f));
-		g.dispose();
-		return new ImageIcon(image);
-	}
-
-	/** The Ko-fi cup: a white mug and two steam wisps on the brand's coral plate. */
-	static ImageIcon kofiIcon(boolean hover)
-	{
-		BufferedImage image = new BufferedImage(LINK_ICON_SIZE, LINK_ICON_SIZE,
-			BufferedImage.TYPE_INT_ARGB);
-		Graphics2D g = image.createGraphics();
-		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-		double s = LINK_ICON_SIZE / 18.0;
-		g.scale(s, s);
-
-		g.setColor(hover ? new Color(255, 110, 107) : new Color(214, 78, 75));
-		g.fillRoundRect(0, 0, 18, 18, 6, 6);
-
-		g.setColor(Color.WHITE);
-		g.fillRoundRect(3, 8, 8, 7, 2, 2);                                  // mug body
-		g.setStroke(new BasicStroke(1.5f));
-		g.drawArc(9, 8, 5, 5, 90, -180);                                    // handle
-		g.fillRoundRect(2, 15, 11, 2, 1, 1);                                // saucer
-		g.setStroke(new BasicStroke(1.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-		g.draw(new QuadCurve2D.Float(5.2f, 6.6f, 6.8f, 4.8f, 5.2f, 2.8f));  // steam
-		g.draw(new QuadCurve2D.Float(8.6f, 6.6f, 10.2f, 4.8f, 8.6f, 2.8f));
-		g.dispose();
-		return new ImageIcon(image);
-	}
-
-	private static Path2D.Float triangle(float x1, float y1, float x2, float y2,
-		float x3, float y3)
-	{
-		Path2D.Float path = new Path2D.Float();
-		path.moveTo(x1, y1);
-		path.lineTo(x2, y2);
-		path.lineTo(x3, y3);
-		path.closePath();
-		return path;
-	}
 
 	// --- Scan progress polling ---
 
-	private void updateScanLabel()
-	{
+	private void updateScanLabel() {
 		scanLabel.setText("Scanning Gielinor's armoury… " + cardDatabase.getScanProgressPercent() + "%");
 	}
 
-	private void ensureScanTimer()
-	{
-		if (!active || cardDatabase.isReady())
-		{
+	private void ensureScanTimer() {
+		if (!active || cardDatabase.isReady()) {
 			return;
 		}
-		if (scanTimer == null)
-		{
+		if (scanTimer == null) {
 			scanTimer = new Timer(SCAN_POLL_MS, e -> {
-				if (cardDatabase.isReady())
-				{
+				if (cardDatabase.isReady()) {
 					stopScanTimer();
 					refresh();
 				}
-				else
-				{
+				else {
 					updateScanLabel();
 				}
 			});
 			scanTimer.setRepeats(true);
 		}
-		if (!scanTimer.isRunning())
-		{
+		if (!scanTimer.isRunning()) {
 			scanTimer.start();
 		}
 	}
 
-	private void stopScanTimer()
-	{
-		if (scanTimer != null && scanTimer.isRunning())
-		{
+	private void stopScanTimer() {
+		if (scanTimer != null && scanTimer.isRunning()) {
 			scanTimer.stop();
 		}
 	}
 
-	private static JScrollPane wrapScroll(JComponent inner)
-	{
+	private static JScrollPane wrapScroll(JComponent inner) {
 		JScrollPane scroll = new JScrollPane(inner,
 			ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
 			ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
@@ -674,33 +549,28 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	}
 
 	/** Slim, dark, game-styled scrollbar (stone thumb, no arrow buttons). */
-	public static void styleScrollbar(JScrollPane scroll)
-	{
+	public static void styleScrollbar(JScrollPane scroll) {
 		JScrollBar bar = scroll.getVerticalScrollBar();
 		bar.setUI(new GameScrollBarUI());
 		bar.setPreferredSize(new Dimension(9, 0));
 		bar.setOpaque(false);
 	}
 
-	private static final class GameScrollBarUI extends BasicScrollBarUI
-	{
+	private static final class GameScrollBarUI extends BasicScrollBarUI {
 		private static final Color TRACK = new Color(28, 27, 25);
 		private static final Color THUMB = new Color(82, 72, 58);
 		private static final Color THUMB_EDGE_LIGHT = new Color(115, 102, 82);
 		private static final Color THUMB_EDGE_DARK = new Color(46, 40, 32);
 
 		@Override
-		protected void paintTrack(Graphics g, JComponent c, Rectangle r)
-		{
+		protected void paintTrack(Graphics g, JComponent c, Rectangle r) {
 			g.setColor(TRACK);
 			g.fillRect(r.x, r.y, r.width, r.height);
 		}
 
 		@Override
-		protected void paintThumb(Graphics g, JComponent c, Rectangle r)
-		{
-			if (r.isEmpty() || !scrollbar.isEnabled())
-			{
+		protected void paintThumb(Graphics g, JComponent c, Rectangle r) {
+			if (r.isEmpty() || !scrollbar.isEnabled()) {
 				return;
 			}
 			g.setColor(THUMB);
@@ -714,19 +584,16 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		}
 
 		@Override
-		protected JButton createDecreaseButton(int orientation)
-		{
+		protected JButton createDecreaseButton(int orientation) {
 			return zeroButton();
 		}
 
 		@Override
-		protected JButton createIncreaseButton(int orientation)
-		{
+		protected JButton createIncreaseButton(int orientation) {
 			return zeroButton();
 		}
 
-		private static JButton zeroButton()
-		{
+		private static JButton zeroButton() {
 			JButton button = new JButton();
 			Dimension zero = new Dimension(0, 0);
 			button.setPreferredSize(zero);
@@ -738,15 +605,13 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 
 	// --- Shared widget helpers used by the tabs ---
 
-	static JPanel section(@Nullable String title)
-	{
+	static JPanel section(@Nullable String title) {
 		JPanel panel = new JPanel();
 		panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
 		panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		panel.setBorder(new EmptyBorder(8, 8, 8, 8));
 		panel.setAlignmentX(Component.LEFT_ALIGNMENT);
-		if (title != null)
-		{
+		if (title != null) {
 			JLabel label = new JLabel(title);
 			label.setForeground(ColorScheme.BRAND_ORANGE);
 			label.setFont(FontManager.getRunescapeBoldFont());
@@ -757,8 +622,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		return panel;
 	}
 
-	static JLabel line(String text, Color color, Font font)
-	{
+	static JLabel line(String text, Color color, Font font) {
 		JLabel label = new JLabel(text);
 		label.setForeground(color);
 		label.setFont(font);
@@ -766,8 +630,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		return label;
 	}
 
-	static JLabel smallLine(String text, Color color)
-	{
+	static JLabel smallLine(String text, Color color) {
 		return line(text, color, FontManager.getRunescapeSmallFont());
 	}
 
@@ -804,8 +667,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 * the right edge with no ellipsis. A JEditorPane wraps against the width it
 	 * is actually given, and pinning that width makes the column real.
 	 */
-	static JComponent wrapped(String text, Color color)
-	{
+	static JComponent wrapped(String text, Color color) {
 		return wrapped(text, color, FontManager.getRunescapeSmallFont());
 	}
 
@@ -814,8 +676,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 * pick the font is a HEADING that has to wrap, and the bold face at ~7px/char
 	 * runs out of column a third sooner than the small one does.
 	 */
-	static JComponent wrapped(String text, Color color, Font font)
-	{
+	static JComponent wrapped(String text, Color color, Font font) {
 		JEditorPane pane = new JEditorPane();
 		pane.setContentType("text/html");
 		pane.setEditable(false);
@@ -855,8 +716,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 * {@code & < >} — a lone {@code >} is legal text in HTML5 but Swing's parser
 	 * is HTML 3.2 and will happily close a tag it thinks it is inside.
 	 */
-	static String escape(@Nullable String text)
-	{
+	static String escape(@Nullable String text) {
 		return text == null ? ""
 			: text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
 	}
@@ -867,17 +727,14 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 * this is used on is a difficulty or a chest name, and none of them is a
 	 * "u"-as-in-you or a silent-h word where the two rules disagree.
 	 */
-	static String article(@Nullable String noun)
-	{
-		if (noun == null || noun.isEmpty())
-		{
+	static String article(@Nullable String noun) {
+		if (noun == null || noun.isEmpty()) {
 			return "a";
 		}
 		return "AEIOUaeiou".indexOf(noun.charAt(0)) >= 0 ? "an" : "a";
 	}
 
-	static JComponent centeredNote(String text)
-	{
+	static JComponent centeredNote(String text) {
 		JPanel panel = new JPanel(new GridBagLayout());
 		panel.setOpaque(false);
 		JLabel label = new JLabel(text, SwingConstants.CENTER);
@@ -888,8 +745,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		return panel;
 	}
 
-	static boolean confirm(Component parent, String titleText, String message)
-	{
+	static boolean confirm(Component parent, String titleText, String message) {
 		JOptionPane pane = new JOptionPane(dialogBody(message),
 			JOptionPane.WARNING_MESSAGE, JOptionPane.YES_NO_OPTION);
 		JDialog dialog = pane.createDialog(parent, titleText);
@@ -899,8 +755,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		return Integer.valueOf(JOptionPane.YES_OPTION).equals(pane.getValue());
 	}
 
-	static void info(Component parent, String message)
-	{
+	static void info(Component parent, String message) {
 		JOptionPane pane = new JOptionPane(dialogBody(message), JOptionPane.INFORMATION_MESSAGE);
 		JDialog dialog = pane.createDialog(parent, "Gachaman");
 		sizeForTargetScreen(dialog, parent);
@@ -909,8 +764,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	}
 
 	/** Fixed-width HTML body so the dialog's preferred size is stable on any monitor. */
-	private static JComponent dialogBody(String message)
-	{
+	private static JComponent dialogBody(String message) {
 		String escaped = escape(message).replace("\n", "<br>");
 		return new JLabel("<html><body style='width:230px'>" + escaped + "</body></html>");
 	}
@@ -923,8 +777,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 * the target screen FIRST, then re-pack so layout runs with that monitor's
 	 * real metrics, and pin the packed size as the minimum.
 	 */
-	private static void sizeForTargetScreen(JDialog dialog, Component parent)
-	{
+	private static void sizeForTargetScreen(JDialog dialog, Component parent) {
 		dialog.setLocationRelativeTo(parent);
 		dialog.pack();
 		dialog.setMinimumSize(dialog.getSize());
@@ -932,8 +785,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	}
 
 	/** A thin horizontal meter with an optional centered label. */
-	static final class MeterBar extends JComponent
-	{
+	static final class MeterBar extends JComponent {
 		private static final Color TRACK = new Color(28, 28, 28);
 
 		private final double fraction;
@@ -941,8 +793,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		@Nullable
 		private final String label;
 
-		MeterBar(double fraction, Color barColor, @Nullable String label)
-		{
+		MeterBar(double fraction, Color barColor, @Nullable String label) {
 			this.fraction = Math.max(0, Math.min(1, fraction));
 			this.barColor = barColor;
 			this.label = label;
@@ -952,8 +803,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		}
 
 		@Override
-		protected void paintComponent(Graphics g)
-		{
+		protected void paintComponent(Graphics g) {
 			Graphics2D g2 = (Graphics2D) g.create();
 			g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 			int w = getWidth();
@@ -961,13 +811,11 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 			g2.setColor(TRACK);
 			g2.fillRoundRect(0, 0, w, h, 6, 6);
 			int fill = (int) Math.round(w * fraction);
-			if (fill > 0)
-			{
+			if (fill > 0) {
 				g2.setColor(barColor);
 				g2.fillRoundRect(0, 0, Math.max(fill, 6), h, 6, 6);
 			}
-			if (label != null)
-			{
+			if (label != null) {
 				g2.setFont(FontManager.getRunescapeSmallFont());
 				g2.setColor(Color.WHITE);
 				int tw = g2.getFontMetrics().stringWidth(label);
@@ -978,22 +826,19 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	}
 
 	/** A left-aligned row wrapper so BorderLayout rows behave in a BoxLayout. */
-	static JPanel row(JComponent left, @Nullable JComponent right)
-	{
+	static JPanel row(JComponent left, @Nullable JComponent right) {
 		JPanel panel = new JPanel(new BorderLayout(6, 0));
 		panel.setOpaque(false);
 		panel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
 		panel.add(left, BorderLayout.CENTER);
-		if (right != null)
-		{
+		if (right != null) {
 			panel.add(right, BorderLayout.EAST);
 		}
 		return panel;
 	}
 
-	static JButton button(String text)
-	{
+	static JButton button(String text) {
 		JButton button = new JButton(text);
 		button.setFont(FontManager.getRunescapeSmallFont());
 		button.setFocusPainted(false);
@@ -1007,8 +852,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	}
 
 	/** Dark, RuneLite-styled combo box: colors, font, renderer and arrow. */
-	static void styleCombo(JComboBox<?> combo)
-	{
+	static void styleCombo(JComboBox<?> combo) {
 		styleCombo(combo, value -> value == null ? "" : String.valueOf(value));
 	}
 
@@ -1023,17 +867,14 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 * cannot be got wrong.
 	 */
 	static <T> void styleCombo(JComboBox<T> combo,
-		Function<T, String> labeller)
-	{
+		Function<T, String> labeller) {
 		combo.setFont(FontManager.getRunescapeSmallFont());
 		combo.setForeground(Color.WHITE);
 		combo.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		combo.setFocusable(false);
-		combo.setUI(new BasicComboBoxUI()
-		{
+		combo.setUI(new BasicComboBoxUI() {
 			@Override
-			protected JButton createArrowButton()
-			{
+			protected JButton createArrowButton() {
 				BasicArrowButton arrow = new BasicArrowButton(
 					SwingConstants.SOUTH, ColorScheme.DARKER_GRAY_COLOR.darker(),
 					ColorScheme.DARKER_GRAY_COLOR.darker(), ColorScheme.LIGHT_GRAY_COLOR,
@@ -1043,13 +884,11 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 			}
 		});
 		combo.setBorder(BorderFactory.createLineBorder(ColorScheme.MEDIUM_GRAY_COLOR));
-		DefaultListCellRenderer renderer = new DefaultListCellRenderer()
-		{
+		DefaultListCellRenderer renderer = new DefaultListCellRenderer() {
 			@Override
 			@SuppressWarnings("unchecked")
 			public Component getListCellRendererComponent(JList<?> list, Object value,
-				int index, boolean isSelected, boolean cellHasFocus)
-			{
+				int index, boolean isSelected, boolean cellHasFocus) {
 				super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
 				setFont(FontManager.getRunescapeSmallFont());
 				setBackground(isSelected ? ColorScheme.DARK_GRAY_HOVER_COLOR : ColorScheme.DARKER_GRAY_COLOR);
@@ -1065,18 +904,15 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	}
 
 	/** Dark, RuneLite-styled spinner (date/number editors alike). */
-	static void styleSpinner(JComponent spinner)
-	{
-		if (!(spinner instanceof JSpinner))
-		{
+	static void styleSpinner(JComponent spinner) {
+		if (!(spinner instanceof JSpinner)) {
 			return;
 		}
 		JSpinner s = (JSpinner) spinner;
 		s.setBorder(BorderFactory.createLineBorder(ColorScheme.MEDIUM_GRAY_COLOR));
 		s.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		JComponent editor = s.getEditor();
-		if (editor instanceof JSpinner.DefaultEditor)
-		{
+		if (editor instanceof JSpinner.DefaultEditor) {
 			JFormattedTextField field =
 				((JSpinner.DefaultEditor) editor).getTextField();
 			field.setFont(FontManager.getRunescapeSmallFont());
@@ -1085,44 +921,37 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 			field.setCaretColor(Color.WHITE);
 			field.setBorder(new EmptyBorder(2, 5, 2, 5));
 		}
-		for (Component child : s.getComponents())
-		{
-			if (child instanceof JButton)
-			{
+		for (Component child : s.getComponents()) {
+			if (child instanceof JButton) {
 				child.setBackground(ColorScheme.DARKER_GRAY_COLOR.darker());
 			}
 		}
 	}
 
 	/** Dark game-styled slider: stone thumb on a slim dark track. */
-	static final class GameSliderUI extends BasicSliderUI
-	{
+	static final class GameSliderUI extends BasicSliderUI {
 		private static final Color TRACK = new Color(28, 27, 25);
 		private static final Color THUMB = new Color(82, 72, 58);
 		private static final Color THUMB_EDGE = new Color(115, 102, 82);
 
-		GameSliderUI(JSlider slider)
-		{
+		GameSliderUI(JSlider slider) {
 			super(slider);
 		}
 
 		@Override
-		public void paintTrack(Graphics g)
-		{
+		public void paintTrack(Graphics g) {
 			int cy = trackRect.y + trackRect.height / 2;
 			g.setColor(TRACK);
 			g.fillRoundRect(trackRect.x, cy - 3, trackRect.width, 6, 6, 6);
 			g.setColor(ColorScheme.BRAND_ORANGE);
 			int fill = thumbRect.x + thumbRect.width / 2 - trackRect.x;
-			if (fill > 0)
-			{
+			if (fill > 0) {
 				g.fillRoundRect(trackRect.x, cy - 3, Math.min(fill, trackRect.width), 6, 6, 6);
 			}
 		}
 
 		@Override
-		public void paintThumb(Graphics g)
-		{
+		public void paintThumb(Graphics g) {
 			g.setColor(THUMB);
 			g.fillRect(thumbRect.x + 2, thumbRect.y + 2, thumbRect.width - 4, thumbRect.height - 4);
 			g.setColor(THUMB_EDGE);
@@ -1130,8 +959,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		}
 
 		@Override
-		public void paintFocus(Graphics g)
-		{
+		public void paintFocus(Graphics g) {
 			// no focus ring
 		}
 	}

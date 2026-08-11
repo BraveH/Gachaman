@@ -2,6 +2,8 @@ package com.gachaman.service;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.Item;
@@ -27,8 +29,8 @@ import net.runelite.api.widgets.Widget;
  */
 @Slf4j
 @Singleton
-public class UnequipService
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class UnequipService {
 	/**
 	 * Worn-items component per equipment slot index. The gaps (6, 8, 11) are
 	 * indices the equipment container does not use.
@@ -58,38 +60,21 @@ public class UnequipService
 	private final Client client;
 
 	private int ticksLeft;
+	@Getter
 	private boolean stripComplete;
 
-	@Inject
-	public UnequipService(Client client)
-	{
-		this.client = client;
-	}
-
 	/** Begin stripping on the following ticks. */
-	public void arm()
-	{
+	public void arm() {
 		ticksLeft = MAX_TICKS;
 		stripComplete = false;
 	}
 
-	public boolean isArmed()
-	{
+	public boolean isArmed() {
 		return ticksLeft > 0;
 	}
 
-	/**
-	 * True only once a pass has found nothing left to take off. A logout, a full
-	 * inventory or an exhausted tick budget all leave this false, so the caller
-	 * knows to resume rather than to record the strip as settled.
-	 */
-	public boolean isStripComplete()
-	{
-		return stripComplete;
-	}
 
-	public void cancel()
-	{
+	public void cancel() {
 		ticksLeft = 0;
 	}
 
@@ -99,41 +84,33 @@ public class UnequipService
 	 *
 	 * @return true while items remain to strip
 	 */
-	public boolean tick()
-	{
-		if (ticksLeft <= 0)
-		{
+	public boolean tick() {
+		if (ticksLeft <= 0) {
 			return false;
 		}
 		ticksLeft--;
 
 		ItemContainer worn = client.getItemContainer(InventoryID.WORN);
-		if (worn == null)
-		{
+		if (worn == null) {
 			ticksLeft = 0;
 			return false;
 		}
-		if (freeInventorySlots() <= 0)
-		{
+		if (freeInventorySlots() <= 0) {
 			log.debug("Gachaman: tutorial strip stopped — inventory full");
 			ticksLeft = 0;
 			return false;
 		}
 
-		for (int slot = 0; slot < SLOT_COMPONENTS.length; slot++)
-		{
+		for (int slot = 0; slot < SLOT_COMPONENTS.length; slot++) {
 			int component = SLOT_COMPONENTS[slot];
-			if (component < 0)
-			{
+			if (component < 0) {
 				continue;
 			}
 			Item item = worn.getItem(slot);
-			if (item == null || item.getId() <= 0)
-			{
+			if (item == null || item.getId() <= 0) {
 				continue;
 			}
-			if (invokeRemove(component, item.getId()))
-			{
+			if (invokeRemove(component, item.getId())) {
 				return true;
 			}
 		}
@@ -145,18 +122,14 @@ public class UnequipService
 	}
 
 	/** Count of empty inventory slots, or 0 when the container is unavailable. */
-	private int freeInventorySlots()
-	{
+	private int freeInventorySlots() {
 		ItemContainer inventory = client.getItemContainer(InventoryID.INV);
-		if (inventory == null)
-		{
+		if (inventory == null) {
 			return 0;
 		}
 		int used = 0;
-		for (Item item : inventory.getItems())
-		{
-			if (item != null && item.getId() > 0)
-			{
+		for (Item item : inventory.getItems()) {
+			if (item != null && item.getId() > 0) {
 				used++;
 			}
 		}
@@ -164,25 +137,19 @@ public class UnequipService
 	}
 
 	/** Fires the widget's own "Remove" op, if it has one. */
-	private boolean invokeRemove(int component, int itemId)
-	{
+	private boolean invokeRemove(int component, int itemId) {
 		Widget widget = client.getWidget(component);
-		if (widget == null)
-		{
+		if (widget == null) {
 			return false;
 		}
-		if (invokeRemoveOn(widget, itemId))
-		{
+		if (invokeRemoveOn(widget, itemId)) {
 			return true;
 		}
 		// some layouts put the item (and its ops) on a child of the slot
 		Widget[] children = widget.getChildren();
-		if (children != null)
-		{
-			for (Widget child : children)
-			{
-				if (child != null && invokeRemoveOn(child, itemId))
-				{
+		if (children != null) {
+			for (Widget child : children) {
+				if (child != null && invokeRemoveOn(child, itemId)) {
 					return true;
 				}
 			}
@@ -190,17 +157,13 @@ public class UnequipService
 		return false;
 	}
 
-	private boolean invokeRemoveOn(Widget widget, int itemId)
-	{
+	private boolean invokeRemoveOn(Widget widget, int itemId) {
 		String[] actions = widget.getActions();
-		if (actions == null)
-		{
+		if (actions == null) {
 			return false;
 		}
-		for (int i = 0; i < actions.length; i++)
-		{
-			if (!"Remove".equalsIgnoreCase(actions[i]))
-			{
+		for (int i = 0; i < actions.length; i++) {
+			if (!"Remove".equalsIgnoreCase(actions[i])) {
 				continue;
 			}
 			// CC_OP identifiers are 1-based over the action list

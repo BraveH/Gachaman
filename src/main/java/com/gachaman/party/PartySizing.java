@@ -18,8 +18,7 @@ import javax.annotation.Nullable;
  * {@link #fromWire} reads as "unknown, use the default". An int would
  * deserialize to 0 and silently fabricate a real choice.
  */
-public enum PartySizing
-{
+public enum PartySizing {
 	/**
 	 * The party's AVERAGE combat level. The default, and the only rule that
 	 * existed before this setting.
@@ -33,8 +32,7 @@ public enum PartySizing
 
 	private final String label;
 
-	PartySizing(String label)
-	{
+	PartySizing(String label) {
 		this.label = label;
 	}
 
@@ -44,8 +42,7 @@ public enum PartySizing
 	 * dropdown is correct either way.
 	 */
 	@Override
-	public String toString()
-	{
+	public String toString() {
 		return label;
 	}
 
@@ -57,16 +54,12 @@ public enum PartySizing
 	 * on every client, which is the only property that matters here. A roll
 	 * that cannot agree on its rule is worse than a roll on the wrong rule.
 	 */
-	static PartySizing fromWire(@Nullable String name)
-	{
-		if (name == null)
-		{
+	static PartySizing fromWire(@Nullable String name) {
+		if (name == null) {
 			return FIGHTING_WEIGHT;
 		}
-		for (PartySizing sizing : values())
-		{
-			if (sizing.name().equals(name))
-			{
+		for (PartySizing sizing : values()) {
+			if (sizing.name().equals(name)) {
 				return sizing;
 			}
 		}

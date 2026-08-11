@@ -1,14 +1,19 @@
 package com.gachaman.service;
 
+import com.gachaman.data.DataJson;
 import com.gachaman.model.AttackStyle;
+import com.google.gson.reflect.TypeToken;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Actor;
 import net.runelite.api.Client;
@@ -17,7 +22,6 @@ import net.runelite.api.EnumID;
 import net.runelite.api.GameState;
 import net.runelite.api.MenuAction;
 import net.runelite.api.ParamID;
-import net.runelite.api.Skill;
 import net.runelite.api.StructComposition;
 import net.runelite.api.events.AnimationChanged;
 import net.runelite.api.events.GameStateChanged;
@@ -25,7 +29,6 @@ import net.runelite.api.events.GameTick;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.StatChanged;
-import net.runelite.api.gameval.AnimationID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.eventbus.Subscribe;
@@ -58,8 +61,8 @@ import net.runelite.client.eventbus.Subscribe;
  */
 @Slf4j
 @Singleton
-public class StyleTracker
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class StyleTracker {
 	private static final int LOGIN_SETTLE_TICKS = 5;
 	/** Weapon categories whose WEAPON_STYLES enum entry is -1 (client special cases). */
 	private static final int CAT_BLUE_MOON_SPEAR = 22;
@@ -83,141 +86,38 @@ public class StyleTracker
 	private static final int PARDON_WINDOW_TICKS = 5;
 
 	/** What evidence produced a judgement. Pardons only ever touch STANCE. */
-	enum JudgementSource
-	{
+	enum JudgementSource {
 		MARK, ANIM, STANCE, XP
 	}
 
 	/**
-	 * Player animations that are unambiguously offensive spell casts. These
-	 * judge MAGIC regardless of stance or mark — a melee-stance manual cast
-	 * whose Cast click was missed (or whose mark expired) still animates one
-	 * of these.
+	 * How StyleTracker classifies an animation, loaded from attack-anims.json.
+	 *
+	 * <p>The ids are authored as {@link net.runelite.api.gameval.AnimationID}
+	 * constants by com.gachaman.tools.AttackAnims, so the compiler still checks
+	 * every name against the live API, and AttackAnimResourceTest pins the
+	 * shipped resource to those lists. Data in a resource, names checked in
+	 * code, and a test between them.
+	 *
+	 * <p>offensiveMagic: unambiguous spell casts — judge MAGIC whatever the
+	 * stance says. neverJudge: provably not attacks (utility, consumables,
+	 * blocks); these also do NOT consume a pending Cast mark. magicUtility: the
+	 * neverJudge subset that pays Magic XP, whose drop must never grant a
+	 * pardon.
 	 */
-	private static final Set<Integer> OFFENSIVE_MAGIC_ANIMS = Set.of(
-		AnimationID.HUMAN_CASTSTRIKE,
-		AnimationID.HUMAN_CASTSTRIKE_STAFF,
-		AnimationID.HUMAN_CASTWAVE,
-		AnimationID.HUMAN_CASTWAVE_STAFF,
-		AnimationID.HUMAN_CAST_SURGE,
-		AnimationID.HUMAN_CAST_SURGE_FAST,
-		AnimationID.HUMAN_CASTENTANGLE,
-		AnimationID.HUMAN_CASTENTANGLE_STAFF,
-		AnimationID.HUMAN_CASTIBANBLAST,
-		AnimationID.HUMAN_CASTCRUMBLEUNDEAD,
-		AnimationID.HUMAN_CASTCRUMBLEUNDEAD_STAFF,
-		AnimationID.HUMAN_CASTING,
-		AnimationID.ZAROS_CASTING,
-		AnimationID.ZAROS_VERTICAL_CASTING,
-		AnimationID.SLAYER_MAGICDART_CAST,
-		AnimationID.HUMAN_SPELLCAST_GRASP,
-		AnimationID.HUMAN_SPELLCAST_DEMONBANE,
-		AnimationID.HUMAN_CASTCONFUSE,
-		AnimationID.HUMAN_CASTWEAKEN,
-		AnimationID.HUMAN_CASTCURSE,
-		AnimationID.HUMAN_CASTENFEEBLE,
-		AnimationID.HUMAN_CASTSTUN,
-		AnimationID.HUMAN_CASTCONFUSE_STAFF,
-		AnimationID.HUMAN_CASTWEAKEN_STAFF,
-		AnimationID.HUMAN_CASTCURSE_STAFF,
-		AnimationID.HUMAN_CASTENFEEBLE_STAFF,
-		AnimationID.HUMAN_CASTSTUN_STAFF,
-		AnimationID.HUMAN_CASTSTRIKE_WALKMERGE,
-		AnimationID.HUMAN_CAST_SURGE_WALKMERGE,
-		AnimationID.HUMAN_CASTCURSE_STAFF_WALKMERGE,
-		AnimationID.HUMAN_CASTSTRIKE_STAFF_WALKMERGE,
-		AnimationID.HUMAN_CASTCONFUSE_WALKMERGE,
-		AnimationID.HUMAN_CASTCONFUSE_STAFF_WALKMERGE,
-		AnimationID.HUMAN_CASTWEAKEN_WALKMERGE,
-		AnimationID.HUMAN_CASTWEAKEN_STAFF_WALKMERGE,
-		AnimationID.HUMAN_CASTCURSE_WALKMERGE,
-		AnimationID.HUMAN_CASTWAVE_WALKMERGE,
-		AnimationID.HUMAN_CASTWAVE_STAFF_WALKMERGE,
-		AnimationID.NIGHTMARE_STAFF_SPECIAL,
-		AnimationID.TOA_SOT_CAST_B,
-		AnimationID.POG_WARPED_SCEPTRE_ATTACK);
+	private static final Map<String, Set<Integer>> ANIMS = DataJson.load("attack-anims",
+		new TypeToken<Map<String, Set<Integer>>>() {
+		}.getType(), Collections.emptyMap());
 
-	/**
-	 * Player animations that are provably NOT attacks: utility spells,
-	 * teleports, consumables and block/defence poses. Never judged — and
-	 * crucially they do NOT consume a pending Cast mark (alching or eating
-	 * while pathing to a marked target must not eat the mark and let the
-	 * eventual cast be stance-judged as melee).
-	 */
-	private static final Set<Integer> NEVER_JUDGE_ANIMS = Set.of(
-		AnimationID.HUMAN_CASTLOWLVLALCHEMY,
-		AnimationID.HUMAN_CASTHIGHLVLALCHEMY,
-		AnimationID.HUMAN_CASTLOWLVLALCHEMY_FIRE,
-		AnimationID.HUMAN_CASTHIGHLVLALCHEMY_FIRE,
-		AnimationID.HUMAN_CASTSUPERHEATITEM,
-		AnimationID.HUMAN_CASTTELEGRAB,
-		AnimationID.HUMAN_CASTTELEPORT,
-		AnimationID.HUMAN_CASTTELEPORT_REVERSE,
-		AnimationID.HUMAN_CAST2_TELEPORT,
-		AnimationID.HUMAN_CAST_ENCHANTRING,
-		AnimationID.HUMAN_CASTING_TELE_BLOCK,
-		AnimationID.HUMAN_CASTING_TELE_BLOCK_STAFF,
-		AnimationID.HUMAN_CASTING_TELE_BLOCK_STAFF_WALKMERGE,
-		// Arceuus and Lunar self-buffs. Every one of them is a spell the player
-		// casts ON THEMSELVES in the middle of a fight, mid-combat and while
-		// interacting with the target — which is exactly the shape the animation
-		// path judges. Missing from this list they were judged from the STANCE
-		// varps, so resurrecting a thrall or re-veiling between kills scored a
-		// melee attack against a magic contract.
-		AnimationID.HUMAN_SPELLCAST_RESURRECT,
-		AnimationID.HUMAN_SPELLCAST_SHADOWVEIL,
-		AnimationID.HUMAN_CAST_VILEVIGOUR,
-		AnimationID.HUMAN_CAST_OFFERING,
-		AnimationID.HUMAN_PREPARE_OFFERING,
-		AnimationID.HUMAN_PREPARE_OFFERING_LOOP,
-		AnimationID.HUMAN_CAST_SELFIMBUE,
-		AnimationID.HUMAN_CASTHEAL,
-		AnimationID.HUMAN_CASTCHARGEORB,
-		AnimationID.HUMAN_EAT_BANANA,
-		AnimationID.HUMAN_DRINK_RUM,
-		AnimationID.HUMAN_EAT,
-		AnimationID.HUMAN_PICKUPFLOOR,
-		AnimationID.HUMAN_STAFF_BLOCK,
-		AnimationID.HUMAN_STAFF_DEF,
-		AnimationID.HUMAN_STAFFORB_BLOCK,
-		AnimationID.HUMAN_STAFFORB_DEF,
-		AnimationID.HUMAN_UNARMEDBLOCK,
-		AnimationID.HUMAN_UNARMED_DEF,
-		AnimationID.HUMAN_SHIELD_DEFENCE);
+	private static Set<Integer> anims(String group) {
+		return ANIMS.getOrDefault(group, Collections.emptySet());
+	}
 
-	/**
-	 * The subset of {@link #NEVER_JUDGE_ANIMS} that GRANTS Magic XP (alchemy,
-	 * superheat, telegrab, teleports, enchants). Their XP drop must never
-	 * trigger a pardon — otherwise a missed forbidden melee swing could be
-	 * erased by a quick alch.
-	 */
-	private static final Set<Integer> MAGIC_UTILITY_ANIMS = Set.of(
-		AnimationID.HUMAN_CASTLOWLVLALCHEMY,
-		AnimationID.HUMAN_CASTHIGHLVLALCHEMY,
-		AnimationID.HUMAN_CASTLOWLVLALCHEMY_FIRE,
-		AnimationID.HUMAN_CASTHIGHLVLALCHEMY_FIRE,
-		AnimationID.HUMAN_CASTSUPERHEATITEM,
-		AnimationID.HUMAN_CASTTELEGRAB,
-		AnimationID.HUMAN_CASTTELEPORT,
-		AnimationID.HUMAN_CASTTELEPORT_REVERSE,
-		AnimationID.HUMAN_CAST2_TELEPORT,
-		AnimationID.HUMAN_CAST_ENCHANTRING,
-		AnimationID.HUMAN_CASTING_TELE_BLOCK,
-		AnimationID.HUMAN_CASTING_TELE_BLOCK_STAFF,
-		AnimationID.HUMAN_CASTING_TELE_BLOCK_STAFF_WALKMERGE,
-		// the self-buffs pay Magic XP too, so they belong here as well: without
-		// it, resurrecting a thrall one tick after a genuine forbidden sword
-		// swing would hand out a pardon the swing never earned
-		AnimationID.HUMAN_SPELLCAST_RESURRECT,
-		AnimationID.HUMAN_SPELLCAST_SHADOWVEIL,
-		AnimationID.HUMAN_CAST_VILEVIGOUR,
-		AnimationID.HUMAN_CAST_OFFERING,
-		AnimationID.HUMAN_CAST_SELFIMBUE,
-		AnimationID.HUMAN_CASTHEAL,
-		AnimationID.HUMAN_CASTCHARGEORB);
+	private static final Set<Integer> OFFENSIVE_MAGIC_ANIMS = anims("offensiveMagic");
+	private static final Set<Integer> NEVER_JUDGE_ANIMS = anims("neverJudge");
+	private static final Set<Integer> MAGIC_UTILITY_ANIMS = anims("magicUtility");
 
-	public interface AttackListener
-	{
+	public interface AttackListener {
 		/** One offensive action, judged at its own tick. */
 		void onAttack(AttackStyle style, int tick);
 
@@ -225,8 +125,7 @@ public class StyleTracker
 		 * A stance-sourced verdict at judgedTick was retracted: the delayed
 		 * Magic XP drop proved the attack was actually a spell cast.
 		 */
-		default void onAttackPardoned(int judgedTick)
-		{
+		default void onAttackPardoned(int judgedTick) {
 		}
 	}
 
@@ -243,19 +142,12 @@ public class StyleTracker
 	private int lastJudgedTick = -1;
 
 	/** One judged attack, kept until it falls out of the pardon window. */
-	static final class Verdict
-	{
+	@RequiredArgsConstructor
+	static final class Verdict {
 		final int tick;
 		final AttackStyle style;
 		final JudgementSource source;
 		boolean pardoned;
-
-		Verdict(int tick, AttackStyle style, JudgementSource source)
-		{
-			this.tick = tick;
-			this.style = style;
-			this.source = source;
-		}
 	}
 
 	/**
@@ -301,35 +193,23 @@ public class StyleTracker
 	private long lastRangedXp = -1;
 	private long lastMagicXp = -1;
 
-	@Inject
-	public StyleTracker(Client client)
-	{
-		this.client = client;
-	}
-
-	public void addListener(AttackListener listener)
-	{
-		if (!listeners.contains(listener))
-		{
+	public void addListener(AttackListener listener) {
+		if (!listeners.contains(listener)) {
 			listeners.add(listener);
 		}
 	}
 
-	public void removeListener(AttackListener listener)
-	{
+	public void removeListener(AttackListener listener) {
 		listeners.remove(listener);
 	}
 
-	public int currentTick()
-	{
+	public int currentTick() {
 		return tick;
 	}
 
 	@Subscribe
-	public void onGameStateChanged(GameStateChanged event)
-	{
-		if (event.getGameState() == GameState.LOGGED_IN)
-		{
+	public void onGameStateChanged(GameStateChanged event) {
+		if (event.getGameState() == GameState.LOGGED_IN) {
 			settleUntilTick = tick + LOGIN_SETTLE_TICKS;
 			lastAttackXp = -1;
 			lastStrengthXp = -1;
@@ -343,35 +223,29 @@ public class StyleTracker
 	}
 
 	@Subscribe
-	public void onGameTick(GameTick event)
-	{
+	public void onGameTick(GameTick event) {
 		tick++;
 	}
 
 	@Subscribe
-	public void onHitsplatApplied(HitsplatApplied event)
-	{
-		if (event.getActor() == client.getLocalPlayer())
-		{
+	public void onHitsplatApplied(HitsplatApplied event) {
+		if (event.getActor() == client.getLocalPlayer()) {
 			lastDamagedTick = tick;
 		}
 	}
 
 	@Subscribe
-	public void onMenuOptionClicked(MenuOptionClicked event)
-	{
+	public void onMenuOptionClicked(MenuOptionClicked event) {
 		MenuAction action = event.getMenuAction();
 		if ((action == MenuAction.WIDGET_TARGET_ON_NPC || action == MenuAction.WIDGET_TARGET_ON_PLAYER)
-			&& event.getMenuOption() != null && event.getMenuOption().startsWith("Cast"))
-		{
+			&& event.getMenuOption() != null && event.getMenuOption().startsWith("Cast")) {
 			// a manual spell cast was just clicked — the upcoming attack on
 			// THIS target is magic (a newer Cast click simply re-marks)
 			castMarkTick = tick;
 			castMarkTarget = event.getMenuEntry() == null ? null : event.getMenuEntry().getActor();
 			return;
 		}
-		if (castMarkTick >= 0 && supersedesCast(action))
-		{
+		if (castMarkTick >= 0 && supersedesCast(action)) {
 			// the player changed their mind — walked away, attacked something
 			// the normal way, picked something up — the pending cast is dead
 			clearCastMark();
@@ -379,28 +253,22 @@ public class StyleTracker
 	}
 
 	/** Clicks that abandon a pending manual cast (widget clicks — eat, spellbook — do not). */
-	private static boolean supersedesCast(MenuAction action)
-	{
-		if (action == null)
-		{
+	private static boolean supersedesCast(MenuAction action) {
+		if (action == null) {
 			return false;
 		}
-		if (action == MenuAction.WALK)
-		{
+		if (action == MenuAction.WALK) {
 			return true;
 		}
 		String name = action.name();
 		return name.startsWith("NPC_") || name.startsWith("PLAYER_") || name.startsWith("GROUND_ITEM_");
 	}
 
-	private boolean castMarkActiveOn(@Nullable Actor interacting)
-	{
-		if (castMarkTick < 0 || tick - castMarkTick > CAST_MARK_CAP_TICKS)
-		{
+	private boolean castMarkActiveOn(@Nullable Actor interacting) {
+		if (castMarkTick < 0 || tick - castMarkTick > CAST_MARK_CAP_TICKS) {
 			return false;
 		}
-		if (castMarkTarget == null)
-		{
+		if (castMarkTarget == null) {
 			// target unresolvable at click time — fall back to the old short
 			// TTL against whatever we are now interacting with
 			return interacting != null && tick - castMarkTick <= CAST_MARK_UNBOUND_TTL_TICKS;
@@ -408,8 +276,7 @@ public class StyleTracker
 		return castMarkTarget == interacting;
 	}
 
-	private void clearCastMark()
-	{
+	private void clearCastMark() {
 		castMarkTick = -1;
 		castMarkTarget = null;
 	}
@@ -421,31 +288,25 @@ public class StyleTracker
 	 * taint its own kill.
 	 */
 	@Subscribe
-	public void onAnimationChanged(AnimationChanged event)
-	{
-		if (event.getActor() != client.getLocalPlayer() || tick < settleUntilTick || tick == lastJudgedTick)
-		{
+	public void onAnimationChanged(AnimationChanged event) {
+		if (event.getActor() != client.getLocalPlayer() || tick < settleUntilTick || tick == lastJudgedTick) {
 			return;
 		}
 		int animation = client.getLocalPlayer().getAnimation();
 		Actor interacting = client.getLocalPlayer().getInteracting();
-		if (animation == -1 || interacting == null)
-		{
+		if (animation == -1 || interacting == null) {
 			return;
 		}
-		if (NEVER_JUDGE_ANIMS.contains(animation))
-		{
+		if (NEVER_JUDGE_ANIMS.contains(animation)) {
 			// utility cast / consumable / block pose — not an attack, and the
 			// pending Cast mark (if any) survives untouched
-			if (MAGIC_UTILITY_ANIMS.contains(animation))
-			{
+			if (MAGIC_UTILITY_ANIMS.contains(animation)) {
 				lastUtilityMagicTick = tick;
 			}
 			return;
 		}
 		boolean markMatch = castMarkActiveOn(interacting);
-		if (OFFENSIVE_MAGIC_ANIMS.contains(animation))
-		{
+		if (OFFENSIVE_MAGIC_ANIMS.contains(animation)) {
 			// unambiguous spell cast: magic no matter the stance, and provably
 			// not a block animation — so it is judged even inside the damage
 			// window below
@@ -454,23 +315,20 @@ public class StyleTracker
 			judge(AttackStyle.MAGIC, JudgementSource.ANIM);
 			return;
 		}
-		if (tick - lastDamagedTick <= 1)
-		{
+		if (tick - lastDamagedTick <= 1) {
 			// almost certainly the BLOCK animation from the hit we just took —
 			// never judge it (the XP path still catches a real wrong-style
 			// attack that lands damage on the same tick)
 			return;
 		}
-		if (markMatch)
-		{
+		if (markMatch) {
 			logVerdict(animation, AttackStyle.MAGIC, JudgementSource.MARK, true);
 			clearCastMark();
 			judge(AttackStyle.MAGIC, JudgementSource.MARK);
 			return;
 		}
 		AttackStyle style = predictStyle();
-		if (style != null)
-		{
+		if (style != null) {
 			logVerdict(animation, style, JudgementSource.STANCE, false);
 			judge(style, JudgementSource.STANCE);
 		}
@@ -484,13 +342,11 @@ public class StyleTracker
 	 * checks whether it CONTRADICTS a recent stance verdict and pardons it.
 	 */
 	@Subscribe
-	public void onStatChanged(StatChanged event)
-	{
+	public void onStatChanged(StatChanged event) {
 		AttackStyle xpStyle;
 		long previous;
 		long current = event.getXp();
-		switch (event.getSkill())
-		{
+		switch (event.getSkill()) {
 			case ATTACK:
 				previous = lastAttackXp;
 				lastAttackXp = current;
@@ -514,20 +370,16 @@ public class StyleTracker
 			default:
 				return; // Defence/HP are shared across styles — never evidence
 		}
-		if (previous < 0 || current <= previous || tick < settleUntilTick)
-		{
+		if (previous < 0 || current <= previous || tick < settleUntilTick) {
 			return; // baseline settle or no gain
 		}
-		if (xpStyle == AttackStyle.MAGIC)
-		{
+		if (xpStyle == AttackStyle.MAGIC) {
 			maybePardonStanceVerdict();
 		}
-		else
-		{
+		else {
 			lastMeleeRangedXpTick = tick;
 		}
-		if (lastJudgedTick >= 0 && tick - lastJudgedTick <= XP_FALLBACK_QUIET_TICKS)
-		{
+		if (lastJudgedTick >= 0 && tick - lastJudgedTick <= XP_FALLBACK_QUIET_TICKS) {
 			return; // the animation path already judged this attack
 		}
 		log.debug("style verdict: tick={} skill={} verdict={} source=XP", tick, event.getSkill(), xpStyle);
@@ -540,25 +392,20 @@ public class StyleTracker
 	 * XP, and not explained by a utility cast, that verdict was wrong — the
 	 * "attack" was a manual cast judged from a stale melee stance. Retract it.
 	 */
-	private void maybePardonStanceVerdict()
-	{
+	private void maybePardonStanceVerdict() {
 		Verdict verdict = pardonTarget(recentVerdicts, tick, lastMeleeRangedXpTick,
 			lastUtilityMagicTick);
-		if (verdict == null)
-		{
+		if (verdict == null) {
 			return;
 		}
 		verdict.pardoned = true;
 		log.debug("style pardon: retracting {} verdict from tick {} (magic xp at tick {})",
 			verdict.style, verdict.tick, tick);
-		for (AttackListener listener : new ArrayList<>(listeners))
-		{
-			try
-			{
+		for (AttackListener listener : new ArrayList<>(listeners)) {
+			try {
 				listener.onAttackPardoned(verdict.tick);
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				log.warn("attack listener failed", e);
 			}
 		}
@@ -579,13 +426,10 @@ public class StyleTracker
 	 */
 	@Nullable
 	static Verdict pardonTarget(Iterable<Verdict> recent, int tick, int lastMeleeRangedXpTick,
-		int lastUtilityMagicTick)
-	{
-		for (Verdict verdict : recent)
-		{
+		int lastUtilityMagicTick) {
+		for (Verdict verdict : recent) {
 			if (shouldPardon(verdict.source, verdict.style, verdict.pardoned, verdict.tick,
-				tick, lastMeleeRangedXpTick, lastUtilityMagicTick))
-			{
+				tick, lastMeleeRangedXpTick, lastUtilityMagicTick)) {
 				return verdict;
 			}
 		}
@@ -601,8 +445,7 @@ public class StyleTracker
 	 * utility cast proves nothing about combat.
 	 */
 	static boolean shouldPardon(JudgementSource source, AttackStyle style, boolean alreadyPardoned,
-		int judgedTick, int tick, int lastMeleeRangedXpTick, int lastUtilityMagicTick)
-	{
+		int judgedTick, int tick, int lastMeleeRangedXpTick, int lastUtilityMagicTick) {
 		return source == JudgementSource.STANCE
 			&& (style == AttackStyle.MELEE || style == AttackStyle.RANGED)
 			&& !alreadyPardoned
@@ -612,55 +455,44 @@ public class StyleTracker
 			&& tick - lastUtilityMagicTick > 1;
 	}
 
-	private void judge(AttackStyle style, JudgementSource source)
-	{
+	private void judge(AttackStyle style, JudgementSource source) {
 		lastJudgedTick = tick;
 		// prune first, so the cap can only ever discard verdicts that are still
 		// young enough to matter — and at one judgement per tick over a 5-tick
 		// window it never reaches the cap in the first place
 		while (!recentVerdicts.isEmpty()
-			&& tick - recentVerdicts.peekFirst().tick > PARDON_WINDOW_TICKS)
-		{
+			&& tick - recentVerdicts.peekFirst().tick > PARDON_WINDOW_TICKS) {
 			recentVerdicts.pollFirst();
 		}
 		recentVerdicts.addLast(new Verdict(tick, style, source));
-		while (recentVerdicts.size() > MAX_RECENT_VERDICTS)
-		{
+		while (recentVerdicts.size() > MAX_RECENT_VERDICTS) {
 			recentVerdicts.pollFirst();
 		}
 		fire(style, tick);
 	}
 
-	private void fire(AttackStyle style, int judgedTick)
-	{
-		for (AttackListener listener : new ArrayList<>(listeners))
-		{
-			try
-			{
+	private void fire(AttackStyle style, int judgedTick) {
+		for (AttackListener listener : new ArrayList<>(listeners)) {
+			try {
 				listener.onAttack(style, judgedTick);
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				log.warn("attack listener failed", e);
 			}
 		}
 	}
 
-	private void logVerdict(int animation, AttackStyle verdict, JudgementSource source, boolean markMatch)
-	{
-		if (!log.isDebugEnabled())
-		{
+	private void logVerdict(int animation, AttackStyle verdict, JudgementSource source, boolean markMatch) {
+		if (!log.isDebugEnabled()) {
 			return;
 		}
 		int category = -1;
 		int comMode = -1;
-		try
-		{
+		try {
 			category = client.getVarbitValue(VarbitID.COMBAT_WEAPON_CATEGORY);
 			comMode = client.getVarpValue(VarPlayerID.COM_MODE);
 		}
-		catch (Exception ignored)
-		{
+		catch (Exception ignored) {
 		}
 		log.debug("style verdict: tick={} anim={} category={} comMode={} verdict={} source={}"
 				+ " markTick={} markMatch={} lastDamagedTick={}",
@@ -669,43 +501,36 @@ public class StyleTracker
 
 	/** The style the next attack would use, or null when unresolvable. */
 	@Nullable
-	public AttackStyle predictStyle()
-	{
-		try
-		{
+	public AttackStyle predictStyle() {
+		try {
 			int category = client.getVarbitValue(VarbitID.COMBAT_WEAPON_CATEGORY);
 			int comMode = client.getVarpValue(VarPlayerID.COM_MODE);
 			boolean defensiveAutocast = client.getVarbitValue(VarbitID.AUTOCAST_DEFMODE) == 1;
 			return resolve(category, comMode, defensiveAutocast, this::styleNameFor);
 		}
-		catch (Exception e)
-		{
+		catch (Exception e) {
 			return null;
 		}
 	}
 
 	/** Lookup of the style-name param for (category, styleIndex); null when absent. */
 	@Nullable
-	private String styleNameFor(int category, int styleIndex)
-	{
+	private String styleNameFor(int category, int styleIndex) {
 		EnumComposition weaponStyles = client.getEnum(EnumID.WEAPON_STYLES);
 		int structsEnumId = weaponStyles.getIntValue(category);
-		if (structsEnumId == -1)
-		{
+		if (structsEnumId == -1) {
 			return null;
 		}
 		EnumComposition structs = client.getEnum(structsEnumId);
 		int[] structIds = structs.getIntVals();
-		if (styleIndex < 0 || styleIndex >= structIds.length)
-		{
+		if (styleIndex < 0 || styleIndex >= structIds.length) {
 			return null;
 		}
 		StructComposition struct = client.getStructComposition(structIds[styleIndex]);
 		return struct == null ? null : struct.getStringValue(ParamID.ATTACK_STYLE_NAME);
 	}
 
-	interface StyleNameLookup
-	{
+	interface StyleNameLookup {
 		@Nullable
 		String get(int category, int styleIndex);
 	}
@@ -718,20 +543,16 @@ public class StyleTracker
 	 * first style is "Casting" is all-magic in every mode.
 	 */
 	@Nullable
-	static AttackStyle resolve(int category, int comMode, boolean defensiveAutocast, StyleNameLookup lookup)
-	{
-		if (comMode == 4)
-		{
+	static AttackStyle resolve(int category, int comMode, boolean defensiveAutocast, StyleNameLookup lookup) {
+		if (comMode == 4) {
 			// the autocast slot; defensiveAutocast irrelevant to style
 			return AttackStyle.MAGIC;
 		}
-		if (category == CAT_BLUE_MOON_SPEAR || category == CAT_PARTISAN)
-		{
+		if (category == CAT_BLUE_MOON_SPEAR || category == CAT_PARTISAN) {
 			// client special-cases these; their non-autocast styles are melee
 			return AttackStyle.MELEE;
 		}
-		if ("Casting".equals(lookup.get(category, 0)))
-		{
+		if ("Casting".equals(lookup.get(category, 0))) {
 			// powered stave: every combat mode of this category is a cast
 			return AttackStyle.MAGIC;
 		}
@@ -740,10 +561,8 @@ public class StyleTracker
 	}
 
 	@Nullable
-	static AttackStyle mapStyleName(String name)
-	{
-		switch (name)
-		{
+	static AttackStyle mapStyleName(String name) {
+		switch (name) {
 			case "Accurate":
 			case "Aggressive":
 			case "Defensive":

@@ -21,6 +21,8 @@ import java.util.Map;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
@@ -57,8 +59,8 @@ import net.runelite.client.party.messages.UserSync;
  */
 @Slf4j
 @Singleton
-public class PartyPresenceService
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class PartyPresenceService {
 	/** A remote display name is drawn in a fixed-width sidebar; bound it. */
 	private static final int NAME_MAX = 40;
 	/**
@@ -69,16 +71,14 @@ public class PartyPresenceService
 	private static final char SEP = '|';
 
 	@Value
-	private static class Heard
-	{
+	private static class Heard {
 		GachaPresenceMessage message;
 		int heardAtTick;
 	}
 
 	/** One rendered line. Already sanitised — the UI trusts nothing itself. */
 	@Value
-	public static class Row
-	{
+	public static class Row {
 		long memberId;
 		String name;
 		boolean loggedIn;
@@ -116,8 +116,7 @@ public class PartyPresenceService
 		BufferedImage avatar;
 
 		/** Nothing signed and nothing pending: this member can join a roll. */
-		public boolean isEligibleToRoll()
-		{
+		public boolean isEligibleToRoll() {
 			return heard && loggedIn && killsRequired <= 0 && !undecidedOffers;
 		}
 	}
@@ -132,8 +131,7 @@ public class PartyPresenceService
 	 * unrelated lines that happen to repeat a monster name twice.
 	 */
 	@Value
-	public static class Group
-	{
+	public static class Group {
 		/** The shared contract's proposal id, or null for a solo/idle member. */
 		@Nullable
 		Long contractId;
@@ -157,13 +155,11 @@ public class PartyPresenceService
 		int killsRequired;
 
 		/** A contract this member says is shared, however many are visible. */
-		public boolean isShared()
-		{
+		public boolean isShared() {
 			return contractId != null;
 		}
 
-		public boolean isOnContract()
-		{
+		public boolean isOnContract() {
 			return killsRequired > 0;
 		}
 	}
@@ -183,6 +179,7 @@ public class PartyPresenceService
 	private int lastSentTick;
 	private boolean wasEnabled;
 	/** Published from the client thread, read from the EDT. */
+	@Getter
 	private volatile List<Row> rows = Collections.emptyList();
 	private String lastRowSignature;
 
@@ -190,36 +187,16 @@ public class PartyPresenceService
 	@Nullable
 	private Runnable refreshHook;
 
-	@Inject
-	public PartyPresenceService(Client client, ClientThread clientThread, PartyService partyService,
-		TaskService taskService, GachaStateService stateService,
-		AccountKeyService accountKeyService,
-		GachamanConfig config)
-	{
-		this.client = client;
-		this.clientThread = clientThread;
-		this.partyService = partyService;
-		this.taskService = taskService;
-		this.stateService = stateService;
-		this.accountKeyService = accountKeyService;
-		this.config = config;
-	}
-
-	public void setRefreshHook(@Nullable Runnable hook)
-	{
+	public void setRefreshHook(@Nullable Runnable hook) {
 		this.refreshHook = hook;
 	}
 
-	private void refreshPanel()
-	{
-		if (refreshHook != null)
-		{
-			try
-			{
+	private void refreshPanel() {
+		if (refreshHook != null) {
+			try {
 				refreshHook.run();
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				log.debug("panel refresh hook failed", e);
 			}
 		}
@@ -237,8 +214,7 @@ public class PartyPresenceService
 	 */
 	static String signature(@Nullable String allowedStyle, int combatLevel,
 		@Nullable String taskName, int killsDone, int killsRequired, boolean tainted,
-		@Nullable String accountKey, boolean undecidedOffers, @Nullable Long partyContractId)
-	{
+		@Nullable String accountKey, boolean undecidedOffers, @Nullable Long partyContractId) {
 		return (allowedStyle == null ? "" : allowedStyle) + SEP + combatLevel + SEP
 			+ (taskName == null ? "" : taskName) + SEP + killsDone + SEP
 			+ killsRequired + SEP + tainted + SEP
@@ -263,30 +239,24 @@ public class PartyPresenceService
 	 * quiet, and the carry clause has not fired yet. Saying "solo" there would
 	 * be a guess about someone else's state.
 	 */
-	public static List<Group> group(@Nullable List<Row> rows)
-	{
-		if (rows == null || rows.isEmpty())
-		{
+	public static List<Group> group(@Nullable List<Row> rows) {
+		if (rows == null || rows.isEmpty()) {
 			return Collections.emptyList();
 		}
 		// LinkedHashMap: the row order is already the display order, so the
 		// group order falls out of first appearance and self stays on top
 		Map<String, List<Row>> buckets = new LinkedHashMap<>();
-		for (Row row : rows)
-		{
+		for (Row row : rows) {
 			buckets.computeIfAbsent(groupKey(row), k -> new ArrayList<>()).add(row);
 		}
 		List<Group> out = new ArrayList<>(buckets.size());
-		for (List<Row> members : buckets.values())
-		{
+		for (List<Row> members : buckets.values()) {
 			Long contractId = null;
 			String taskName = null;
 			int done = 0;
 			int required = 0;
-			for (Row row : members)
-			{
-				if (row.getKillsRequired() > 0)
-				{
+			for (Row row : members) {
+				if (row.getKillsRequired() > 0) {
 					contractId = row.getPartyContractId();
 					taskName = row.getTaskName();
 					done = Math.max(done, row.getKillsDone());
@@ -307,10 +277,8 @@ public class PartyPresenceService
 	 * {@link #signature}: without it a contract id ending in 7 on "Goblin"
 	 * and one ending in 70 on "oblin" would flatten to one bucket.
 	 */
-	private static String groupKey(Row row)
-	{
-		if (row.getPartyContractId() != null && row.getKillsRequired() > 0)
-		{
+	private static String groupKey(Row row) {
+		if (row.getPartyContractId() != null && row.getKillsRequired() > 0) {
 			return "c" + SEP + row.getPartyContractId() + SEP
 				+ (row.getTaskName() == null ? "" : row.getTaskName());
 		}
@@ -318,26 +286,21 @@ public class PartyPresenceService
 	}
 
 	static boolean shouldBroadcast(int nowTick, int lastSentTick,
-		@Nullable String nowSignature, @Nullable String lastSignature)
-	{
-		if (lastSignature == null || !lastSignature.equals(nowSignature))
-		{
+		@Nullable String nowSignature, @Nullable String lastSignature) {
+		if (lastSignature == null || !lastSignature.equals(nowSignature)) {
 			return true;
 		}
 		// a relog or world hop restarts the client's tick counter: without this
 		// the heartbeat would wait out a now-negative interval and we would look
 		// silent to the whole party for as long as the old count was high
-		if (nowTick < lastSentTick)
-		{
+		if (nowTick < lastSentTick) {
 			return true;
 		}
 		return nowTick - lastSentTick >= Tuning.PARTY_PRESENCE_HEARTBEAT_TICKS;
 	}
 
-	static boolean isStale(int nowTick, int lastHeardTick)
-	{
-		if (nowTick < lastHeardTick)
-		{
+	static boolean isStale(int nowTick, int lastHeardTick) {
+		if (nowTick < lastHeardTick) {
 			// OUR clock restarted, not theirs — do not blame the sender. The
 			// asymmetry with shouldBroadcast is deliberate: we re-announce
 			// ourselves, we do not grey out the entire party.
@@ -348,15 +311,12 @@ public class PartyPresenceService
 
 	/** Trust boundary: a remote name is drawn, so it cannot be unbounded. */
 	@Nullable
-	static String clip(@Nullable String text, int max)
-	{
-		if (text == null)
-		{
+	static String clip(@Nullable String text, int max) {
+		if (text == null) {
 			return null;
 		}
 		String trimmed = text.trim();
-		if (trimmed.isEmpty())
-		{
+		if (trimmed.isEmpty()) {
 			return null;
 		}
 		return trimmed.length() <= max ? trimmed : trimmed.substring(0, max);
@@ -372,24 +332,20 @@ public class PartyPresenceService
 	 * it were somebody's RSN. Treat it as absent and use the same wording as a
 	 * genuinely missing name.
 	 */
-	static String memberName(@Nullable String displayName)
-	{
+	static String memberName(@Nullable String displayName) {
 		String clipped = clip(displayName, NAME_MAX);
 		return clipped == null || "<unknown>".equals(clipped) ? "A party member" : clipped;
 	}
 
 	/** public: PartyTab lives in another package and sizes its bar from this. */
-	public static double progressFraction(int killsDone, int killsRequired)
-	{
-		if (killsRequired <= 0)
-		{
+	public static double progressFraction(int killsDone, int killsRequired) {
+		if (killsRequired <= 0) {
 			return 0;
 		}
 		return Math.max(0, Math.min(1, killsDone / (double) killsRequired));
 	}
 
-	private static int clamp(int v, int lo, int hi)
-	{
+	private static int clamp(int v, int lo, int hi) {
 		return Math.max(lo, Math.min(hi, v));
 	}
 
@@ -398,14 +354,11 @@ public class PartyPresenceService
 	// =====================================================================
 
 	@Subscribe
-	public void onGameTick(GameTick tick)
-	{
+	public void onGameTick(GameTick tick) {
 		int now = client.getTickCount();
 		boolean enabled = config.partyRollsEnabled() && safeInParty();
-		if (!enabled)
-		{
-			if (wasEnabled)
-			{
+		if (!enabled) {
+			if (wasEnabled) {
 				// leaving the party (or switching the setting off) must not leave
 				// a frozen roster on the page, and re-joining has to re-announce
 				// at once rather than sit out a heartbeat nobody heard
@@ -418,8 +371,7 @@ public class PartyPresenceService
 		}
 		wasEnabled = true;
 		GachaState state = stateService.get();
-		if (state == null)
-		{
+		if (state == null) {
 			return;
 		}
 		GachaPresenceMessage mine = localPresence(state);
@@ -427,8 +379,7 @@ public class PartyPresenceService
 			mine.getActiveTaskName(), mine.getKillsDone(), mine.getKillsRequired(),
 			mine.isTainted(), mine.getAccountKey(), mine.isUndecidedOffers(),
 			mine.getPartyContractId());
-		if (shouldBroadcast(now, lastSentTick, sig, lastSignature) && safeSend(mine))
-		{
+		if (shouldBroadcast(now, lastSentTick, sig, lastSignature) && safeSend(mine)) {
 			lastSignature = sig;
 			lastSentTick = now;
 		}
@@ -436,8 +387,7 @@ public class PartyPresenceService
 	}
 
 	/** Reads client skill levels, so client-thread only — onGameTick guarantees it. */
-	private GachaPresenceMessage localPresence(GachaState state)
-	{
+	private GachaPresenceMessage localPresence(GachaState state) {
 		ActiveTask task = state.getActiveTask();
 		return new GachaPresenceMessage(
 			state.getAllowedStyle(),
@@ -459,10 +409,8 @@ public class PartyPresenceService
 	// =====================================================================
 
 	@Subscribe
-	public void onGachaPresenceMessage(GachaPresenceMessage msg)
-	{
-		if (msg == null || isSelfEcho(msg.getMemberId()))
-		{
+	public void onGachaPresenceMessage(GachaPresenceMessage msg) {
+		if (msg == null || isSelfEcho(msg.getMemberId())) {
 			return;
 		}
 		// store only: the next tick republishes, at most 600ms later, and one
@@ -472,8 +420,7 @@ public class PartyPresenceService
 	}
 
 	@Subscribe
-	public void onUserSync(UserSync event)
-	{
+	public void onUserSync(UserSync event) {
 		// a member just joined and asked the party to re-announce: drop the
 		// last-sent signature so the very next tick sends, instead of leaving
 		// the joiner on an empty page until our heartbeat comes round
@@ -481,8 +428,7 @@ public class PartyPresenceService
 	}
 
 	@Subscribe
-	public void onUserPart(UserPart event)
-	{
+	public void onUserPart(UserPart event) {
 		clientThread.invokeLater(() -> presence.remove(event.getMemberId()));
 	}
 
@@ -491,26 +437,21 @@ public class PartyPresenceService
 	// =====================================================================
 
 	/** Client thread only. Sanitises every remote value on the way in. */
-	private List<Row> buildRows(int now, GachaPresenceMessage mine)
-	{
+	private List<Row> buildRows(int now, GachaPresenceMessage mine) {
 		long selfId = safeMemberIdOrZero();
 		List<PartyMember> members;
-		try
-		{
+		try {
 			members = new ArrayList<>(partyService.getMembers());
 		}
-		catch (Exception e)
-		{
+		catch (Exception e) {
 			log.debug("party roster read failed", e);
 			return rows;
 		}
 		List<Row> out = new ArrayList<>(members.size());
-		for (PartyMember member : members)
-		{
+		for (PartyMember member : members) {
 			long id = member.getMemberId();
 			String name = memberName(member.getDisplayName());
-			if (id == selfId)
-			{
+			if (id == selfId) {
 				// our own row reads the same source we send, not our echo (which
 				// never arrives): the page shows exactly what the party is told
 				out.add(new Row(id, name, true, true, true,
@@ -550,11 +491,9 @@ public class PartyPresenceService
 		return Collections.unmodifiableList(out);
 	}
 
-	private void publishRows(List<Row> next)
-	{
+	private void publishRows(List<Row> next) {
 		StringBuilder sb = new StringBuilder(next.size() * 24);
-		for (Row r : next)
-		{
+		for (Row r : next) {
 			sb.append(r.getMemberId()).append(SEP)
 				.append(r.isHeard()).append(SEP)
 				.append(r.getStyle() == null ? "" : r.getStyle().name()).append(SEP)
@@ -576,8 +515,7 @@ public class PartyPresenceService
 		// always publish: the EDT must be able to read the current list even when
 		// it happens to render identically
 		rows = next;
-		if (!sig.equals(lastRowSignature))
-		{
+		if (!sig.equals(lastRowSignature)) {
 			// GachamanPanel.refresh() marks every tab dirty and rebuilds the
 			// selected one, so poking it every tick would rebuild whichever tab
 			// the player is actually looking at ~1.7x/second for no visible change
@@ -586,11 +524,6 @@ public class PartyPresenceService
 		}
 	}
 
-	/** EDT-safe: an immutable list published from the client thread. */
-	public List<Row> getRows()
-	{
-		return rows;
-	}
 
 	/**
 	 * Profile switch / logout: the line we last broadcast describes a character
@@ -598,8 +531,7 @@ public class PartyPresenceService
 	 * their lines are still true and every one of them re-heartbeats within
 	 * seconds anyway, so clearing it would only blank the page for no reason.
 	 */
-	public void reset()
-	{
+	public void reset() {
 		lastSignature = null;
 		lastSentTick = 0;
 	}
@@ -610,52 +542,41 @@ public class PartyPresenceService
 	// avoid)
 	// =====================================================================
 
-	private boolean safeInParty()
-	{
-		try
-		{
+	private boolean safeInParty() {
+		try {
 			return partyService.isInParty();
 		}
-		catch (Exception e)
-		{
+		catch (Exception e) {
 			return false;
 		}
 	}
 
 	@Nullable
-	private PartyMember safeLocalMember()
-	{
-		try
-		{
+	private PartyMember safeLocalMember() {
+		try {
 			return partyService.getLocalMember();
 		}
-		catch (Exception e)
-		{
+		catch (Exception e) {
 			return null;
 		}
 	}
 
-	private long safeMemberIdOrZero()
-	{
+	private long safeMemberIdOrZero() {
 		PartyMember local = safeLocalMember();
 		return local == null ? 0 : local.getMemberId();
 	}
 
-	private boolean isSelfEcho(long memberId)
-	{
+	private boolean isSelfEcho(long memberId) {
 		PartyMember local = safeLocalMember();
 		return local == null || memberId == local.getMemberId();
 	}
 
-	private boolean safeSend(PartyMemberMessage msg)
-	{
-		try
-		{
+	private boolean safeSend(PartyMemberMessage msg) {
+		try {
 			partyService.send(msg);
 			return true;
 		}
-		catch (Exception e)
-		{
+		catch (Exception e) {
 			log.debug("presence send failed", e);
 			return false;
 		}

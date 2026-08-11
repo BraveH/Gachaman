@@ -1,26 +1,38 @@
 package com.gachaman.ui.panel;
 
 import java.awt.image.BufferedImage;
-import javax.swing.ImageIcon;
+import java.io.IOException;
+import java.io.InputStream;
+import javax.imageio.ImageIO;
 import org.junit.Assert;
 import org.junit.Test;
 
 /**
- * The header's Ko-fi and GitHub icons are DRAWN rather than shipped as PNGs, which
- * means a geometry edit can quietly produce an empty or invisible glyph â€” Swing
- * renders a blank icon perfectly happily and nothing fails. These assertions are
- * the smoke alarm for that: coverage proves something was actually painted, and the
- * hover difference proves the hover variant is not silently identical.
+ * The header's Ko-fi and GitHub icons ship as PNGs authored by
+ * {@code com.gachaman.tools.IconArt}. Shipping them rather than painting them
+ * moves the failure mode: the glyph can no longer come out empty because of a
+ * geometry edit, but it CAN be missing from the jar, regenerated at the wrong
+ * size, or accidentally overwritten with a blank tile — and Swing renders a
+ * missing or empty icon perfectly happily while nothing fails.
  *
- * Deliberately NOT pixel-exact. Pinning the artwork would make every nudge to the
- * tail or the ears a test edit, which trains the habit of updating the expectation
- * instead of looking at the icon.
+ * <p>These assertions are the smoke alarm for that: the resource must resolve
+ * off the classpath, coverage proves the tile actually carries a mark, and the
+ * hover difference proves the two variants are not the same file twice.
+ *
+ * <p>Deliberately NOT pixel-exact. Pinning the artwork would make every nudge
+ * to the tail or the ears a test edit, which trains the habit of updating the
+ * expectation instead of looking at the icon.
  */
 public class HeaderLinkIconTest
 {
-	private static BufferedImage image(ImageIcon icon)
+	private static BufferedImage icon(String name) throws IOException
 	{
-		return (BufferedImage) icon.getImage();
+		try (InputStream in = HeaderLinkIconTest.class.getResourceAsStream(
+			"/com/gachaman/ui/" + name + ".png"))
+		{
+			Assert.assertNotNull("icon missing from the classpath: " + name, in);
+			return ImageIO.read(in);
+		}
 	}
 
 	/** Fraction of pixels that are not fully transparent. */
@@ -57,11 +69,11 @@ public class HeaderLinkIconTest
 	}
 
 	@Test
-	public void bothIconsAreSquareAndTheSameSize()
+	public void bothIconsAreSquareAndTheSameSize() throws IOException
 	{
 		// they sit side by side in the title row: a mismatch reads as misalignment
-		BufferedImage github = image(GachamanPanel.githubIcon(false));
-		BufferedImage kofi = image(GachamanPanel.kofiIcon(false));
+		BufferedImage github = icon("link-github");
+		BufferedImage kofi = icon("link-kofi");
 		Assert.assertEquals(github.getWidth(), github.getHeight());
 		Assert.assertEquals(kofi.getWidth(), kofi.getHeight());
 		Assert.assertEquals(github.getWidth(), kofi.getWidth());
@@ -69,44 +81,39 @@ public class HeaderLinkIconTest
 	}
 
 	@Test
-	public void theGithubMarkIsActuallyDrawn()
+	public void theGithubMarkIsActuallyDrawn() throws IOException
 	{
-		double covered = coverage(image(GachamanPanel.githubIcon(false)));
+		double covered = coverage(icon("link-github"));
 		Assert.assertTrue("the mark rendered as (nearly) nothing: " + covered, covered > 0.3);
 		Assert.assertTrue("the mark filled the whole tile, so no silhouette is readable: "
 			+ covered, covered < 0.9);
 	}
 
 	@Test
-	public void theKofiPlateIsOpaqueEdgeToEdge()
+	public void theKofiPlateIsOpaqueEdgeToEdge() throws IOException
 	{
 		// a rounded plate, so the corners are the only transparent pixels
-		double covered = coverage(image(GachamanPanel.kofiIcon(false)));
+		double covered = coverage(icon("link-kofi"));
 		Assert.assertTrue("the plate did not render: " + covered, covered > 0.85);
 	}
 
 	@Test
-	public void hoverVariantsDifferFromTheirRestingState()
+	public void hoverVariantsDifferFromTheirRestingState() throws IOException
 	{
-		// hover is the ONLY affordance these labels have â€” no border, no fill, no
-		// focus ring â€” so an identical hover icon makes them look unclickable
-		Assert.assertTrue(differingPixels(
-			image(GachamanPanel.githubIcon(false)),
-			image(GachamanPanel.githubIcon(true))) > 20);
-		Assert.assertTrue(differingPixels(
-			image(GachamanPanel.kofiIcon(false)),
-			image(GachamanPanel.kofiIcon(true))) > 20);
+		// hover is the ONLY affordance these labels have — no border, no fill, no
+		// focus ring — so an identical hover icon makes them look unclickable
+		Assert.assertTrue(differingPixels(icon("link-github"), icon("link-github-hover")) > 20);
+		Assert.assertTrue(differingPixels(icon("link-kofi"), icon("link-kofi-hover")) > 20);
 	}
 
 	@Test
-	public void repeatedCallsAreIdentical()
+	public void theSidebarIconShipsAndCarriesAMark() throws IOException
 	{
-		// drawn fresh per call rather than cached, so any accidental dependence on
-		// time, randomness or shared mutable state would show up as a flicker
-		Assert.assertEquals(0, differingPixels(
-			image(GachamanPanel.githubIcon(false)), image(GachamanPanel.githubIcon(false))));
-		Assert.assertEquals(0, differingPixels(
-			image(GachamanPanel.kofiIcon(true)), image(GachamanPanel.kofiIcon(true))));
+		// the one icon a player sees before opening anything; a missing resource
+		// here is a blank button in the RuneLite sidebar
+		BufferedImage sidebar = icon("panel-icon");
+		Assert.assertEquals(sidebar.getWidth(), sidebar.getHeight());
+		double covered = coverage(sidebar);
+		Assert.assertTrue("the sidebar icon is blank: " + covered, covered > 0.3);
 	}
 }
-

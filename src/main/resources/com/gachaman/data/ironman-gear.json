@@ -1,0 +1,15 @@
+{
+  "_comment": [
+    "Identity armour by account-type varbit value. Index 0 is a normal account, which",
+    "has none. Within each set the order is {helm, platebody, platelegs}."
+  ],
+  "sets": [
+    [],
+    ["Ironman helm", "Ironman platebody", "Ironman platelegs"],
+    ["Ultimate ironman helm", "Ultimate ironman platebody", "Ultimate ironman platelegs"],
+    ["Hardcore ironman helm", "Hardcore ironman platebody", "Hardcore ironman platelegs"],
+    ["Group ironman helm", "Group ironman platebody", "Group ironman platelegs"],
+    ["Hardcore group ironman helm", "Hardcore group ironman platebody", "Hardcore group ironman platelegs"],
+    ["Unranked group ironman helm", "Unranked group ironman platebody", "Unranked group ironman platelegs"]
+  ]
+}

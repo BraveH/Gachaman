@@ -23,6 +23,7 @@ import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import net.runelite.client.config.ConfigManager;
 
@@ -32,11 +33,10 @@ import net.runelite.client.config.ConfigManager;
  * biased toward unowned cards from sets the player has started.
  */
 @Singleton
-public class WeeklyShopService
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class WeeklyShopService {
 	@Value
-	public static class ShopSlot
-	{
+	public static class ShopSlot {
 		int slotIndex;
 		CardDefinition card;
 		int priceGc;
@@ -50,19 +50,7 @@ public class WeeklyShopService
 	private final SetTable setTable;
 	private final ConfigManager configManager;
 
-	@Inject
-	public WeeklyShopService(GachaStateService stateService, CreditSink creditSink,
-		CardDatabase cardDatabase, SetTable setTable, ConfigManager configManager)
-	{
-		this.stateService = stateService;
-		this.creditSink = creditSink;
-		this.cardDatabase = cardDatabase;
-		this.setTable = setTable;
-		this.configManager = configManager;
-	}
-
-	public String currentWeekKey()
-	{
+	public String currentWeekKey() {
 		LocalDate now = LocalDate.now(ZoneOffset.UTC);
 		return now.get(IsoFields.WEEK_BASED_YEAR) + "-W" + now.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR);
 	}
@@ -72,11 +60,9 @@ public class WeeklyShopService
 	 * recomputation — before or after purchases, across restarts — returns the
 	 * exact same 3 cards. No stored state.
 	 */
-	public List<ShopSlot> currentOffers()
-	{
+	public List<ShopSlot> currentOffers() {
 		GachaState state = stateService.get();
-		if (state == null || !cardDatabase.isReady())
-		{
+		if (state == null || !cardDatabase.isReady()) {
 			return Collections.emptyList();
 		}
 		String weekKey = currentWeekKey();
@@ -93,11 +79,9 @@ public class WeeklyShopService
 
 		List<CardDefinition> offers = new ArrayList<>(3);
 		Set<Integer> pickedIds = new HashSet<>();
-		while (offers.size() < 3 && offers.size() < all.size())
-		{
+		while (offers.size() < 3 && offers.size() < all.size()) {
 			CardDefinition pick = all.get(weekRng.nextInt(all.size()));
-			if (pickedIds.add(pick.getCardId()))
-			{
+			if (pickedIds.add(pick.getCardId())) {
 				offers.add(pick);
 			}
 		}
@@ -105,8 +89,7 @@ public class WeeklyShopService
 		Set<Integer> purchased = state.getWeeklyShopPurchases()
 			.getOrDefault(weekKey, Collections.emptySet());
 		List<ShopSlot> slots = new ArrayList<>(3);
-		for (int i = 0; i < offers.size(); i++)
-		{
+		for (int i = 0; i < offers.size(); i++) {
 			CardDefinition card = offers.get(i);
 			slots.add(new ShopSlot(i, card, Tuning.SHOP_PRICE_GC.get(card.getRarity()),
 				purchased.contains(i), ownedIds.contains(card.getCardId())));
@@ -115,16 +98,13 @@ public class WeeklyShopService
 	}
 
 	@Nullable
-	public OwnedCard purchase(int slotIndex)
-	{
+	public OwnedCard purchase(int slotIndex) {
 		List<ShopSlot> offers = currentOffers();
-		if (slotIndex < 0 || slotIndex >= offers.size())
-		{
+		if (slotIndex < 0 || slotIndex >= offers.size()) {
 			return null;
 		}
 		ShopSlot slot = offers.get(slotIndex);
-		if (slot.isPurchased() || !creditSink.spend(slot.getPriceGc()))
-		{
+		if (slot.isPurchased() || !creditSink.spend(slot.getPriceGc())) {
 			return null;
 		}
 		String weekKey = currentWeekKey();
@@ -142,8 +122,7 @@ public class WeeklyShopService
 		return card;
 	}
 
-	static long splitmix64(long seed)
-	{
+	static long splitmix64(long seed) {
 		long z = seed + 0x9E3779B97F4A7C15L;
 		z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
 		z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;

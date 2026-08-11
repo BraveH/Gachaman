@@ -4,8 +4,7 @@ import java.util.List;
 import lombok.Value;
 
 @Value
-public class TaskOffer
-{
+public class TaskOffer {
 	TaskDifficulty difficulty;
 	String monsterName;
 	int monsterCombatLevel;

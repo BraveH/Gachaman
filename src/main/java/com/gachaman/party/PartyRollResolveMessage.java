@@ -22,8 +22,7 @@ import net.runelite.client.party.messages.PartyMemberMessage;
 @EqualsAndHashCode(callSuper = false)
 @NoArgsConstructor
 @AllArgsConstructor
-public class PartyRollResolveMessage extends PartyMemberMessage
-{
+public class PartyRollResolveMessage extends PartyMemberMessage {
 	/** A strict majority of the party picked this one. Binds the whole party. */
 	public static final int MODE_MAJORITY = 0;
 	/** No majority, but one contract led on votes. Binds the voters only. */

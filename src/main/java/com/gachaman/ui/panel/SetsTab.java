@@ -17,7 +17,6 @@ import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JComponent;
-import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
 import net.runelite.client.ui.ColorScheme;
@@ -28,8 +27,7 @@ import net.runelite.client.ui.FontManager;
  * sets and silhouetted (darkened) names for the missing members.
  */
 @Singleton
-public class SetsTab extends JPanel
-{
+public class SetsTab extends JPanel {
 	private static final Color GOLD = new Color(230, 190, 80);
 	private static final Color SILHOUETTE = new Color(88, 84, 74);
 	private static final Color COMPLETE_BAR = new Color(120, 200, 120);
@@ -39,8 +37,7 @@ public class SetsTab extends JPanel
 	private final SetTable setTable;
 
 	@Inject
-	public SetsTab(GachaStateService stateService, CardDatabase cardDatabase, SetTable setTable)
-	{
+	public SetsTab(GachaStateService stateService, CardDatabase cardDatabase, SetTable setTable) {
 		this.stateService = stateService;
 		this.cardDatabase = cardDatabase;
 		this.setTable = setTable;
@@ -49,19 +46,16 @@ public class SetsTab extends JPanel
 		setBorder(new EmptyBorder(0, 0, 6, 0));
 	}
 
-	void rebuild()
-	{
+	void rebuild() {
 		removeAll();
 		GachaState state = stateService.get();
-		if (state == null)
-		{
+		if (state == null) {
 			add(GachamanPanel.centeredNote("Log in to view your sets."));
 			revalidate();
 			repaint();
 			return;
 		}
-		if (!cardDatabase.isReady() || setTable.getSets().isEmpty())
-		{
+		if (!cardDatabase.isReady() || setTable.getSets().isEmpty()) {
 			add(GachamanPanel.centeredNote("No sets available."));
 			revalidate();
 			repaint();
@@ -70,20 +64,16 @@ public class SetsTab extends JPanel
 
 		Set<Integer> ownedIds = new HashSet<>();
 		Set<String> ownedHoloTiers = new HashSet<>();
-		for (OwnedCard owned : state.getOwnedCards())
-		{
-			if (owned.isHologram())
-			{
+		for (OwnedCard owned : state.getOwnedCards()) {
+			if (owned.isHologram()) {
 				ownedHoloTiers.add(owned.getTierKey());
 			}
-			else
-			{
+			else {
 				ownedIds.add(owned.getCardId());
 			}
 		}
 
-		for (SetTable.CardSet set : setTable.getSets())
-		{
+		for (SetTable.CardSet set : setTable.getSets()) {
 			add(buildSetRow(state, set, ownedIds, ownedHoloTiers));
 			add(Box.createVerticalStrut(6));
 		}
@@ -92,23 +82,18 @@ public class SetsTab extends JPanel
 	}
 
 	private JPanel buildSetRow(GachaState state, SetTable.CardSet set,
-		Set<Integer> ownedIds, Set<String> ownedHoloTiers)
-	{
+		Set<Integer> ownedIds, Set<String> ownedHoloTiers) {
 		List<CardDefinition> members = cardDatabase.setMembers(set.getSetKey());
 		int ownedCount = 0;
 		StringBuilder missing = new StringBuilder();
-		for (CardDefinition member : members)
-		{
+		for (CardDefinition member : members) {
 			boolean owned = ownedIds.contains(member.getCardId())
 				|| (member.getTierKey() != null && ownedHoloTiers.contains(member.getTierKey()));
-			if (owned)
-			{
+			if (owned) {
 				ownedCount++;
 			}
-			else
-			{
-				if (missing.length() > 0)
-				{
+			else {
+				if (missing.length() > 0) {
 					missing.append(", ");
 				}
 				missing.append(member.getName());
@@ -119,8 +104,7 @@ public class SetsTab extends JPanel
 				&& members.size() >= set.getCardNames().size());
 
 		JPanel row = GachamanPanel.section(null);
-		if (completed)
-		{
+		if (completed) {
 			row.setBorder(BorderFactory.createCompoundBorder(
 				BorderFactory.createLineBorder(GOLD, 1),
 				new EmptyBorder(7, 7, 7, 7)));
@@ -149,17 +133,14 @@ public class SetsTab extends JPanel
 		row.add(Box.createVerticalStrut(4));
 
 		String perkText = SetPerkService.perkDescription(set.getPerk());
-		if (!perkText.isEmpty())
-		{
+		if (!perkText.isEmpty()) {
 			row.add(GachamanPanel.wrapped(perkText,
 				completed ? COMPLETE_BAR : ColorScheme.LIGHT_GRAY_COLOR));
 		}
-		if (members.size() < set.getCardNames().size())
-		{
+		if (members.size() < set.getCardNames().size()) {
 			row.add(GachamanPanel.smallLine("(some members unresolved)", ColorScheme.MEDIUM_GRAY_COLOR));
 		}
-		if (!completed && missing.length() > 0)
-		{
+		if (!completed && missing.length() > 0) {
 			row.add(Box.createVerticalStrut(3));
 			// escaped: these are item-cache names going into an HTML label, and one
 			// item carrying an angle bracket would have Swing's HTML 3.2 parser
@@ -167,8 +148,7 @@ public class SetsTab extends JPanel
 			row.add(GachamanPanel.wrapped("Missing: " + GachamanPanel.escape(missing.toString()),
 				SILHOUETTE));
 		}
-		if (completed)
-		{
+		if (completed) {
 			row.add(Box.createVerticalStrut(3));
 			row.add(GachamanPanel.smallLine("COMPLETE", GOLD));
 		}

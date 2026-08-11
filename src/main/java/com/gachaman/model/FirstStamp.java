@@ -10,8 +10,7 @@ import lombok.RequiredArgsConstructor;
  */
 @Getter
 @RequiredArgsConstructor
-public enum FirstStamp
-{
+public enum FirstStamp {
 	FIRST_KILL("First Blood", "Credited kills pay GC — tougher foes pay more."),
 	FIRST_TASK("Contract Complete", "Completion bonuses are the income backbone."),
 	FIRST_SIDE_BET("Side Hustle", "Side bets pay bonus GC on top of contract rewards."),

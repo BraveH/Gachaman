@@ -7,16 +7,15 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import lombok.Getter;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Quest;
 
 @Slf4j
-public class MonsterTable
-{
+public class MonsterTable {
 	@Value
-	public static class Monster
-	{
+	public static class Monster {
 		String name;
 		int combatLevel;
 		List<String> tags;
@@ -47,28 +46,24 @@ public class MonsterTable
 		List<String> quests;
 	}
 
-	private static class MonstersFile
-	{
+	private static class MonstersFile {
 		List<Monster> monsters;
 	}
 
+	@Getter
 	private List<Monster> monsters = Collections.emptyList();
 
-	public static MonsterTable load(Gson gson)
-	{
+	public static MonsterTable load(Gson gson) {
 		MonsterTable table = new MonsterTable();
-		try (InputStream in = MonsterTable.class.getResourceAsStream("/com/gachaman/data/monsters.json"))
-		{
+		try (InputStream in = MonsterTable.class.getResourceAsStream("/com/gachaman/data/monsters.json")) {
 			MonstersFile file = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), MonstersFile.class);
 			List<Monster> normalised = new ArrayList<>(file.monsters.size());
-			for (Monster monster : file.monsters)
-			{
+			for (Monster monster : file.monsters) {
 				normalised.add(withNormalisedQuests(monster));
 			}
 			table.monsters = Collections.unmodifiableList(normalised);
 		}
-		catch (Exception e)
-		{
+		catch (Exception e) {
 			log.error("Failed to load monsters.json", e);
 		}
 		return table;
@@ -87,11 +82,9 @@ public class MonsterTable
 	 * dataset integrity test fails the build on such a name; this is what happens
 	 * if one ever reaches a player anyway.
 	 */
-	private static Monster withNormalisedQuests(Monster monster)
-	{
+	private static Monster withNormalisedQuests(Monster monster) {
 		List<String> quests = monster.getQuests();
-		if (quests != null && quests.isEmpty())
-		{
+		if (quests != null && quests.isEmpty()) {
 			return monster;
 		}
 		List<String> safe = quests == null
@@ -102,8 +95,4 @@ public class MonsterTable
 			monster.isNoGuaranteedDrop(), safe);
 	}
 
-	public List<Monster> getMonsters()
-	{
-		return monsters;
-	}
 }

@@ -20,8 +20,7 @@ import com.gachaman.Tuning;
  * {@link Tuning}, which pulls in nothing from the client, so the schedule is
  * testable without a running RuneLite.
  */
-final class ChestStrain
-{
+final class ChestStrain {
 	/**
 	 * Dead stillness immediately before the give. Sustained shaking reads as
 	 * noise; shaking that suddenly STOPS reads as a lock about to lose. This
@@ -40,8 +39,7 @@ final class ChestStrain
 	private static final long[] BEATS_GILDED = {600, 1400, 2200};
 	private static final long[] BEATS_ORNATE = {4000, 4700, 5400, 6000};
 
-	private ChestStrain()
-	{
+	private ChestStrain() {
 	}
 
 	/**
@@ -50,10 +48,8 @@ final class ChestStrain
 	 * its duration, because every downstream boundary (the Gilded lid at 3200,
 	 * the Ornate blast at 6400) is tuned against them.
 	 */
-	static long totalMs(Tuning.Chest tier)
-	{
-		switch (tier)
-		{
+	static long totalMs(Tuning.Chest tier) {
+		switch (tier) {
 			case RUSTY:
 				return 1400;
 			case BATTERED:
@@ -66,10 +62,8 @@ final class ChestStrain
 	}
 
 	/** When the lock first moves. */
-	static long shudderMs(Tuning.Chest tier)
-	{
-		switch (tier)
-		{
+	static long shudderMs(Tuning.Chest tier) {
+		switch (tier) {
 			case RUSTY:
 				return 300;
 			case BATTERED:
@@ -82,10 +76,8 @@ final class ChestStrain
 	}
 
 	/** When the lock loses — the instant the existing lid/flash/shatter code owns. */
-	static long giveMs(Tuning.Chest tier)
-	{
-		switch (tier)
-		{
+	static long giveMs(Tuning.Chest tier) {
+		switch (tier) {
 			case RUSTY:
 				return 900;
 			case BATTERED:
@@ -104,10 +96,8 @@ final class ChestStrain
 	 * Callers must not write to it (Tuning.CHEST_ODDS hands out shared arrays
 	 * the same way).
 	 */
-	static long[] beats(Tuning.Chest tier)
-	{
-		switch (tier)
-		{
+	static long[] beats(Tuning.Chest tier) {
+		switch (tier) {
 			case RUSTY:
 				return BEATS_RUSTY;
 			case BATTERED:
@@ -120,12 +110,10 @@ final class ChestStrain
 	}
 
 	/** 0..1 build from the first shudder to the give; monotone and clamped. */
-	static double load(long el, Tuning.Chest tier)
-	{
+	static double load(long el, Tuning.Chest tier) {
 		long from = shudderMs(tier);
 		long to = giveMs(tier);
-		if (to <= from)
-		{
+		if (to <= from) {
 			return 0;
 		}
 		double t = (el - from) / (double) (to - from);
@@ -138,23 +126,18 @@ final class ChestStrain
 	 * because at {@code el == shudderMs} the load is exactly 0, so a {@code > 0}
 	 * gate would silently swallow the first frame of movement.
 	 */
-	static boolean straining(long el, Tuning.Chest tier)
-	{
+	static boolean straining(long el, Tuning.Chest tier) {
 		return el >= shudderMs(tier) && el < giveMs(tier) - HELD_STILL_MS;
 	}
 
 	/** Extra amplitude right after a groan, decaying over KICK_MS — the visible shudder. */
-	static double kick(long el, Tuning.Chest tier)
-	{
+	static double kick(long el, Tuning.Chest tier) {
 		double best = 0;
-		for (long b : beats(tier))
-		{
+		for (long b : beats(tier)) {
 			long d = el - b;
-			if (d >= 0 && d < KICK_MS)
-			{
+			if (d >= 0 && d < KICK_MS) {
 				double k = 1.0 - d / (double) KICK_MS;
-				if (k > best)
-				{
+				if (k > best) {
 					best = k;
 				}
 			}

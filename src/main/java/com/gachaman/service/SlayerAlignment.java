@@ -9,6 +9,7 @@ import net.runelite.api.Client;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.plugins.slayer.SlayerConfig;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Double Docket: does a Gachaman contract's target intersect the player's live
@@ -25,17 +26,10 @@ import net.runelite.client.plugins.slayer.SlayerConfig;
  * unit tested, because no mocking framework is available in this project.
  */
 @Singleton
-public class SlayerAlignment
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class SlayerAlignment {
 	private final Client client;
 	private final ConfigManager configManager;
-
-	@Inject
-	public SlayerAlignment(Client client, ConfigManager configManager)
-	{
-		this.client = client;
-		this.configManager = configManager;
-	}
 
 	/**
 	 * The name of the LIVE Slayer assignment, or null when there is none.
@@ -56,14 +50,11 @@ public class SlayerAlignment
 	 * profile key (not logged in), which is exactly the answer we want.
 	 */
 	@Nullable
-	public String liveTarget()
-	{
-		if (client == null || configManager == null)
-		{
+	public String liveTarget() {
+		if (client == null || configManager == null) {
 			return null;
 		}
-		if (client.getVarpValue(VarPlayerID.SLAYER_COUNT) <= 0)
-		{
+		if (client.getVarpValue(VarPlayerID.SLAYER_COUNT) <= 0) {
 			return null;
 		}
 		String name = configManager.getRSProfileConfiguration(
@@ -92,22 +83,17 @@ public class SlayerAlignment
 	 * wrongly paid one, which is the correct direction to fail; the sidebar
 	 * tooltip states the limitation with this exact example.
 	 */
-	static boolean matches(@Nullable String contractMonster, @Nullable String slayerTarget)
-	{
+	static boolean matches(@Nullable String contractMonster, @Nullable String slayerTarget) {
 		String contract = normalize(contractMonster);
 		String target = normalize(slayerTarget);
-		if (contract.isEmpty() || target.isEmpty())
-		{
+		if (contract.isEmpty() || target.isEmpty()) {
 			return false;
 		}
-		for (String candidate : singularCandidates(target))
-		{
-			if (candidate.isEmpty())
-			{
+		for (String candidate : singularCandidates(target)) {
+			if (candidate.isEmpty()) {
 				continue;
 			}
-			if (contract.equals(candidate))
-			{
+			if (contract.equals(candidate)) {
 				return true;
 			}
 			// One-directional, word-boundary prefix: an assignment BROADER than
@@ -115,8 +101,7 @@ public class SlayerAlignment
 			// Worker", "Elves" covers "Elf archer"), while the reverse is not a
 			// real relationship. The trailing space is LOAD-BEARING — a bare
 			// startsWith would make "Rats" match "Ratcatcher".
-			if (contract.startsWith(candidate + " "))
-			{
+			if (contract.startsWith(candidate + " ")) {
 				return true;
 			}
 		}
@@ -124,28 +109,22 @@ public class SlayerAlignment
 	}
 
 	/** Lowercase, letters/digits/spaces only, whitespace collapsed, no edge spaces. */
-	static String normalize(@Nullable String raw)
-	{
-		if (raw == null)
-		{
+	static String normalize(@Nullable String raw) {
+		if (raw == null) {
 			return "";
 		}
 		StringBuilder sb = new StringBuilder(raw.length());
 		boolean pendingSpace = false;
-		for (int i = 0; i < raw.length(); i++)
-		{
+		for (int i = 0; i < raw.length(); i++) {
 			char c = raw.charAt(i);
-			if (Character.isLetterOrDigit(c))
-			{
-				if (pendingSpace && sb.length() > 0)
-				{
+			if (Character.isLetterOrDigit(c)) {
+				if (pendingSpace && sb.length() > 0) {
 					sb.append(' ');
 				}
 				pendingSpace = false;
 				sb.append(Character.toLowerCase(c));
 			}
-			else
-			{
+			else {
 				pendingSpace = true;
 			}
 		}
@@ -163,28 +142,23 @@ public class SlayerAlignment
 	 * monster. The name itself is always a candidate, so an assignment with no
 	 * plural form ("Nechryael") still works.
 	 */
-	static List<String> singularCandidates(String normalized)
-	{
+	static List<String> singularCandidates(String normalized) {
 		List<String> out = new ArrayList<>(5);
 		out.add(normalized);
 		int cut = normalized.lastIndexOf(' ');
 		String head = cut < 0 ? "" : normalized.substring(0, cut + 1);
 		String last = cut < 0 ? normalized : normalized.substring(cut + 1);
-		if (last.length() > 1 && last.endsWith("s"))
-		{
+		if (last.length() > 1 && last.endsWith("s")) {
 			out.add(head + last.substring(0, last.length() - 1));        // giants -> giant
 		}
-		if (last.length() > 3 && last.endsWith("ies"))
-		{
+		if (last.length() > 3 && last.endsWith("ies")) {
 			out.add(head + last.substring(0, last.length() - 3) + "y");  // jellies -> jelly
 		}
-		if (last.length() > 3 && last.endsWith("ves"))
-		{
+		if (last.length() > 3 && last.endsWith("ves")) {
 			out.add(head + last.substring(0, last.length() - 3) + "f");  // elves -> elf
 			out.add(head + last.substring(0, last.length() - 3) + "fe"); // knives -> knife
 		}
-		if (last.length() > 2 && last.endsWith("es"))
-		{
+		if (last.length() > 2 && last.endsWith("es")) {
 			out.add(head + last.substring(0, last.length() - 2));        // boxes -> box
 		}
 		return out;

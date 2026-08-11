@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.Set;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
@@ -51,8 +53,8 @@ import net.runelite.client.util.Text;
  */
 @Slf4j
 @Singleton
-public class KillTracker
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class KillTracker {
 	private static final int ENGAGEMENT_TICKS = 7;
 	private static final int SWEEP_INTERVAL = 25;
 	/**
@@ -66,8 +68,7 @@ public class KillTracker
 	private static final int PENDING_TIMEOUT_TICKS = 30;
 
 	@Value
-	public static class Kill
-	{
+	public static class Kill {
 		String npcName;
 		int npcCombatLevel;
 		int npcIndex;
@@ -80,8 +81,7 @@ public class KillTracker
 		LocalPoint deathLocation;
 	}
 
-	public interface KillListener
-	{
+	public interface KillListener {
 		void onKill(Kill kill);
 
 		/**
@@ -94,13 +94,11 @@ public class KillTracker
 		 * message would silently miss exactly the deaths that cost nothing to
 		 * arrange.
 		 */
-		default void onLocalPlayerDeath()
-		{
+		default void onLocalPlayerDeath() {
 		}
 	}
 
-	private static class Engagement
-	{
+	private static class Engagement {
 		int lastRefreshTick;
 		int startTick;
 		int maxHit;
@@ -109,8 +107,7 @@ public class KillTracker
 	}
 
 	/** A credited kill awaiting the server's loot verdict. */
-	private static class PendingKill
-	{
+	private static class PendingKill {
 		Kill kill;           // built at death with the SUSPICION verdict
 		int npcId;
 		int deathTick;
@@ -138,54 +135,36 @@ public class KillTracker
 	private boolean lootPipelineLive;
 
 	private int tick;
+	@Getter
 	private int lastPlayerDamagedTick = -1;
 
-	@Inject
-	public KillTracker(Client client, MonsterTable monsterTable)
-	{
-		this.client = client;
-		this.monsterTable = monsterTable;
-	}
-
-	public void addListener(KillListener listener)
-	{
-		if (!listeners.contains(listener))
-		{
+	public void addListener(KillListener listener) {
+		if (!listeners.contains(listener)) {
 			listeners.add(listener);
 		}
 	}
 
-	public void removeListener(KillListener listener)
-	{
+	public void removeListener(KillListener listener) {
 		listeners.remove(listener);
 	}
 
-	public int currentTick()
-	{
+	public int currentTick() {
 		return tick;
 	}
 
-	public int getLastPlayerDamagedTick()
-	{
-		return lastPlayerDamagedTick;
-	}
 
 	@Subscribe
-	public void onGameTick(GameTick event)
-	{
+	public void onGameTick(GameTick event) {
 		tick++;
 		emitReadyKills();
-		if (tick % SWEEP_INTERVAL == 0)
-		{
+		if (tick % SWEEP_INTERVAL == 0) {
 			engagements.values().removeIf(e -> tick - e.lastRefreshTick > ENGAGEMENT_TICKS * 4);
 		}
 	}
 
 	@Subscribe
-	public void onInteractingChanged(InteractingChanged event)
-	{
-		if (event.getSource() != client.getLocalPlayer() || !(event.getTarget() instanceof NPC))
-		{
+	public void onInteractingChanged(InteractingChanged event) {
+		if (event.getSource() != client.getLocalPlayer() || !(event.getTarget() instanceof NPC)) {
 			return;
 		}
 		NPC npc = (NPC) event.getTarget();
@@ -193,10 +172,8 @@ public class KillTracker
 	}
 
 	@Subscribe
-	public void onHitsplatApplied(HitsplatApplied event)
-	{
-		if (event.getActor() == client.getLocalPlayer())
-		{
+	public void onHitsplatApplied(HitsplatApplied event) {
+		if (event.getActor() == client.getLocalPlayer()) {
 			// NPC hits on YOU are *_ME hitsplat types (they involve the local
 			// player), so isMine() covers regular incoming damage; DoT types
 			// (poison/venom/...) are neither mine nor others and count too.
@@ -210,27 +187,23 @@ public class KillTracker
 				|| type == HitsplatID.BLEED
 				|| type == HitsplatID.BURN
 				|| type == HitsplatID.DOOM;
-			if (hpDamage && hitsplat.getAmount() > 0)
-			{
+			if (hpDamage && hitsplat.getAmount() > 0) {
 				lastPlayerDamagedTick = tick;
 			}
 			return;
 		}
-		if (!(event.getActor() instanceof NPC))
-		{
+		if (!(event.getActor() instanceof NPC)) {
 			return;
 		}
 		NPC npc = (NPC) event.getActor();
-		if (event.getHitsplat().isOthers())
-		{
+		if (event.getHitsplat().isOthers()) {
 			// another player attacked this NPC — even a 0-damage splash voids
 			// ironman credit, so no amount filter. Sticky until despawn: the
 			// game's denial state never expires either.
 			otherDamaged.add(npc.getIndex());
 			return;
 		}
-		if (!event.getHitsplat().isMine())
-		{
+		if (!event.getHitsplat().isMine()) {
 			return;
 		}
 		Engagement engagement = refresh(npc);
@@ -238,18 +211,15 @@ public class KillTracker
 	}
 
 	@Subscribe
-	public void onChatMessage(ChatMessage event)
-	{
+	public void onChatMessage(ChatMessage event) {
 		// only real game messages — a player could type the phrase in public chat
 		if (event.getType() != ChatMessageType.GAMEMESSAGE
 			&& event.getType() != ChatMessageType.SPAM
-			&& event.getType() != ChatMessageType.ENGINE)
-		{
+			&& event.getType() != ChatMessageType.ENGINE) {
 			return;
 		}
 		String text = Text.removeTags(event.getMessage()).toLowerCase(Locale.ROOT);
-		if (!text.contains(KILL_CREDIT_WARNING))
-		{
+		if (!text.contains(KILL_CREDIT_WARNING)) {
 			return;
 		}
 		// the warning refers to the monster just attacked: the current target,
@@ -257,45 +227,35 @@ public class KillTracker
 		NPC target = client.getLocalPlayer() != null
 			&& client.getLocalPlayer().getInteracting() instanceof NPC
 			? (NPC) client.getLocalPlayer().getInteracting() : null;
-		if (target != null)
-		{
+		if (target != null) {
 			warnedAssist.add(target.getIndex());
 			return;
 		}
 		int bestIndex = -1;
 		int bestTick = -1;
-		for (Map.Entry<Integer, Engagement> entry : engagements.entrySet())
-		{
-			if (entry.getValue().lastRefreshTick > bestTick)
-			{
+		for (Map.Entry<Integer, Engagement> entry : engagements.entrySet()) {
+			if (entry.getValue().lastRefreshTick > bestTick) {
 				bestTick = entry.getValue().lastRefreshTick;
 				bestIndex = entry.getKey();
 			}
 		}
-		if (bestIndex >= 0)
-		{
+		if (bestIndex >= 0) {
 			warnedAssist.add(bestIndex);
 		}
 	}
 
 	@Subscribe
-	public void onActorDeath(ActorDeath event)
-	{
-		if (!(event.getActor() instanceof NPC))
-		{
+	public void onActorDeath(ActorDeath event) {
+		if (!(event.getActor() instanceof NPC)) {
 			// The one non-NPC death worth reporting: this player's own. Same
 			// event, one branch, so death is observed exactly where kills are.
 			if (client != null && event.getActor() instanceof Player
-				&& event.getActor() == client.getLocalPlayer())
-			{
-				for (KillListener listener : new ArrayList<>(listeners))
-				{
-					try
-					{
+				&& event.getActor() == client.getLocalPlayer()) {
+				for (KillListener listener : new ArrayList<>(listeners)) {
+					try {
 						listener.onLocalPlayerDeath();
 					}
-					catch (Exception e)
-					{
+					catch (Exception e) {
 						log.warn("death listener failed", e);
 					}
 				}
@@ -305,8 +265,7 @@ public class KillTracker
 		NPC npc = (NPC) event.getActor();
 		Engagement engagement = engagements.remove(npc.getIndex());
 		boolean suspected = otherDamaged.remove(npc.getIndex()) | warnedAssist.remove(npc.getIndex());
-		if (engagement == null || tick - engagement.lastRefreshTick > ENGAGEMENT_TICKS)
-		{
+		if (engagement == null || tick - engagement.lastRefreshTick > ENGAGEMENT_TICKS) {
 			return;
 		}
 		boolean tookDamage = lastPlayerDamagedTick >= engagement.startTick;
@@ -319,13 +278,10 @@ public class KillTracker
 	}
 
 	@Subscribe
-	public void onNpcDespawned(NpcDespawned event)
-	{
+	public void onNpcDespawned(NpcDespawned event) {
 		int index = event.getNpc().getIndex();
-		for (PendingKill pending : pendingKills)
-		{
-			if (pending.despawnTick < 0 && pending.kill.getNpcIndex() == index)
-			{
+		for (PendingKill pending : pendingKills) {
+			if (pending.despawnTick < 0 && pending.kill.getNpcIndex() == index) {
 				pending.despawnTick = tick;
 				break;
 			}
@@ -338,14 +294,11 @@ public class KillTracker
 	}
 
 	@Subscribe
-	public void onNpcLootReceived(NpcLootReceived event)
-	{
+	public void onNpcLootReceived(NpcLootReceived event) {
 		lootPipelineLive = true;
 		int index = event.getNpc().getIndex();
-		for (PendingKill pending : pendingKills)
-		{
-			if (!pending.lootSeen && pending.kill.getNpcIndex() == index)
-			{
+		for (PendingKill pending : pendingKills) {
+			if (!pending.lootSeen && pending.kill.getNpcIndex() == index) {
 				pending.lootSeen = true;
 				return;
 			}
@@ -353,11 +306,9 @@ public class KillTracker
 	}
 
 	@Subscribe
-	public void onServerNpcLoot(ServerNpcLoot event)
-	{
+	public void onServerNpcLoot(ServerNpcLoot event) {
 		lootPipelineLive = true;
-		if (event.getComposition() == null)
-		{
+		if (event.getComposition() == null) {
 			return;
 		}
 		int npcId = event.getComposition().getId();
@@ -378,16 +329,13 @@ public class KillTracker
 		// refuse a match FIFO would have made — it only changes WHICH pending is
 		// credited — so nothing proven today becomes unproven.
 		PendingKill best = null;
-		for (PendingKill pending : pendingKills)
-		{
+		for (PendingKill pending : pendingKills) {
 			if (!pending.lootSeen && pending.npcId == npcId
-				&& (best == null || pending.deathTick > best.deathTick))
-			{
+				&& (best == null || pending.deathTick > best.deathTick)) {
 				best = pending;
 			}
 		}
-		if (best != null)
-		{
+		if (best != null) {
 			best.lootSeen = true;
 		}
 	}
@@ -399,29 +347,23 @@ public class KillTracker
 	 * guaranteed drop.
 	 */
 	static boolean finalAssisted(boolean lootSeen, boolean suspected, boolean pipelineLive,
-		boolean guaranteedDrop)
-	{
-		if (lootSeen)
-		{
+		boolean guaranteedDrop) {
+		if (lootSeen) {
 			return false;
 		}
 		return suspected || (pipelineLive && guaranteedDrop);
 	}
 
-	private void emitReadyKills()
-	{
-		if (pendingKills.isEmpty())
-		{
+	private void emitReadyKills() {
+		if (pendingKills.isEmpty()) {
 			return;
 		}
 		Iterator<PendingKill> it = pendingKills.iterator();
-		while (it.hasNext())
-		{
+		while (it.hasNext()) {
 			PendingKill pending = it.next();
 			boolean settled = pending.despawnTick >= 0 && tick - pending.despawnTick >= LOOT_SETTLE_TICKS;
 			boolean timedOut = tick - pending.deathTick >= PENDING_TIMEOUT_TICKS;
-			if (!settled && !timedOut)
-			{
+			if (!settled && !timedOut) {
 				continue;
 			}
 			it.remove();
@@ -429,8 +371,7 @@ public class KillTracker
 		}
 	}
 
-	private void emit(PendingKill pending)
-	{
+	private void emit(PendingKill pending) {
 		Kill draft = pending.kill;
 		boolean assisted = finalAssisted(pending.lootSeen, draft.isAssistedByOther(),
 			lootPipelineLive, hasGuaranteedDrop(draft.getNpcName()));
@@ -438,26 +379,21 @@ public class KillTracker
 			: new Kill(draft.getNpcName(), draft.getNpcCombatLevel(), draft.getNpcIndex(),
 				draft.getTick(), draft.getEngagementStartTick(), draft.isTookDamageDuringEngagement(),
 				draft.getMaxHitDealt(), assisted, draft.getDeathLocation());
-		for (KillListener listener : new ArrayList<>(listeners))
-		{
-			try
-			{
+		for (KillListener listener : new ArrayList<>(listeners)) {
+			try {
 				listener.onKill(kill);
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				log.warn("kill listener failed", e);
 			}
 		}
 	}
 
 	/** Emit everything still pending with current verdicts (logout hygiene). */
-	public void flushPending()
-	{
+	public void flushPending() {
 		List<PendingKill> drain = new ArrayList<>(pendingKills);
 		pendingKills.clear();
-		for (PendingKill pending : drain)
-		{
+		for (PendingKill pending : drain) {
 			emit(pending);
 		}
 		otherDamaged.clear();
@@ -465,13 +401,10 @@ public class KillTracker
 		engagements.clear();
 	}
 
-	private boolean hasGuaranteedDrop(String npcName)
-	{
-		if (noGuaranteedDropByName == null)
-		{
+	private boolean hasGuaranteedDrop(String npcName) {
+		if (noGuaranteedDropByName == null) {
 			noGuaranteedDropByName = new HashMap<>();
-			for (MonsterTable.Monster monster : monsterTable.getMonsters())
-			{
+			for (MonsterTable.Monster monster : monsterTable.getMonsters()) {
 				noGuaranteedDropByName.put(monster.getName().toLowerCase(Locale.ROOT),
 					monster.isNoGuaranteedDrop());
 			}
@@ -482,26 +415,22 @@ public class KillTracker
 		return noDrop != null && !noDrop;
 	}
 
-	public boolean isPlayerLowHp(double fraction)
-	{
+	public boolean isPlayerLowHp(double fraction) {
 		int boosted = client.getBoostedSkillLevel(Skill.HITPOINTS);
 		int real = client.getRealSkillLevel(Skill.HITPOINTS);
 		return real > 0 && boosted <= real * fraction;
 	}
 
-	private Engagement refresh(NPC npc)
-	{
+	private Engagement refresh(NPC npc) {
 		Engagement engagement = engagements.get(npc.getIndex());
-		if (engagement == null || tick - engagement.lastRefreshTick > ENGAGEMENT_TICKS * 4)
-		{
+		if (engagement == null || tick - engagement.lastRefreshTick > ENGAGEMENT_TICKS * 4) {
 			engagement = new Engagement();
 			engagement.startTick = tick;
 			engagements.put(npc.getIndex(), engagement);
 		}
 		engagement.lastRefreshTick = tick;
 		String name = npc.getName();
-		if (name != null)
-		{
+		if (name != null) {
 			engagement.name = Text.removeTags(name);
 		}
 		engagement.combatLevel = npc.getCombatLevel();

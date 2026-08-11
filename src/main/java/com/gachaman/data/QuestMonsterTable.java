@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Quest;
@@ -34,10 +35,8 @@ import net.runelite.api.Quest;
  * is expressed.
  */
 @Slf4j
-public class QuestMonsterTable
-{
-	private static class Entry
-	{
+public class QuestMonsterTable {
+	private static class Entry {
 		String quest;
 		List<String> npcNames;
 		Integer varp;
@@ -46,8 +45,7 @@ public class QuestMonsterTable
 		Integer max;
 	}
 
-	private static class QuestsFile
-	{
+	private static class QuestsFile {
 		List<Entry> quests;
 	}
 
@@ -55,8 +53,8 @@ public class QuestMonsterTable
 	 * One reason an NPC may be attacked: {@code quest} must be IN_PROGRESS and,
 	 * when {@link #hasWindow()}, the tracked variable must be inside [min, max].
 	 */
-	public static final class Gate
-	{
+	@RequiredArgsConstructor
+	public static final class Gate {
 		/** The NPC as written in the file, for display; the index keys on its
 		 *  lowercase form. One Gate per (npc, entry) so it can name itself. */
 		@Getter
@@ -72,24 +70,12 @@ public class QuestMonsterTable
 		private final int min;
 		private final int max;
 
-		Gate(String npcName, Quest quest, int varId, boolean varbit, int min, int max)
-		{
-			this.npcName = npcName;
-			this.quest = quest;
-			this.varId = varId;
-			this.varbit = varbit;
-			this.min = min;
-			this.max = max;
-		}
-
-		public boolean hasWindow()
-		{
+		public boolean hasWindow() {
 			return varId >= 0;
 		}
 
 		/** Pure so it is testable without a Client; the caller does the read. */
-		public boolean contains(int value)
-		{
+		public boolean contains(int value) {
 			return value >= min && value <= max;
 		}
 	}
@@ -99,34 +85,27 @@ public class QuestMonsterTable
 	/** Same gates, flat and in file order, for enumeration by the panel. */
 	private List<Gate> allGates = Collections.emptyList();
 
-	public static QuestMonsterTable load(Gson gson)
-	{
+	public static QuestMonsterTable load(Gson gson) {
 		QuestMonsterTable table = new QuestMonsterTable();
 		try (InputStream in = QuestMonsterTable.class.getResourceAsStream(
-			"/com/gachaman/data/quest-monsters.json"))
-		{
-			if (in == null)
-			{
+			"/com/gachaman/data/quest-monsters.json")) {
+			if (in == null) {
 				log.warn("quest-monsters.json missing — quest combat exemptions disabled");
 				return table;
 			}
 			QuestsFile file = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), QuestsFile.class);
 			Map<String, List<Gate>> index = new HashMap<>();
 			List<Gate> all = new ArrayList<>();
-			for (Entry entry : file.quests)
-			{
+			for (Entry entry : file.quests) {
 				Quest quest;
-				try
-				{
+				try {
 					quest = Quest.valueOf(entry.quest);
 				}
-				catch (IllegalArgumentException e)
-				{
+				catch (IllegalArgumentException e) {
 					log.warn("quest-monsters.json references unknown quest {}", entry.quest);
 					continue;
 				}
-				for (String name : entry.npcNames)
-				{
+				for (String name : entry.npcNames) {
 					Gate gate = gateOf(entry, quest, name);
 					index.computeIfAbsent(name.toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(gate);
 					all.add(gate);
@@ -135,8 +114,7 @@ public class QuestMonsterTable
 			table.gatesByNpc = Collections.unmodifiableMap(index);
 			table.allGates = Collections.unmodifiableList(all);
 		}
-		catch (Exception e)
-		{
+		catch (Exception e) {
 			log.error("Failed to load quest-monsters.json", e);
 		}
 		return table;
@@ -147,19 +125,15 @@ public class QuestMonsterTable
 	 * failure that locks a player out of a quest is the one worth avoiding, and
 	 * the build catches malformed entries anyway (DatasetIntegrityTest).
 	 */
-	private static Gate gateOf(Entry entry, Quest quest, String npcName)
-	{
+	private static Gate gateOf(Entry entry, Quest quest, String npcName) {
 		boolean hasRange = entry.min != null || entry.max != null;
-		if (entry.varp != null && entry.varbit != null)
-		{
+		if (entry.varp != null && entry.varbit != null) {
 			log.warn("{} names both a varp and a varbit — ignoring the window", entry.quest);
 			return new Gate(npcName, quest, -1, false, 0, 0);
 		}
 		Integer id = entry.varp != null ? entry.varp : entry.varbit;
-		if (id == null || !hasRange)
-		{
-			if (id != null || hasRange)
-			{
+		if (id == null || !hasRange) {
+			if (id != null || hasRange) {
 				log.warn("{} has half a window (id={}, min={}, max={}) — ignoring it",
 					entry.quest, id, entry.min, entry.max);
 			}
@@ -167,22 +141,19 @@ public class QuestMonsterTable
 		}
 		int min = entry.min != null ? entry.min : Integer.MIN_VALUE;
 		int max = entry.max != null ? entry.max : Integer.MAX_VALUE;
-		if (min > max)
-		{
+		if (min > max) {
 			log.warn("{} has min {} above max {} — ignoring the window", entry.quest, min, max);
 			return new Gate(npcName, quest, -1, false, 0, 0);
 		}
 		return new Gate(npcName, quest, id, entry.varbit != null, min, max);
 	}
 
-	public List<Gate> gatesFor(String npcName)
-	{
+	public List<Gate> gatesFor(String npcName) {
 		return gatesByNpc.getOrDefault(npcName.toLowerCase(Locale.ROOT), Collections.emptyList());
 	}
 
 	/** Every gate in the table, for callers that have to enumerate rather than ask. */
-	public List<Gate> allGates()
-	{
+	public List<Gate> allGates() {
 		return allGates;
 	}
 }

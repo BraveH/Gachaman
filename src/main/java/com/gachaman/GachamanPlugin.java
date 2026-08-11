@@ -17,7 +17,6 @@ import com.gachaman.model.SideBet;
 import com.gachaman.model.TaskOffer;
 import com.gachaman.model.Variant;
 import com.gachaman.overlay.ForbiddenItemOverlay;
-import com.gachaman.overlay.GachaInfoboxOverlay;
 import com.gachaman.overlay.KillJuiceOverlay;
 import com.gachaman.overlay.RevealInputListener;
 import com.gachaman.overlay.RevealOverlay;
@@ -36,7 +35,6 @@ import com.gachaman.party.PartyRollStartMessage;
 import com.gachaman.party.PartyRollVoteMessage;
 import com.gachaman.service.BossKcService;
 import com.gachaman.service.CeremonyBus;
-import com.gachaman.service.CharterService;
 import com.gachaman.service.ChestService;
 import com.gachaman.service.CombatBlockService;
 import com.gachaman.service.ComplianceService;
@@ -50,13 +48,11 @@ import com.gachaman.service.KillTracker;
 import com.gachaman.service.LoadoutService;
 import com.gachaman.service.MilestoneService;
 import com.gachaman.service.PermissionService;
-import com.gachaman.service.PrestigeService;
 import com.gachaman.service.QuestExemptionService;
 import com.gachaman.service.SafeModeService;
 import com.gachaman.service.ServiceRecordService;
 import com.gachaman.service.SetPerkService;
 import com.gachaman.service.SlayerAlignment;
-import com.gachaman.service.SoundService;
 import com.gachaman.service.StyleService;
 import com.gachaman.service.StyleTracker;
 import com.gachaman.service.TaskService;
@@ -68,7 +64,6 @@ import com.gachaman.ui.loadout.LoadoutInputListener;
 import com.gachaman.ui.loadout.LoadoutOverlay;
 import com.gachaman.ui.loadout.LoadoutTabButton;
 import com.gachaman.ui.panel.GachamanPanel;
-import com.gachaman.ui.panel.PanelIcon;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import java.util.ArrayList;
@@ -115,6 +110,7 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.util.ImageUtil;
 
 @Slf4j
 @PluginDescriptor(
@@ -122,8 +118,7 @@ import net.runelite.client.ui.overlay.OverlayManager;
 	description = "RNG gamemode: attack styles rolled by fate, equipment gated behind collectible cards, chests, kill contracts and ceremonies. Removes menu entries on card-locked equipment (client-side only).",
 	tags = {"gamemode", "gacha", "cards", "chest", "challenge"}
 )
-public class GachamanPlugin extends Plugin
-{
+public class GachamanPlugin extends Plugin {
 	// clients & managers
 	@Inject
 	private Client client;
@@ -188,13 +183,9 @@ public class GachamanPlugin extends Plugin
 	@Inject
 	private TimelineService timelineService;
 	@Inject
-	private CharterService charterService;
-	@Inject
 	private BossKcService bossKcService;
 	@Inject
 	private SetPerkService setPerkService;
-	@Inject
-	private PrestigeService prestigeService;
 	@Inject
 	private PermissionService permissionService;
 	@Inject
@@ -204,8 +195,6 @@ public class GachamanPlugin extends Plugin
 
 	@Inject
 	private UnequipService unequipService;
-	@Inject
-	private SoundService soundService;
 	@Inject
 	private PartyRollService partyRollService;
 	@Inject
@@ -226,8 +215,6 @@ public class GachamanPlugin extends Plugin
 	private RevealInputListener revealInputListener;
 	@Inject
 	private KillJuiceOverlay killJuiceOverlay;
-	@Inject
-	private GachaInfoboxOverlay gachaInfoboxOverlay;
 	@Inject
 	private ForbiddenItemOverlay forbiddenItemOverlay;
 	@Inject
@@ -250,44 +237,36 @@ public class GachamanPlugin extends Plugin
 	private boolean wasOnTutorial;
 
 	/** Loud, immediate feedback the moment a forbidden-style attack lands. */
-	private final ComplianceService.Listener complianceFeedback = new ComplianceService.Listener()
-	{
+	private final ComplianceService.Listener complianceFeedback = new ComplianceService.Listener() {
 		@Override
 		public void onForbiddenAttack(AttackStyle used,
-			AttackStyle allowed, long penaltyGc)
-		{
-			soundService.playShatter();
+			AttackStyle allowed, long penaltyGc) {
 			debugChatAlways("<col=e83c3c>Forbidden " + used.getDisplayName()
 				+ " attack!</col> Only " + allowed.getDisplayName()
 				+ " is allowed. <col=e83c3c>-" + penaltyGc + " GC</col>");
 			if (used == AttackStyle.MELEE
 				&& allowed == AttackStyle.MAGIC
-				&& autoRetaliateStaffBashLikely())
-			{
+				&& autoRetaliateStaffBashLikely()) {
 				debugChatAlways("Tip: auto-retaliate swings your staff's melee bash between casts —"
 					+ " set an autocast spell or turn auto-retaliate off.");
 			}
 		}
 
 		@Override
-		public void onForbiddenPardoned(int tick, long refundedGc)
-		{
+		public void onForbiddenPardoned(int tick, long refundedGc) {
 			debugChatAlways("<col=6ec86e>Pardoned.</col> That attack was actually Magic —"
 				+ (refundedGc > 0 ? " +" + refundedGc + " GC refunded." : " no penalty kept."));
 		}
 
 		@Override
-		public void onTaintAdded(int newTaint)
-		{
+		public void onTaintAdded(int newTaint) {
 			debugChatAlways("<col=e83c3c>Tainted kill — no reward.</col> Taint x" + newTaint
 				+ ": all income halved until worked off.");
 		}
 
 		@Override
-		public void onTaintCleared(int cleared, int remaining)
-		{
-			if (remaining == 0 && cleared > 1)
-			{
+		public void onTaintCleared(int cleared, int remaining) {
+			if (remaining == 0 && cleared > 1) {
 				debugChatAlways("<col=6ec86e>All taint cleansed.</col>");
 			}
 		}
@@ -301,83 +280,59 @@ public class GachamanPlugin extends Plugin
 		request -> timelineService.onCeremony(request);
 
 	/** Chat notice when the ironman assisted-kill penalty halves a kill's credit. */
-	private final TaskService.Listener assistedKillFeedback = new TaskService.Listener()
-	{
+	private final TaskService.Listener assistedKillFeedback = new TaskService.Listener() {
 		@Override
-		public void onKillFeedback(TaskService.KillFeedback feedback)
-		{
-			if (feedback.isAssistedHalfCredit())
-			{
+		public void onKillFeedback(TaskService.KillFeedback feedback) {
+			if (feedback.isAssistedHalfCredit()) {
 				debugChatAlways("<col=e8a33c>Assisted kill — half credit.</col> Another player"
 					+ " damaged that monster; ironman kills count half kc and half GC.");
 			}
 		}
 
-		@Override
-		public void onSideBetHit(SideBet bet, String monsterName)
-		{
-		}
 
 		@Override
-		public void onTaskCompleted(TaskService.TaskCompletionSummary summary)
-		{
+		public void onTaskCompleted(TaskService.TaskCompletionSummary summary) {
 		}
 
-		@Override
-		public void onOffersRolled(List<TaskOffer> offers)
-		{
-		}
-
-		@Override
-		public void onPartyProgress(ActiveTask task)
-		{
-		}
 	};
 
 	@Provides
-	GachamanConfig provideConfig(ConfigManager configManager)
-	{
+	GachamanConfig provideConfig(ConfigManager configManager) {
 		return configManager.getConfig(GachamanConfig.class);
 	}
 
 	@Provides
 	@Singleton
-	TierTable provideTierTable(Gson gson)
-	{
+	TierTable provideTierTable(Gson gson) {
 		return TierTable.load(gson);
 	}
 
 	@Provides
 	@Singleton
-	MonsterTable provideMonsterTable(Gson gson)
-	{
+	MonsterTable provideMonsterTable(Gson gson) {
 		return MonsterTable.load(gson);
 	}
 
 	@Provides
 	@Singleton
-	BossTable provideBossTable(Gson gson)
-	{
+	BossTable provideBossTable(Gson gson) {
 		return BossTable.load(gson);
 	}
 
 	@Provides
 	@Singleton
-	SetTable provideSetTable(Gson gson)
-	{
+	SetTable provideSetTable(Gson gson) {
 		return SetTable.load(gson);
 	}
 
 	@Provides
 	@Singleton
-	QuestMonsterTable provideQuestMonsterTable(Gson gson)
-	{
+	QuestMonsterTable provideQuestMonsterTable(Gson gson) {
 		return QuestMonsterTable.load(gson);
 	}
 
 	@Override
-	protected void startUp()
-	{
+	protected void startUp() {
 		// service listener graph
 		styleTracker.addListener(complianceService);
 		styleTracker.addListener(taskService); // any attack keeps the combo chain alive
@@ -403,13 +358,8 @@ public class GachamanPlugin extends Plugin
 		// the party page, both off the one snapshot method
 		revealOverlay.setPartyVoteSupplier(partyRollService::voteView);
 		gachamanPanel.setVoteViewSupplier(partyRollService::voteView);
-		// The Charter Office sells a personal, binding contract onto a personal
-		// board, so it stands down for the whole of any party roll
-		charterService.setPartyBusyHook(partyRollService::isPartyRollLive);
-		charterService.setRefreshHook(gachamanPanel::refresh);
 		permissionService.start();
 		setPerkService.start();
-		prestigeService.start(creditSink);
 		complianceService.addListener(complianceFeedback);
 
 		taskService.addListener(serviceRecordService); // flush the tally at contract completion
@@ -430,13 +380,10 @@ public class GachamanPlugin extends Plugin
 
 		// ceremonies
 		ceremonyBus.addRenderer(revealOverlay);
-		soundService.setEnabled(config.soundsEnabled());
-		soundService.setVolume(config.soundVolume());
 
 		// overlays
 		overlayManager.add(revealOverlay);
 		overlayManager.add(killJuiceOverlay);
-		overlayManager.add(gachaInfoboxOverlay);
 		overlayManager.add(forbiddenItemOverlay);
 		overlayManager.add(taskNpcHighlightOverlay);
 		overlayManager.add(taskProgressOverlay);
@@ -476,7 +423,7 @@ public class GachamanPlugin extends Plugin
 		// sidebar
 		navButton = NavigationButton.builder()
 			.tooltip("Gachaman")
-			.icon(PanelIcon.create())
+			.icon(ImageUtil.loadImageResource(getClass(), "/com/gachaman/ui/panel-icon.png"))
 			.priority(6)
 			.panel(gachamanPanel)
 			.build();
@@ -485,16 +432,14 @@ public class GachamanPlugin extends Plugin
 		// party UI hides entirely when the Party contracts setting is off
 		gachamanPanel.setInPartySupplier(() -> partyService.isInParty() && config.partyRollsEnabled());
 
-		if (client.getGameState() == GameState.LOGGED_IN)
-		{
+		if (client.getGameState() == GameState.LOGGED_IN) {
 			stateLoadPending = true;
 		}
 		log.info("Gachaman started");
 	}
 
 	@Override
-	protected void shutDown()
-	{
+	protected void shutDown() {
 		// renderer FIRST: commit-time ceremony submissions must only queue (and
 		// then be cleared), never be claimed into the overlay being torn down
 		ceremonyBus.removeRenderer(revealOverlay);
@@ -526,8 +471,6 @@ public class GachamanPlugin extends Plugin
 		partyPresenceService.reset();
 		partyRollService.setCeremonyAbortHook(null);
 		revealOverlay.setPartyVoteSupplier(null);
-		charterService.setPartyBusyHook(null);
-		charterService.setRefreshHook(null);
 		complianceService.removeListener(complianceFeedback);
 		taskService.removeListener(serviceRecordService);
 		taskService.removeListener(firstsService);
@@ -537,7 +480,6 @@ public class GachamanPlugin extends Plugin
 		ceremonyBus.removeTap(timelineTap);
 		chestService.removeChestListener(timelineService);
 		complianceService.removeListener(timelineService);
-		prestigeService.stop();
 
 		gachamanPanel.stop();
 		gachamanPanel.setInPartySupplier(() -> false); // null is ignored by the setter
@@ -574,7 +516,6 @@ public class GachamanPlugin extends Plugin
 
 		overlayManager.remove(revealOverlay);
 		overlayManager.remove(killJuiceOverlay);
-		overlayManager.remove(gachaInfoboxOverlay);
 		overlayManager.remove(forbiddenItemOverlay);
 		overlayManager.remove(taskNpcHighlightOverlay);
 		overlayManager.remove(taskProgressOverlay);
@@ -586,14 +527,11 @@ public class GachamanPlugin extends Plugin
 	}
 
 	@Subscribe
-	public void onGameStateChanged(GameStateChanged event)
-	{
-		if (event.getGameState() == GameState.LOGGED_IN)
-		{
+	public void onGameStateChanged(GameStateChanged event) {
+		if (event.getGameState() == GameState.LOGGED_IN) {
 			stateLoadPending = true;
 		}
-		else if (event.getGameState() == GameState.LOGIN_SCREEN)
-		{
+		else if (event.getGameState() == GameState.LOGIN_SCREEN) {
 			// credit kills still waiting on the loot oracle BEFORE checkpointing
 			killTracker.flushPending();
 			revealOverlay.abortActiveCeremony();
@@ -616,14 +554,12 @@ public class GachamanPlugin extends Plugin
 			// a half-finished strip must not resume against the next character
 			unequipService.cancel();
 		}
-		if (event.getGameState() != GameState.LOGGED_IN)
-		{
+		if (event.getGameState() != GameState.LOGGED_IN) {
 			// the board's hit test outlives the frames that drew it
 			loadoutOverlay.setOpen(false);
 		}
 		if (event.getGameState() == GameState.LOGGING_IN
-			|| event.getGameState() == GameState.LOGIN_SCREEN_AUTHENTICATOR)
-		{
+			|| event.getGameState() == GameState.LOGIN_SCREEN_AUTHENTICATOR) {
 			// off-world without a logout teardown. Ceremonies are only ever drawn
 			// in game, so one left claimed here would sit invisible over the
 			// welcome screen — exactly where "Click here to play" is the only
@@ -633,20 +569,17 @@ public class GachamanPlugin extends Plugin
 	}
 
 	@Subscribe
-	public void onGameTick(GameTick event)
-	{
+	public void onGameTick(GameTick event) {
 		// a ceremony's phase clock only ticks while it is being drawn, so one
 		// that stopped rendering can never time itself out — drop it here
 		revealOverlay.pruneStaleModal();
 
 		if (stateLoadPending && client.getGameState() == GameState.LOGGED_IN
-			&& configManager.getRSProfileKey() != null)
-		{
+			&& configManager.getRSProfileKey() != null) {
 			// profile key must exist before load, or a fresh state could be
 			// created under (and later saved to) the wrong profile
 			stateLoadPending = false;
-			if (!stateService.isLoaded())
-			{
+			if (!stateService.isLoaded()) {
 				stateService.load(milestoneService.combatLevel());
 			}
 			cardDatabase.beginBuild(tierTable, setTable);
@@ -669,15 +602,13 @@ public class GachamanPlugin extends Plugin
 			// ceremonies parked while logged out present now
 			ceremonyBus.drain();
 			wasOnTutorial = TutorialGate.onTutorial(client);
-			if (!wasOnTutorial)
-			{
+			if (!wasOnTutorial) {
 				// already ashore: settle the strip without performing it, so
 				// installing the plugin later never undresses an existing account
 				stateService.mutate(s -> s.isTutorialStripDone() ? s : s.withTutorialStripDone(true));
 				// ...unless this save DID step off the island and the strip was cut
 				// short by that logout; finish the job it started
-				if (stateService.get() != null && stateService.get().isTutorialStripPending())
-				{
+				if (stateService.get() != null && stateService.get().isTutorialStripPending()) {
 					unequipService.arm();
 				}
 				beginJourneyIfFresh();
@@ -688,12 +619,10 @@ public class GachamanPlugin extends Plugin
 		// Tutorial Island exit: the locks switch on — strip the tutorial's gear
 		// (no card unlocks it yet), then style roll, then tasks
 		if (wasOnTutorial && stateService.isLoaded()
-			&& !TutorialGate.onTutorial(client))
-		{
+			&& !TutorialGate.onTutorial(client)) {
 			wasOnTutorial = false;
 			var state = stateService.get();
-			if (state != null && !state.isTutorialStripDone())
-			{
+			if (state != null && !state.isTutorialStripDone()) {
 				stateService.mutate(s -> s.withTutorialStripDone(true).withTutorialStripPending(true));
 				unequipService.arm();
 				// never suppressible: gear vanishing without a reason reads as item loss
@@ -703,16 +632,10 @@ public class GachamanPlugin extends Plugin
 			beginJourneyIfFresh();
 		}
 
-		if (unequipService.isArmed() && !unequipService.tick() && unequipService.isStripComplete())
-		{
+		if (unequipService.isArmed() && !unequipService.tick() && unequipService.isStripComplete()) {
 			// everything is off; stop resuming this on every future login
 			stateService.mutate(s -> s.isTutorialStripPending() ? s.withTutorialStripPending(false) : s);
 		}
-
-		// The Charter Office: refresh the scalars the panel reads off the EDT, and
-		// settle any open deed escrow. Deliberately below the load block's return,
-		// so the first tick that sees a hold runs against a fully restored board.
-		charterService.tick();
 	}
 
 	/**
@@ -727,11 +650,9 @@ public class GachamanPlugin extends Plugin
 	 * hold boards neither asked for, and no party can form until both clear one
 	 * by hand. Rolling is one click on the Contract panel.
 	 */
-	private void beginJourneyIfFresh()
-	{
+	private void beginJourneyIfFresh() {
 		var state = stateService.get();
-		if (state == null || state.getAllowedStyle() != null)
-		{
+		if (state == null || state.getAllowedStyle() != null) {
 			return;
 		}
 		styleService.roll(styleTracker.currentTick());
@@ -750,11 +671,9 @@ public class GachamanPlugin extends Plugin
 	 * be handed a second. A no-op when the DB is not ready yet — the onReady hook
 	 * registered at load time covers that case.
 	 */
-	private void redeemFirstColoursChestIfOwed()
-	{
+	private void redeemFirstColoursChestIfOwed() {
 		var state = stateService.get();
-		if (state == null || !state.isFirstColoursChestOwed() || state.getAllowedStyle() == null)
-		{
+		if (state == null || !state.isFirstColoursChestOwed() || state.getAllowedStyle() == null) {
 			return;
 		}
 		AttackStyle style =
@@ -768,16 +687,13 @@ public class GachamanPlugin extends Plugin
 	 * the training cards, and empty default slots auto-assign starter gear so
 	 * training equipment is usable out of the box.
 	 */
-	private void grantStarterCards()
-	{
+	private void grantStarterCards() {
 		var state = stateService.get();
-		if (state == null)
-		{
+		if (state == null) {
 			return;
 		}
 		// migrate: ammo joined the default deeded slots
-		if (!state.getDeededSlots().contains(GearSlot.AMMO.name()))
-		{
+		if (!state.getDeededSlots().contains(GearSlot.AMMO.name())) {
 			stateService.mutate(s -> {
 				Set<String> deeded = new HashSet<>(s.getDeededSlots());
 				deeded.add(GearSlot.WEAPON.name());
@@ -793,8 +709,7 @@ public class GachamanPlugin extends Plugin
 		int accountType = IronmanGear.accountType(client);
 		revokeForeignIronmanCards(accountType);
 		state = stateService.get();
-		if (state == null)
-		{
+		if (state == null) {
 			return;
 		}
 
@@ -804,31 +719,25 @@ public class GachamanPlugin extends Plugin
 			"Training sword", "Training shield", "Training bow", "Training arrows"));
 		starters.addAll(IronmanGear.cardNames(accountType));
 		Set<Integer> ownedIds = new HashSet<>();
-		for (OwnedCard owned : state.getOwnedCards())
-		{
-			if (!owned.isHologram())
-			{
+		for (OwnedCard owned : state.getOwnedCards()) {
+			if (!owned.isHologram()) {
 				ownedIds.add(owned.getCardId());
 			}
 		}
 		List<OwnedCard> granted = new ArrayList<>();
-		for (String name : starters)
-		{
+		for (String name : starters) {
 			CardDefinition card = cardDatabase.cardByName(name);
-			if (card == null)
-			{
+			if (card == null) {
 				log.warn("Starter card not found in DB: {}", name);
 				continue;
 			}
-			if (!ownedIds.contains(card.getCardId()))
-			{
+			if (!ownedIds.contains(card.getCardId())) {
 				granted.add(new OwnedCard(
 					UUID.randomUUID().toString(), card.getCardId(), null,
 					Variant.NORMAL, System.currentTimeMillis(), "starter", 0));
 			}
 		}
-		if (!granted.isEmpty())
-		{
+		if (!granted.isEmpty()) {
 			stateService.mutate(s -> {
 				List<OwnedCard> owned = new ArrayList<>(s.getOwnedCards());
 				owned.addAll(granted);
@@ -848,8 +757,7 @@ public class GachamanPlugin extends Plugin
 		// one-shot voucher grant (fresh and pre-existing saves alike): a free
 		// Compactor + Extender so the style-cycle levers get tried early
 		var current = stateService.get();
-		if (current != null && !current.isStarterVouchersGranted())
-		{
+		if (current != null && !current.isStarterVouchersGranted()) {
 			stateService.mutate(s -> s.isStarterVouchersGranted() ? s
 				: s.withFreeCompactors(s.getFreeCompactors() + 1)
 					.withFreeExtenders(s.getFreeExtenders() + 1)
@@ -865,47 +773,37 @@ public class GachamanPlugin extends Plugin
 	 * one. Only starter-granted copies are revoked — a card genuinely pulled
 	 * from a chest carries a different provenance and is left alone.
 	 */
-	private void revokeForeignIronmanCards(int accountType)
-	{
+	private void revokeForeignIronmanCards(int accountType) {
 		var state = stateService.get();
-		if (state == null)
-		{
+		if (state == null) {
 			return;
 		}
 		Set<String> mine =
 			new HashSet<>(IronmanGear.cardNames(accountType));
 		Set<Integer> foreignIds = new HashSet<>();
-		for (String name : IronmanGear.allCardNames())
-		{
-			if (mine.contains(name))
-			{
+		for (String name : IronmanGear.allCardNames()) {
+			if (mine.contains(name)) {
 				continue;
 			}
 			CardDefinition card = cardDatabase.cardByName(name);
-			if (card != null)
-			{
+			if (card != null) {
 				foreignIds.add(card.getCardId());
 			}
 		}
 		Set<String> revoked = new HashSet<>();
-		for (OwnedCard owned : state.getOwnedCards())
-		{
+		for (OwnedCard owned : state.getOwnedCards()) {
 			if (!owned.isHologram() && "starter".equals(owned.getProvenance())
-				&& foreignIds.contains(owned.getCardId()))
-			{
+				&& foreignIds.contains(owned.getCardId())) {
 				revoked.add(owned.getUuid());
 			}
 		}
-		if (revoked.isEmpty())
-		{
+		if (revoked.isEmpty()) {
 			return;
 		}
 		stateService.mutate(s -> {
 			List<OwnedCard> kept = new ArrayList<>();
-			for (OwnedCard owned : s.getOwnedCards())
-			{
-				if (!revoked.contains(owned.getUuid()))
-				{
+			for (OwnedCard owned : s.getOwnedCards()) {
+				if (!revoked.contains(owned.getUuid())) {
 					kept.add(owned);
 				}
 			}
@@ -917,24 +815,19 @@ public class GachamanPlugin extends Plugin
 			revoked.size(), accountType);
 	}
 
-	private void autoAssignStarter(GearSlot slot, String cardName)
-	{
+	private void autoAssignStarter(GearSlot slot, String cardName) {
 		var state = stateService.get();
-		if (cardName == null || state == null || state.getLoadout().containsKey(slot.name()))
-		{
+		if (cardName == null || state == null || state.getLoadout().containsKey(slot.name())) {
 			return;
 		}
 		CardDefinition card = cardDatabase.cardByName(cardName);
-		if (card == null)
-		{
+		if (card == null) {
 			return;
 		}
 		Set<String> assigned = new HashSet<>(state.getLoadout().values());
-		for (OwnedCard owned : state.getOwnedCards())
-		{
+		for (OwnedCard owned : state.getOwnedCards()) {
 			if (!owned.isHologram() && owned.getCardId() == card.getCardId()
-				&& !assigned.contains(owned.getUuid()))
-			{
+				&& !assigned.contains(owned.getUuid())) {
 				loadoutService.assign(slot, owned.getUuid());
 				return;
 			}
@@ -942,8 +835,7 @@ public class GachamanPlugin extends Plugin
 	}
 
 	@Subscribe
-	public void onRuneScapeProfileChanged(RuneScapeProfileChanged event)
-	{
+	public void onRuneScapeProfileChanged(RuneScapeProfileChanged event) {
 		// This event fires AFTER the profile key has switched: saving here
 		// would write the previous account's state under the new key. The
 		// LOGIN_SCREEN handler already checkpointed under the correct key —
@@ -972,8 +864,7 @@ public class GachamanPlugin extends Plugin
 	}
 
 	@Subscribe
-	public void onClientShutdown(ClientShutdown event)
-	{
+	public void onClientShutdown(ClientShutdown event) {
 		// must run before ConfigManager's shutdown flush (priority ordering)
 		revealOverlay.abortActiveCeremony();
 		chestService.commitPending();
@@ -982,25 +873,18 @@ public class GachamanPlugin extends Plugin
 	}
 
 	@Subscribe
-	public void onConfigChanged(ConfigChanged event)
-	{
-		if (!GachamanConfig.GROUP.equals(event.getGroup()))
-		{
+	public void onConfigChanged(ConfigChanged event) {
+		if (!GachamanConfig.GROUP.equals(event.getGroup())) {
 			return;
 		}
-		soundService.setEnabled(config.soundsEnabled());
-		soundService.setVolume(config.soundVolume());
-		if ("oneCardPerSlot".equals(event.getKey()))
-		{
+		if ("oneCardPerSlot".equals(event.getKey())) {
 			// re-derive permissions + show/hide every loadout surface
 			clientThread.invokeLater(() -> {
 				permissionService.refresh();
-				if (config.oneCardPerSlot())
-				{
+				if (config.oneCardPerSlot()) {
 					loadoutTabButton.create();
 				}
-				else
-				{
+				else {
 					loadoutTabButton.remove();
 					loadoutOverlay.setOpen(false);
 				}
@@ -1010,57 +894,32 @@ public class GachamanPlugin extends Plugin
 	}
 
 	@Subscribe
-	public void onOverlayMenuClicked(OverlayMenuClicked event)
-	{
-		if (event.getEntry().getMenuAction() != MenuAction.RUNELITE_OVERLAY)
-		{
+	public void onOverlayMenuClicked(OverlayMenuClicked event) {
+		if (event.getEntry().getMenuAction() != MenuAction.RUNELITE_OVERLAY) {
 			return;
 		}
 		if (event.getOverlay() == loadoutButtonOverlay
-			&& LoadoutButtonOverlay.TOGGLE_OPTION.equals(event.getEntry().getOption()))
-		{
+			&& LoadoutButtonOverlay.TOGGLE_OPTION.equals(event.getEntry().getOption())) {
 			loadoutOverlay.toggle();
 			return;
-		}
-		if (event.getOverlay() == gachaInfoboxOverlay
-			&& GachaInfoboxOverlay.OPTION_OPEN.equals(event.getEntry().getOption()))
-		{
-			String target = event.getEntry().getTarget();
-			Tuning.Chest tier = GachaInfoboxOverlay.chestTierFromTarget(target);
-			if (tier != null)
-			{
-				chestService.openChest(tier);
-				return;
-			}
-			String tag = GachaInfoboxOverlay.themedSetTagFromTarget(target);
-			if (tag != null)
-			{
-				chestService.openThemedChest(tag);
-			}
 		}
 	}
 
 	@Subscribe
-	public void onCommandExecuted(CommandExecuted event)
-	{
+	public void onCommandExecuted(CommandExecuted event) {
 		String command = event.getCommand();
-		if ("gachaparty".equalsIgnoreCase(command))
-		{
+		if ("gachaparty".equalsIgnoreCase(command)) {
 			String[] partyArgs = event.getArguments();
-			if (partyArgs.length > 0 && "no".equalsIgnoreCase(partyArgs[0]))
-			{
+			if (partyArgs.length > 0 && "no".equalsIgnoreCase(partyArgs[0])) {
 				partyRollService.decline();
 			}
-			else if (partyArgs.length > 0 && "start".equalsIgnoreCase(partyArgs[0]))
-			{
+			else if (partyArgs.length > 0 && "start".equalsIgnoreCase(partyArgs[0])) {
 				partyRollService.forceStart(); // host only
 			}
-			else if (partyArgs.length > 0 && "cancel".equalsIgnoreCase(partyArgs[0]))
-			{
+			else if (partyArgs.length > 0 && "cancel".equalsIgnoreCase(partyArgs[0])) {
 				partyRollService.cancelRoll(); // host only
 			}
-			else
-			{
+			else {
 				partyRollService.agree(); // proposes when no proposal is live
 			}
 			return;
@@ -1070,16 +929,13 @@ public class GachamanPlugin extends Plugin
 		// table, and telling them to first enable a developer setting is telling
 		// them to stay stuck. Session-only, and the Overview tab shows every
 		// override that is live so none is ever silently left on.
-		if ("gachaunlock".equalsIgnoreCase(command))
-		{
+		if ("gachaunlock".equalsIgnoreCase(command)) {
 			String npc = String.join(" ", event.getArguments()).trim();
-			if (npc.isEmpty())
-			{
+			if (npc.isEmpty()) {
 				debugChatAlways("Usage: ::gachaunlock &lt;npc name&gt; — unblocks that NPC"
 					+ " until you close the client. Please also report it on GitHub.");
 			}
-			else
-			{
+			else {
 				questExemptionService.unlock(npc);
 				debugChatAlways("Unblocked \"" + npc + "\" for this session."
 					+ " Undo with ::gacharelock " + npc);
@@ -1087,19 +943,16 @@ public class GachamanPlugin extends Plugin
 			}
 			return;
 		}
-		if ("gacharelock".equalsIgnoreCase(command))
-		{
+		if ("gacharelock".equalsIgnoreCase(command)) {
 			String npc = String.join(" ", event.getArguments()).trim();
-			if (npc.isEmpty())
-			{
+			if (npc.isEmpty()) {
 				int cleared = questExemptionService.relock(null);
 				debugChatAlways(cleared == 0
 					? "No manual unlocks were active."
 					: "Cleared " + cleared + " manual unlock" + (cleared == 1 ? "" : "s") + ".");
 				gachamanPanel.refresh();
 			}
-			else
-			{
+			else {
 				debugChatAlways(questExemptionService.relock(npc) > 0
 					? "Re-blocked \"" + npc + "\"."
 					: "\"" + npc + "\" was not manually unlocked.");
@@ -1107,28 +960,23 @@ public class GachamanPlugin extends Plugin
 			}
 			return;
 		}
-		if (!config.debugCommands())
-		{
+		if (!config.debugCommands()) {
 			return;
 		}
 		String[] args = event.getArguments();
-		switch (command.toLowerCase())
-		{
-			case "gachagive":
-			{
+		switch (command.toLowerCase()) {
+			case "gachagive": {
 				long amount = args.length > 0 ? Long.parseLong(args[0]) : 10000;
 				stateService.mutate(s -> s.withGc(s.getGc() + amount));
 				debugChat("+" + amount + " GC");
 				break;
 			}
-			case "gachachest":
-			{
+			case "gachachest": {
 				Tuning.Chest tier = args.length > 0
 					? Tuning.Chest.valueOf(args[0].toUpperCase())
 					: Tuning.Chest.BATTERED;
 				stateService.mutate(s -> s.withGc(s.getGc() + Tuning.CHEST_PRICE_GC.get(tier)));
-				if (chestService.openChest(tier) == null)
-				{
+				if (chestService.openChest(tier) == null) {
 					debugChat("Chest could not open (rusted away / busy / DB not ready).");
 				}
 				break;
@@ -1158,18 +1006,15 @@ public class GachamanPlugin extends Plugin
 				partyRollService.resetForDebug();
 				debugChat("Active contract and rolled offers cleared.");
 				break;
-			case "gachacosmetics":
-			{
+			case "gachacosmetics": {
 				// audit: low-stat untiered cards still in the DB (novelty suspects)
 				int threshold = args.length > 0 ? Integer.parseInt(args[0]) : 6;
 				List<String> suspects = cardDatabase.lowStatSuspects(threshold);
 				debugChat("Low-stat suspects (total bonus <= " + threshold + "): "
 					+ suspects.size());
 				int shown = 0;
-				for (String suspect : suspects)
-				{
-					if (++shown > 25)
-					{
+				for (String suspect : suspects) {
+					if (++shown > 25) {
 						debugChat("… and " + (suspects.size() - 25) + " more");
 						break;
 					}
@@ -1177,8 +1022,7 @@ public class GachamanPlugin extends Plugin
 				}
 				break;
 			}
-			case "gachabutton":
-			{
+			case "gachabutton": {
 				// loadout-button diagnostics: overlay state + raw widget state
 				debugChat(loadoutButtonOverlay.diagnostics());
 				Widget root =
@@ -1191,13 +1035,11 @@ public class GachamanPlugin extends Plugin
 					: (head.isHidden() ? "hidden" : String.valueOf(head.getBounds()))));
 				break;
 			}
-			case "gachawear":
-			{
+			case "gachawear": {
 				// stage a worn card face without grinding a thousand kills.
 				// Wear is a pure function of killsServed and nothing reads it,
 				// so this can only change how a face is painted.
-				if (args.length == 0)
-				{
+				if (args.length == 0) {
 					// no angle brackets in the usage line: chat runs it through
 					// the RuneLite tag parser, which eats anything in them
 					debugChat("Usage: ::gachawear none|hairline|cracked|shattered|N [name]"
@@ -1206,18 +1048,14 @@ public class GachamanPlugin extends Plugin
 				}
 				CardWear stage = CardWear.parse(args[0]);
 				int kills;
-				if (stage != null)
-				{
+				if (stage != null) {
 					kills = Tuning.wearKills(stage);
 				}
-				else
-				{
-					try
-					{
+				else {
+					try {
 						kills = Math.max(0, Integer.parseInt(args[0].trim()));
 					}
-					catch (NumberFormatException e)
-					{
+					catch (NumberFormatException e) {
 						debugChat("Not a wear stage or a kill count: " + args[0]);
 						break;
 					}
@@ -1231,13 +1069,10 @@ public class GachamanPlugin extends Plugin
 	}
 
 	/** The rest of a command's arguments as one string — chat splits on spaces. */
-	private static String joinArgs(String[] args, int from)
-	{
+	private static String joinArgs(String[] args, int from) {
 		StringBuilder joined = new StringBuilder();
-		for (int i = from; i < args.length; i++)
-		{
-			if (joined.length() > 0)
-			{
+		for (int i = from; i < args.length; i++) {
+			if (joined.length() > 0) {
 				joined.append(' ');
 			}
 			joined.append(args[i]);
@@ -1252,30 +1087,25 @@ public class GachamanPlugin extends Plugin
 	 * legitimately mean several owned cards and all of them should move
 	 * together. An empty filter means every card.
 	 */
-	private void setCardWear(int kills, String filter)
-	{
+	private void setCardWear(int kills, String filter) {
 		GachaState state = stateService.get();
 		List<OwnedCard> owned =
 			state == null ? null : state.getOwnedCards();
-		if (owned == null || owned.isEmpty())
-		{
+		if (owned == null || owned.isEmpty()) {
 			debugChat("No cards owned yet.");
 			return;
 		}
 		String needle = filter.toLowerCase(Locale.ROOT);
 		Set<String> uuids = new LinkedHashSet<>();
 		List<String> names = new ArrayList<>();
-		for (OwnedCard card : owned)
-		{
+		for (OwnedCard card : owned) {
 			String name = loadoutService.displayName(card);
-			if (needle.isEmpty() || name.toLowerCase(Locale.ROOT).contains(needle))
-			{
+			if (needle.isEmpty() || name.toLowerCase(Locale.ROOT).contains(needle)) {
 				uuids.add(card.getUuid());
 				names.add(name);
 			}
 		}
-		if (uuids.isEmpty())
-		{
+		if (uuids.isEmpty()) {
 			debugChat("No owned card matches \"" + filter + "\".");
 			return;
 		}
@@ -1284,28 +1114,23 @@ public class GachamanPlugin extends Plugin
 		debugChat(uuids.size() + " card(s) set to " + kills + " kills of service — "
 			+ (wear == CardWear.NONE ? "no wear" : wear.getDisplayName()) + ".");
 		int shown = Math.min(names.size(), 5);
-		for (int i = 0; i < shown; i++)
-		{
+		for (int i = 0; i < shown; i++) {
 			debugChat("  " + names.get(i));
 		}
-		if (names.size() > shown)
-		{
+		if (names.size() > shown) {
 			debugChat("  … and " + (names.size() - shown) + " more");
 		}
 	}
 
-	private void clientThreadInvokeCreateButton()
-	{
+	private void clientThreadInvokeCreateButton() {
 		clientThread.invokeLater(loadoutTabButton::create);
 	}
 
-	private void clientThreadInvokeRemoveButton()
-	{
+	private void clientThreadInvokeRemoveButton() {
 		clientThread.invokeLater(loadoutTabButton::remove);
 	}
 
-	private void debugChat(String message)
-	{
+	private void debugChat(String message) {
 		debugChatAlways(message);
 	}
 
@@ -1315,10 +1140,8 @@ public class GachamanPlugin extends Plugin
 	 * blocked actions) uses {@link #debugChatAlways} and is never suppressed:
 	 * a silent penalty reads as a bug.
 	 */
-	private void chatPing(String message)
-	{
-		if (config.chatPings())
-		{
+	private void chatPing(String message) {
+		if (config.chatPings()) {
 			debugChatAlways(message);
 		}
 	}
@@ -1330,15 +1153,13 @@ public class GachamanPlugin extends Plugin
 	 * overlay both state the bonus permanently, so muting chat cannot make it a
 	 * surprise.
 	 */
-	private void announceDoubleDocket()
-	{
+	private void announceDoubleDocket() {
 		chatPing("<col=6ec86e>Double Docket!</col> This contract is also your Slayer task —"
 			+ " completion pays x" + Tuning.DOUBLE_DOCKET_MULT + ". It stays locked in"
 			+ " even if you finish the Slayer task first.");
 	}
 
-	private void debugChatAlways(String message)
-	{
+	private void debugChatAlways(String message) {
 		chatMessageManager.queue(QueuedMessage.builder()
 			.type(ChatMessageType.CONSOLE)
 			.runeLiteFormattedMessage("<col=b25be2>Gachaman:</col> " + message)
@@ -1355,30 +1176,24 @@ public class GachamanPlugin extends Plugin
 	 * (exactly what the dupe rule would have done without the cache bug).
 	 * Loadout assignments key on card uuid, so remapping preserves them.
 	 */
-	private void healStaleCardIds()
-	{
-		if (!cardDatabase.isReady())
-		{
+	private void healStaleCardIds() {
+		if (!cardDatabase.isReady()) {
 			return;
 		}
 		stateService.mutate(s -> {
-			if (s.getOwnedCards() == null || s.getOwnedCards().isEmpty())
-			{
+			if (s.getOwnedCards() == null || s.getOwnedCards().isEmpty()) {
 				return s;
 			}
 			boolean changed = false;
 			Set<String> seen = new HashSet<>();
 			List<OwnedCard> healed =
 				new ArrayList<>(s.getOwnedCards().size());
-			for (OwnedCard card : s.getOwnedCards())
-			{
+			for (OwnedCard card : s.getOwnedCards()) {
 				OwnedCard next = card;
-				if (!card.isHologram() && cardDatabase.card(card.getCardId()) == null)
-				{
+				if (!card.isHologram() && cardDatabase.card(card.getCardId()) == null) {
 					CardDefinition target =
 						cardDatabase.cardForItem(card.getCardId());
-					if (target != null)
-					{
+					if (target != null) {
 						// carry the service record through the remap — a card-DB
 						// heal must not reset the odometer
 						next = new OwnedCard(card.getUuid(),
@@ -1389,8 +1204,7 @@ public class GachamanPlugin extends Plugin
 				}
 				String key = next.isHologram()
 					? "holo:" + next.getTierKey() : next.getCardId() + ":" + next.getVariant();
-				if (!seen.add(key) && next != card)
-				{
+				if (!seen.add(key) && next != card) {
 					continue; // remap collided with an existing copy — drop the stale one
 				}
 				healed.add(next);
@@ -1405,10 +1219,8 @@ public class GachamanPlugin extends Plugin
 	 * auto-retaliate answers incoming hits with the staff's melee bash — a
 	 * genuine melee attack the player never clicked.
 	 */
-	private boolean autoRetaliateStaffBashLikely()
-	{
-		try
-		{
+	private boolean autoRetaliateStaffBashLikely() {
+		try {
 			int category = client.getVarbitValue(
 				VarbitID.COMBAT_WEAPON_CATEGORY);
 			// 18 = staff, 21 = bladed staff — the categories with a Spell tab
@@ -1417,8 +1229,7 @@ public class GachamanPlugin extends Plugin
 				VarbitID.AUTOCAST_SET) == 0;
 			return castableStaff && noAutocast;
 		}
-		catch (Exception e)
-		{
+		catch (Exception e) {
 			return false;
 		}
 	}

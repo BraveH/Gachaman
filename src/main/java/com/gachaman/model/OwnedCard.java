@@ -8,8 +8,7 @@ import lombok.With;
  * canonical item id); hologram instances carry a tierKey and cardId -1.
  */
 @Value
-public class OwnedCard
-{
+public class OwnedCard {
 	String uuid;
 	int cardId;
 	String tierKey; // non-null only for HOLOGRAM instances
@@ -25,8 +24,7 @@ public class OwnedCard
 	@With
 	int killsServed;
 
-	public boolean isHologram()
-	{
+	public boolean isHologram() {
 		return variant == Variant.HOLOGRAM;
 	}
 }

@@ -21,8 +21,7 @@ import lombok.Value;
  * {@link PatronMark}.
  */
 @Value
-public class PatronRecord
-{
+public class PatronRecord {
 	/**
 	 * Last display name seen for this partner. Nullable because a partner
 	 * credited by a client that could not read their name at the time is still

@@ -43,8 +43,7 @@ import net.runelite.client.util.QuantityFormatter;
  * renames keeps one row instead of forking into two half-histories.
  */
 @Singleton
-public class PatronsTab extends JPanel
-{
+public class PatronsTab extends JPanel {
 	private static final Color DETAIL_GRAY = new Color(138, 138, 138);
 	private static final Color BODY_GRAY = new Color(200, 200, 200);
 	private static final long DAY_MS = 86_400_000L;
@@ -55,8 +54,7 @@ public class PatronsTab extends JPanel
 	private final JEditorPane list = new JEditorPane();
 
 	@Inject
-	public PatronsTab(GachaStateService stateService)
-	{
+	public PatronsTab(GachaStateService stateService) {
 		this.stateService = stateService;
 		setLayout(new BorderLayout(0, 6));
 		setOpaque(false);
@@ -81,8 +79,7 @@ public class PatronsTab extends JPanel
 		add(scroll, BorderLayout.CENTER);
 	}
 
-	void rebuild()
-	{
+	void rebuild() {
 		header.removeAll();
 		GachaState state = stateService.get();
 		List<PatronRecord> patrons = state == null
@@ -97,16 +94,14 @@ public class PatronsTab extends JPanel
 		header.repaint();
 	}
 
-	private static JPanel buildTotals(List<PatronRecord> patrons)
-	{
+	private static JPanel buildTotals(List<PatronRecord> patrons) {
 		JPanel section = GachamanPanel.section(null);
 		section.add(GachamanPanel.line(patrons.size() + (patrons.size() == 1 ? " patron" : " patrons"),
 			Color.WHITE, FontManager.getRunescapeBoldFont()));
 		section.add(Box.createVerticalStrut(4));
 
 		int marks = 0;
-		for (PatronRecord record : patrons)
-		{
+		for (PatronRecord record : patrons) {
 			marks += record.getCount();
 		}
 		// MARKS, never "shared contracts": one contract finished with three
@@ -115,8 +110,7 @@ public class PatronsTab extends JPanel
 		section.add(GachamanPanel.smallLine(QuantityFormatter.formatNumber(marks)
 				+ (marks == 1 ? " mark earned" : " marks earned"),
 			ColorScheme.BRAND_ORANGE));
-		if (patrons.size() >= Tuning.PATRON_MAX_PARTNERS)
-		{
+		if (patrons.size() >= Tuning.PATRON_MAX_PARTNERS) {
 			// wrapped, not smallLine: 65 characters is ~300px of small font in a
 			// 214px header, and a non-wrapping label that wide widens the whole
 			// tab and clips every row beside it
@@ -135,16 +129,13 @@ public class PatronsTab extends JPanel
 	 * second ordering in the UI could put a different name at the top of this
 	 * page than the one wearing the outlined pip.
 	 */
-	private static String buildRows(List<PatronRecord> patrons, long now)
-	{
-		if (patrons.isEmpty())
-		{
+	private static String buildRows(List<PatronRecord> patrons, long now) {
+		if (patrons.isEmpty()) {
 			return "<font color='#909090'>No shared contracts finished yet. Roll one with a"
 				+ " party and whoever stands with you lands here.</font>";
 		}
 		StringBuilder html = new StringBuilder();
-		for (int i = 0; i < patrons.size(); i++)
-		{
+		for (int i = 0; i < patrons.size(); i++) {
 			PatronRecord record = patrons.get(i);
 			int count = record.getCount();
 			// The name is another player's string off the party relay.
@@ -164,8 +155,7 @@ public class PatronsTab extends JPanel
 			html.append("<font color='").append(hex(DETAIL_GRAY)).append("'>")
 				.append(GachamanPanel.escape(PatronMark.tierLabel(count)));
 			String last = ago(record.getLastSharedAt(), now);
-			if (!last.isEmpty())
-			{
+			if (!last.isEmpty()) {
 				// "shared", not "last": ago() answers "today" and "yesterday" as
 				// well as "4d ago", and "last today" is not a sentence.
 				html.append(GachamanPanel.DOT).append("shared ").append(last);
@@ -187,43 +177,34 @@ public class PatronsTab extends JPanel
 	 * copied from another machine) reads as today rather than a negative age:
 	 * "shared -3 days ago" is the only answer here that is certainly wrong.
 	 */
-	static String ago(long then, long now)
-	{
-		if (then <= 0)
-		{
+	static String ago(long then, long now) {
+		if (then <= 0) {
 			return "";
 		}
 		long days = Math.max(0, now - then) / DAY_MS;
-		if (days <= 0)
-		{
+		if (days <= 0) {
 			return "today";
 		}
-		if (days == 1)
-		{
+		if (days == 1) {
 			return "yesterday";
 		}
-		if (days < 7)
-		{
+		if (days < 7) {
 			return days + "d ago";
 		}
-		if (days < 30)
-		{
+		if (days < 30) {
 			return (days / 7) + "w ago";
 		}
-		if (days < 365)
-		{
+		if (days < 365) {
 			return (days / 30) + "mo ago";
 		}
 		return (days / 365) + "y ago";
 	}
 
-	private static String htmlWrap(String body)
-	{
+	private static String htmlWrap(String body) {
 		return "<html><body>" + body + "</body></html>";
 	}
 
-	private static String hex(Color color)
-	{
+	private static String hex(Color color) {
 		return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
 	}
 }

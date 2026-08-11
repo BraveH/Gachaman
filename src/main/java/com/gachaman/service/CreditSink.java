@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.function.UnaryOperator;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 
@@ -16,30 +17,26 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Singleton
-public class CreditSink
-{
-	public enum Source
-	{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class CreditSink {
+	public enum Source {
 		KILL, TASK_COMPLETION, SIDE_BET, DUPLICATE, DEED_SATURATED, RECORD,
 		DISCOVERY, GRADUATION, FIRST, OTHER
 	}
 
 	@Value
-	public static class GcContext
-	{
+	public static class GcContext {
 		Source source;
 		String monsterName;   // null when not kill-scoped
 		List<String> monsterTags; // null when unknown
 	}
 
-	public interface Modifier
-	{
+	public interface Modifier {
 		/** Multiplicative factor for this award; return 1.0 when not applicable. */
 		double factor(GcContext context);
 	}
 
-	public interface Listener
-	{
+	public interface Listener {
 		void onGcAwarded(long amount, GcContext context, long newBalance);
 	}
 
@@ -47,38 +44,26 @@ public class CreditSink
 	private final List<Modifier> modifiers = new ArrayList<>();
 	private final List<Listener> listeners = new ArrayList<>();
 
-	@Inject
-	public CreditSink(GachaStateService stateService)
-	{
-		this.stateService = stateService;
-	}
-
-	public synchronized void registerModifier(Modifier modifier)
-	{
-		if (!modifiers.contains(modifier))
-		{
+	public synchronized void registerModifier(Modifier modifier) {
+		if (!modifiers.contains(modifier)) {
 			modifiers.add(modifier);
 		}
 	}
 
-	public synchronized void unregisterModifier(Modifier modifier)
-	{
+	public synchronized void unregisterModifier(Modifier modifier) {
 		modifiers.remove(modifier);
 	}
 
-	public synchronized void addListener(Listener listener)
-	{
+	public synchronized void addListener(Listener listener) {
 		listeners.add(listener);
 	}
 
-	public synchronized void removeListener(Listener listener)
-	{
+	public synchronized void removeListener(Listener listener) {
 		listeners.remove(listener);
 	}
 
 	@Value
-	public static class AwardResult
-	{
+	public static class AwardResult {
 		long amount;
 		/** Post-mutate snapshot; null when state was not loaded. */
 		GachaState state;
@@ -91,58 +76,45 @@ public class CreditSink
 	 * extraMutation actually changed the state.
 	 */
 	public synchronized AwardResult awardWith(long baseAmount, GcContext context,
-		UnaryOperator<GachaState> extraMutation)
-	{
-		if (stateService.get() == null)
-		{
+		UnaryOperator<GachaState> extraMutation) {
+		if (stateService.get() == null) {
 			return new AwardResult(0, null);
 		}
 		double factor = 1.0;
-		for (Modifier modifier : modifiers)
-		{
-			try
-			{
+		for (Modifier modifier : modifiers) {
+			try {
 				factor *= modifier.factor(context);
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				log.warn("GC modifier failed", e);
 			}
 		}
-		if (stateService.get().getTaint() > 0)
-		{
+		if (stateService.get().getTaint() > 0) {
 			factor *= Tuning.TAINT_INCOME_MULT;
 		}
 		long amount = baseAmount <= 0 ? 0 : Math.max(0, Math.round(baseAmount * factor));
 		final boolean[] applied = {false};
 		var next = stateService.mutate(s -> {
 			GachaState mutated = extraMutation.apply(s);
-			if (mutated == null || mutated == s)
-			{
+			if (mutated == null || mutated == s) {
 				return s; // marker did not land — no award either
 			}
 			applied[0] = true;
-			if (amount > 0)
-			{
+			if (amount > 0) {
 				mutated = mutated.withGc(mutated.getGc() + amount)
 					.withLifetimeGcEarned(mutated.getLifetimeGcEarned() + amount);
 			}
 			return mutated;
 		});
-		if (next == null || !applied[0])
-		{
+		if (next == null || !applied[0]) {
 			return new AwardResult(0, next);
 		}
-		if (amount > 0)
-		{
-			for (Listener listener : new ArrayList<>(listeners))
-			{
-				try
-				{
+		if (amount > 0) {
+			for (Listener listener : new ArrayList<>(listeners)) {
+				try {
 					listener.onGcAwarded(amount, context, next.getGc());
 				}
-				catch (Exception e)
-				{
+				catch (Exception e) {
 					log.warn("GC listener failed", e);
 				}
 			}
@@ -151,45 +123,35 @@ public class CreditSink
 	}
 
 	/** Award GC (may be reduced by taint / boosted by perks). Returns the net amount. */
-	public synchronized long award(long baseAmount, GcContext context)
-	{
-		if (baseAmount <= 0 || stateService.get() == null)
-		{
+	public synchronized long award(long baseAmount, GcContext context) {
+		if (baseAmount <= 0 || stateService.get() == null) {
 			return 0;
 		}
 		double factor = 1.0;
-		for (Modifier modifier : modifiers)
-		{
-			try
-			{
+		for (Modifier modifier : modifiers) {
+			try {
 				factor *= modifier.factor(context);
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				log.warn("GC modifier failed", e);
 			}
 		}
-		if (stateService.get().getTaint() > 0)
-		{
+		if (stateService.get().getTaint() > 0) {
 			factor *= Tuning.TAINT_INCOME_MULT;
 		}
 		long amount = Math.max(0, Math.round(baseAmount * factor));
-		if (amount == 0)
-		{
+		if (amount == 0) {
 			return 0;
 		}
 		var newState = stateService.mutate(s -> s
 			.withGc(s.getGc() + amount)
 			.withLifetimeGcEarned(s.getLifetimeGcEarned() + amount));
 		long balance = newState == null ? 0 : newState.getGc();
-		for (Listener listener : new ArrayList<>(listeners))
-		{
-			try
-			{
+		for (Listener listener : new ArrayList<>(listeners)) {
+			try {
 				listener.onGcAwarded(amount, context, balance);
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				log.warn("GC listener failed", e);
 			}
 		}
@@ -201,10 +163,8 @@ public class CreditSink
 	 * bypasses modifiers, taint halving and lifetime earnings — it is not
 	 * income, it is undoing a wrongful deduction.
 	 */
-	public synchronized long refund(long amount)
-	{
-		if (amount <= 0 || stateService.get() == null)
-		{
+	public synchronized long refund(long amount) {
+		if (amount <= 0 || stateService.get() == null) {
 			return 0;
 		}
 		stateService.mutate(s -> s.withGc(s.getGc() + amount));
@@ -212,10 +172,8 @@ public class CreditSink
 	}
 
 	/** Deduct GC (violation penalties, purchases). Returns amount actually deducted. */
-	public synchronized long deduct(long amount)
-	{
-		if (amount <= 0 || stateService.get() == null)
-		{
+	public synchronized long deduct(long amount) {
+		if (amount <= 0 || stateService.get() == null) {
 			return 0;
 		}
 		long current = stateService.get().getGc();
@@ -225,10 +183,8 @@ public class CreditSink
 	}
 
 	/** Try to spend exactly amount; false (and no change) when unaffordable. */
-	public synchronized boolean spend(long amount)
-	{
-		if (stateService.get() == null || stateService.get().getGc() < amount)
-		{
+	public synchronized boolean spend(long amount) {
+		if (stateService.get() == null || stateService.get().getGc() < amount) {
 			return false;
 		}
 		stateService.mutate(s -> s.withGc(s.getGc() - amount));

@@ -12,8 +12,7 @@ import lombok.Value;
  * oldest record and nothing can ever reconcile it.
  */
 @Value
-public class DossierSummary
-{
+public class DossierSummary {
 	int contracts;
 	int cleanContracts;
 	int partyContracts;
@@ -23,8 +22,7 @@ public class DossierSummary
 	/** Best single haul in the retained window, 0 when the log is empty. */
 	long bestGc;
 
-	public static DossierSummary of(@Nullable List<ContractRecord> log)
-	{
+	public static DossierSummary of(@Nullable List<ContractRecord> log) {
 		int contracts = 0;
 		int clean = 0;
 		int party = 0;
@@ -32,23 +30,18 @@ public class DossierSummary
 		long gc = 0;
 		long duration = 0;
 		long best = 0;
-		if (log != null)
-		{
-			for (ContractRecord record : log)
-			{
-				if (record == null)
-				{
+		if (log != null) {
+			for (ContractRecord record : log) {
+				if (record == null) {
 					// Gson writes null ARRAY elements regardless of serializeNulls,
 					// so a hole can genuinely come back off disk
 					continue;
 				}
 				contracts++;
-				if (record.isClean())
-				{
+				if (record.isClean()) {
 					clean++;
 				}
-				if (record.isParty())
-				{
+				if (record.isParty()) {
 					party++;
 				}
 				kills += record.getKills();
@@ -64,24 +57,20 @@ public class DossierSummary
 	 * Whole-percent clean rate, FLOORED rather than rounded: 199 clean out of
 	 * 200 must not display as "100%" while a blemish is still on the record.
 	 */
-	public int cleanPercent()
-	{
+	public int cleanPercent() {
 		return contracts <= 0 ? 0 : (int) (cleanContracts * 100L / contracts);
 	}
 
 	/** 0..1 for the meter; 0 on an empty log rather than a divide by zero. */
-	public double cleanFraction()
-	{
+	public double cleanFraction() {
 		return contracts <= 0 ? 0d : (double) cleanContracts / contracts;
 	}
 
-	public long averageGc()
-	{
+	public long averageGc() {
 		return contracts <= 0 ? 0 : totalGc / contracts;
 	}
 
-	public long averageDurationMs()
-	{
+	public long averageDurationMs() {
 		return contracts <= 0 ? 0 : totalDurationMs / contracts;
 	}
 }

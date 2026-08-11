@@ -10,8 +10,7 @@ import lombok.Value;
  * lowest item id in the merged variant group and is stable across builds.
  */
 @Value
-public class CardDefinition
-{
+public class CardDefinition {
 	int cardId;
 	String name;       // cleaned canonical name, e.g. "Rune scimitar"
 	GearSlot slot;

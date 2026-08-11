@@ -39,8 +39,7 @@ import net.runelite.client.util.QuantityFormatter;
  * header lives in BorderLayout.NORTH outside the scroll viewport.
  */
 @Singleton
-public class DossierTab extends JPanel
-{
+public class DossierTab extends JPanel {
 	/**
 	 * Year included: the log retains {@link Tuning#DOSSIER_MAX_RECORDS} contracts,
 	 * which for a slow player spans well over a year, and a bare "Aug 9" on a
@@ -63,8 +62,7 @@ public class DossierTab extends JPanel
 	private final JEditorPane list = new JEditorPane();
 
 	@Inject
-	public DossierTab(GachaStateService stateService)
-	{
+	public DossierTab(GachaStateService stateService) {
 		this.stateService = stateService;
 		setLayout(new BorderLayout(0, 6));
 		setOpaque(false);
@@ -89,12 +87,10 @@ public class DossierTab extends JPanel
 		add(scroll, BorderLayout.CENTER);
 	}
 
-	void rebuild()
-	{
+	void rebuild() {
 		header.removeAll();
 		GachaState state = stateService.get();
-		if (state == null)
-		{
+		if (state == null) {
 			list.setText(htmlWrap("<font color='#909090'>Log in to view your dossier.</font>"));
 			header.revalidate();
 			header.repaint();
@@ -112,15 +108,13 @@ public class DossierTab extends JPanel
 		header.repaint();
 	}
 
-	private static JPanel buildTotals(GachaState state, DossierSummary summary)
-	{
+	private static JPanel buildTotals(GachaState state, DossierSummary summary) {
 		JPanel section = GachamanPanel.section(null);
 		section.add(GachamanPanel.line("Contracts filed: " + summary.getContracts(),
 			Color.WHITE, FontManager.getRunescapeBoldFont()));
 		section.add(Box.createVerticalStrut(4));
 
-		if (summary.getContracts() == 0)
-		{
+		if (summary.getContracts() == 0) {
 			section.add(GachamanPanel.smallLine("Nothing filed yet — go and sign one.",
 				ColorScheme.MEDIUM_GRAY_COLOR));
 			section.add(Box.createVerticalStrut(3));
@@ -151,8 +145,7 @@ public class DossierTab extends JPanel
 		section.add(GachamanPanel.smallLine(
 			"Clean rate: " + summary.cleanPercent() + "%  ·  shared " + summary.getPartyContracts(),
 			ColorScheme.LIGHT_GRAY_COLOR));
-		if (summary.getContracts() >= Tuning.DOSSIER_MAX_RECORDS)
-		{
+		if (summary.getContracts() >= Tuning.DOSSIER_MAX_RECORDS) {
 			// totals are a fold over the RETAINED window, so say so rather than
 			// letting the header read as a lifetime figure it is not
 			section.add(GachamanPanel.smallLine("(last " + Tuning.DOSSIER_MAX_RECORDS + " contracts)",
@@ -166,20 +159,16 @@ public class DossierTab extends JPanel
 		return section;
 	}
 
-	private static String buildRows(@Nullable List<ContractRecord> log)
-	{
-		if (log == null || log.isEmpty())
-		{
+	private static String buildRows(@Nullable List<ContractRecord> log) {
+		if (log == null || log.isEmpty()) {
 			return "<font color='#909090'>No contracts filed yet. Complete one and it lands here.</font>";
 		}
 		StringBuilder html = new StringBuilder();
 		int shown = 0;
 		// newest first: the log is appended in completion order, so walk it back
-		for (int i = log.size() - 1; i >= 0; i--)
-		{
+		for (int i = log.size() - 1; i >= 0; i--) {
 			ContractRecord record = log.get(i);
-			if (record == null)
-			{
+			if (record == null) {
 				continue; // Gson can hand back a null array element
 			}
 			shown++;
@@ -194,22 +183,18 @@ public class DossierTab extends JPanel
 				.append(LINE_FORMAT.format(new Date(record.getAt())))
 				.append(GachamanPanel.DOT).append(formatDuration(record.getDurationMs()));
 			Color styleColor = styleColor(record.getStyle());
-			if (styleColor != null)
-			{
+			if (styleColor != null) {
 				html.append(GachamanPanel.DOT).append("<font color='").append(hex(styleColor)).append("'>")
 					.append(GachamanPanel.escape(styleName(record.getStyle()))).append("</font>");
 			}
-			if (record.isParty())
-			{
+			if (record.isParty()) {
 				html.append(GachamanPanel.DOT).append("<font color='").append(hex(PARTY_BLUE)).append("'>")
 					.append(GachamanPanel.escape(record.getParty())).append("</font>");
 			}
-			if (record.isCarried())
-			{
+			if (record.isCarried()) {
 				html.append(GachamanPanel.DOT).append("carried");
 			}
-			if (record.isRedemption())
-			{
+			if (record.isRedemption()) {
 				html.append(GachamanPanel.DOT).append("redemption");
 			}
 			html.append(GachamanPanel.DOT).append("<font color='")
@@ -219,86 +204,68 @@ public class DossierTab extends JPanel
 						? " off-style kill" : " off-style kills"))
 				.append("</font></font><br/><br/>");
 		}
-		if (shown == 0)
-		{
+		if (shown == 0) {
 			return "<font color='#909090'>No contracts filed yet. Complete one and it lands here.</font>";
 		}
 		return html.toString();
 	}
 
-	private static String nameOf(@Nullable String monsterName)
-	{
+	private static String nameOf(@Nullable String monsterName) {
 		return monsterName == null || monsterName.isEmpty() ? "Unknown quarry" : monsterName;
 	}
 
 	/** Falls back to neutral for a difficulty name this build does not know. */
-	private static Color difficultyColor(@Nullable String difficulty)
-	{
-		if (difficulty == null)
-		{
+	private static Color difficultyColor(@Nullable String difficulty) {
+		if (difficulty == null) {
 			return ColorScheme.LIGHT_GRAY_COLOR;
 		}
-		try
-		{
+		try {
 			return TaskDifficulty.valueOf(difficulty).getColor();
 		}
-		catch (IllegalArgumentException e)
-		{
+		catch (IllegalArgumentException e) {
 			return ColorScheme.LIGHT_GRAY_COLOR; // a record filed by a future version
 		}
 	}
 
 	/** Null when there is no style to show, so the caller can omit the segment. */
 	@Nullable
-	private static Color styleColor(@Nullable String style)
-	{
-		if (style == null)
-		{
+	private static Color styleColor(@Nullable String style) {
+		if (style == null) {
 			return null;
 		}
-		try
-		{
+		try {
 			return AttackStyle.valueOf(style).getColor();
 		}
-		catch (IllegalArgumentException e)
-		{
+		catch (IllegalArgumentException e) {
 			return ColorScheme.LIGHT_GRAY_COLOR;
 		}
 	}
 
-	static String styleName(@Nullable String style)
-	{
-		if (style == null)
-		{
+	static String styleName(@Nullable String style) {
+		if (style == null) {
 			return "";
 		}
-		try
-		{
+		try {
 			return AttackStyle.valueOf(style).getDisplayName();
 		}
-		catch (IllegalArgumentException e)
-		{
+		catch (IllegalArgumentException e) {
 			return style; // show the raw name rather than dropping the fact
 		}
 	}
 
-	private static String htmlWrap(String body)
-	{
+	private static String htmlWrap(String body) {
 		return "<html><body>" + body + "</body></html>";
 	}
 
-	private static String hex(Color color)
-	{
+	private static String hex(Color color) {
 		return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
 	}
 
-	static String formatDuration(long ms)
-	{
+	static String formatDuration(long ms) {
 		long totalSeconds = Math.max(0, ms) / 1000;
 		long minutes = totalSeconds / 60;
 		long seconds = totalSeconds % 60;
-		if (minutes >= 60)
-		{
+		if (minutes >= 60) {
 			return String.format("%d:%02d:%02d", minutes / 60, minutes % 60, seconds);
 		}
 		return String.format("%d:%02d", minutes, seconds);

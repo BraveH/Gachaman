@@ -5,6 +5,7 @@ import com.gachaman.model.AttackStyle;
 import com.gachaman.model.GachaState;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 
@@ -15,11 +16,10 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Singleton
-public class StyleService
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class StyleService {
 	@Value
-	public static class StyleRollResult
-	{
+	public static class StyleRollResult {
 		AttackStyle previous; // null on the very first roll
 		AttackStyle rolled;
 		int cycleTarget;
@@ -30,28 +30,15 @@ public class StyleService
 	private final CeremonyBus ceremonyBus;
 	private final GachaRng rng;
 
-	@Inject
-	public StyleService(GachaStateService stateService, ComplianceService complianceService,
-		CeremonyBus ceremonyBus, GachaRng rng)
-	{
-		this.stateService = stateService;
-		this.complianceService = complianceService;
-		this.ceremonyBus = ceremonyBus;
-		this.rng = rng;
-	}
-
-	public boolean hasRolled()
-	{
+	public boolean hasRolled() {
 		GachaState state = stateService.get();
 		return state != null && state.getAllowedStyle() != null;
 	}
 
 	/** Roll (or re-roll) the allowed style, commit, and queue the roulette ceremony. */
-	public StyleRollResult roll(int currentTick)
-	{
+	public StyleRollResult roll(int currentTick) {
 		GachaState state = stateService.get();
-		if (state == null)
-		{
+		if (state == null) {
 			return null;
 		}
 		AttackStyle previous = state.getAllowedStyle() == null
@@ -82,20 +69,16 @@ public class StyleService
 	}
 
 	/** Advance the cycle by a completed task; true when a re-roll is due. */
-	public boolean advanceCycle(String appliedCharge)
-	{
+	public boolean advanceCycle(String appliedCharge) {
 		GachaState state = stateService.get();
-		if (state == null || state.getAllowedStyle() == null)
-		{
+		if (state == null || state.getAllowedStyle() == null) {
 			return false;
 		}
 		double weight = 1.0;
-		if ("COMPACTOR".equals(appliedCharge))
-		{
+		if ("COMPACTOR".equals(appliedCharge)) {
 			weight = Tuning.COMPACTOR_WEIGHT;
 		}
-		else if ("EXTENDER".equals(appliedCharge))
-		{
+		else if ("EXTENDER".equals(appliedCharge)) {
 			weight = Tuning.EXTENDER_WEIGHT;
 		}
 		final double w = weight;

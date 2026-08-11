@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import lombok.Getter;
 import net.runelite.api.Client;
 import net.runelite.api.Quest;
@@ -30,8 +31,7 @@ import net.runelite.api.QuestState;
  * exempt has to be IN it.
  */
 @Singleton
-public class QuestExemptionService
-{
+public class QuestExemptionService {
 	private final Client client;
 	private final QuestMonsterTable questMonsterTable;
 
@@ -52,43 +52,31 @@ public class QuestExemptionService
 	private final Set<String> manualUnlocks = new LinkedHashSet<>();
 
 	/** One reason the player may currently attack something off-task. */
-	public static final class Unlock
-	{
-		@Getter
+	@Getter
+	@RequiredArgsConstructor
+	public static final class Unlock {
 		private final String npcName;
 		/** The quest that opened it, or null when it is a manual override. */
-		@Getter
 		private final String questName;
 
-		public Unlock(String npcName, String questName)
-		{
-			this.npcName = npcName;
-			this.questName = questName;
-		}
-
-		public boolean isManual()
-		{
+		public boolean isManual() {
 			return questName == null;
 		}
 	}
 
 	@Inject
-	public QuestExemptionService(Client client, QuestMonsterTable questMonsterTable)
-	{
+	public QuestExemptionService(Client client, QuestMonsterTable questMonsterTable) {
 		this.client = client;
 		this.questMonsterTable = questMonsterTable;
 	}
 
 	/** Client thread only. True when the NPC is a target of an in-progress quest. */
-	public boolean isQuestTarget(String npcName)
-	{
-		if (npcName == null)
-		{
+	public boolean isQuestTarget(String npcName) {
+		if (npcName == null) {
 			return false;
 		}
 		int tick = client.getTickCount();
-		if (tick != memoTick)
-		{
+		if (tick != memoTick) {
 			memoTick = tick;
 			tickMemo.clear();
 		}
@@ -98,18 +86,15 @@ public class QuestExemptionService
 	// --- manual overrides ---
 
 	/** True when this newly unlocked it; false when it was already unlocked. */
-	public boolean unlock(String npcName)
-	{
+	public boolean unlock(String npcName) {
 		tickMemo.clear();
 		return manualUnlocks.add(npcName.toLowerCase(Locale.ROOT));
 	}
 
 	/** Drops one override, or every one of them when {@code npcName} is null. */
-	public int relock(String npcName)
-	{
+	public int relock(String npcName) {
 		tickMemo.clear();
-		if (npcName == null)
-		{
+		if (npcName == null) {
 			int had = manualUnlocks.size();
 			manualUnlocks.clear();
 			return had;
@@ -122,39 +107,31 @@ public class QuestExemptionService
 	 * of their contract, and why. Walks the whole table rather than answering
 	 * one name, so quest state is resolved once per quest and not once per NPC.
 	 */
-	public List<Unlock> currentUnlocks()
-	{
+	public List<Unlock> currentUnlocks() {
 		List<Unlock> out = new ArrayList<>();
-		for (String name : manualUnlocks)
-		{
+		for (String name : manualUnlocks) {
 			out.add(new Unlock(name, null));
 		}
 		Map<Quest, Boolean> inProgress = new HashMap<>();
-		for (QuestMonsterTable.Gate gate : questMonsterTable.allGates())
-		{
-			try
-			{
+		for (QuestMonsterTable.Gate gate : questMonsterTable.allGates()) {
+			try {
 				if (!inProgress.computeIfAbsent(gate.getQuest(),
-					q -> q.getState(client) == QuestState.IN_PROGRESS))
-				{
+					q -> q.getState(client) == QuestState.IN_PROGRESS)) {
 					continue;
 				}
-				if (gate.hasWindow() && !gate.contains(readVar(gate)))
-				{
+				if (gate.hasWindow() && !gate.contains(readVar(gate))) {
 					continue;
 				}
 				out.add(new Unlock(gate.getNpcName(), gate.getQuest().getName()));
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				// one quest's state script misbehaving must not empty the list
 			}
 		}
 		return out;
 	}
 
-	private int readVar(QuestMonsterTable.Gate gate)
-	{
+	private int readVar(QuestMonsterTable.Gate gate) {
 		// the same variable the quest itself tracks its progress in, read through
 		// the ordinary client API - this is how Quest Helper knows which step you
 		// are on, and it needs no privileged access
@@ -163,31 +140,23 @@ public class QuestExemptionService
 			: client.getVarpValue(gate.getVarId());
 	}
 
-	private boolean compute(String lowerName)
-	{
-		if (manualUnlocks.contains(lowerName))
-		{
+	private boolean compute(String lowerName) {
+		if (manualUnlocks.contains(lowerName)) {
 			return true;
 		}
-		for (QuestMonsterTable.Gate gate : questMonsterTable.gatesFor(lowerName))
-		{
-			try
-			{
-				if (gate.getQuest().getState(client) != QuestState.IN_PROGRESS)
-				{
+		for (QuestMonsterTable.Gate gate : questMonsterTable.gatesFor(lowerName)) {
+			try {
+				if (gate.getQuest().getState(client) != QuestState.IN_PROGRESS) {
 					continue;
 				}
-				if (!gate.hasWindow())
-				{
+				if (!gate.hasWindow()) {
 					return true;
 				}
-				if (gate.contains(readVar(gate)))
-				{
+				if (gate.contains(readVar(gate))) {
 					return true;
 				}
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				// a quest-state script hiccup fails CLOSED: the combat block
 				// only ever relaxes on positive proof that the quest is running
 			}

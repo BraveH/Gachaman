@@ -34,8 +34,7 @@ import net.runelite.client.party.messages.PartyMemberMessage;
 @EqualsAndHashCode(callSuper = false)
 @NoArgsConstructor
 @AllArgsConstructor
-public class GachaPresenceMessage extends PartyMemberMessage
-{
+public class GachaPresenceMessage extends PartyMemberMessage {
 	/**
 	 * The sender's locked attack style (AttackStyle name). A NAME rather
 	 * than an ordinal: an older client omits the field entirely and Gson

@@ -29,6 +29,7 @@ import java.util.zip.GZIPOutputStream;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import lombok.Getter;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
@@ -47,8 +48,8 @@ import net.runelite.client.game.ItemStats;
  */
 @Slf4j
 @Singleton
-public class CardDatabase
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class CardDatabase {
 	private static final int CHUNK_SIZE = 4000;
 	private static final Pattern BARROWS_DEGRADE = Pattern.compile("\\s+(100|75|50|25|0)$");
 	private static final Pattern TRAILING_PAREN = Pattern.compile("\\s*\\([^)]*\\)$");
@@ -82,8 +83,7 @@ public class CardDatabase
 	private static final int MIN_SANE_CARD_COUNT = 500;
 
 	@Value
-	private static class ScannedItem
-	{
+	private static class ScannedItem {
 		int itemId;
 		String rawName;
 		int slotIndex;
@@ -96,40 +96,25 @@ public class CardDatabase
 		"Chinchompa", "Red chinchompa", "Black chinchompa",
 		"Training sword", "Training shield", "Training bow", "Training arrows"));
 
-	@Inject
-	public CardDatabase(Client client, ItemManager itemManager, ClientThread clientThread, Gson gson)
-	{
-		this.client = client;
-		this.itemManager = itemManager;
-		this.clientThread = clientThread;
-		this.gson = gson;
-	}
-
-	public synchronized void onReady(Runnable callback)
-	{
-		if (ready)
-		{
+	public synchronized void onReady(Runnable callback) {
+		if (ready) {
 			callback.run();
 		}
-		else
-		{
+		else {
 			readyCallbacks.add(callback);
 		}
 	}
 
 	/** Kick off build (idempotent). Call after the client is logged in. */
-	public void beginBuild(TierTable tiers, SetTable sets)
-	{
-		if (ready || scanned != null)
-		{
+	public void beginBuild(TierTable tiers, SetTable sets) {
+		if (ready || scanned != null) {
 			return;
 		}
 		this.tierTable = tiers;
 		this.setTable = sets;
 
 		List<CardDefinition> cached = loadCache();
-		if (cached != null)
-		{
+		if (cached != null) {
 			log.info("Gachaman card DB loaded from cache: {} cards", cached.size());
 			index(cached);
 			return;
@@ -139,30 +124,23 @@ public class CardDatabase
 		clientThread.invokeLater(() -> scanChunk(0));
 	}
 
-	private void scanChunk(int startId)
-	{
-		if (startId == 0)
-		{
+	private void scanChunk(int startId) {
+		if (startId == 0) {
 			// item stats load asynchronously; scanning before they arrive would
 			// classify everything as unequipable and poison the cache
 			boolean statsReady;
-			try
-			{
+			try {
 				ItemStats probe = itemManager.getItemStats(PROBE_ITEM_ID);
 				statsReady = probe != null && probe.isEquipable();
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				statsReady = false;
 			}
-			if (!statsReady)
-			{
-				if (++statsProbeAttempts < MAX_PROBE_ATTEMPTS)
-				{
+			if (!statsReady) {
+				if (++statsProbeAttempts < MAX_PROBE_ATTEMPTS) {
 					clientThread.invokeLater(() -> scanChunk(0));
 				}
-				else
-				{
+				else {
 					log.warn("Gachaman: item stats never became available; card DB unavailable this session");
 				}
 				return;
@@ -170,53 +148,42 @@ public class CardDatabase
 		}
 		int count = client.getItemCount();
 		int end = Math.min(startId + CHUNK_SIZE, count);
-		for (int id = startId; id < end; id++)
-		{
-			try
-			{
+		for (int id = startId; id < end; id++) {
+			try {
 				ItemComposition comp = itemManager.getItemComposition(id);
-				if (comp == null || comp.getNote() != -1 || comp.getPlaceholderTemplateId() != -1)
-				{
+				if (comp == null || comp.getNote() != -1 || comp.getPlaceholderTemplateId() != -1) {
 					continue;
 				}
 				String name = comp.getName();
-				if (name == null || name.isEmpty() || "null".equalsIgnoreCase(name))
-				{
+				if (name == null || name.isEmpty() || "null".equalsIgnoreCase(name)) {
 					continue;
 				}
 				ItemStats stats = itemManager.getItemStats(id);
-				if (stats == null || !stats.isEquipable() || stats.getEquipment() == null)
-				{
+				if (stats == null || !stats.isEquipable() || stats.getEquipment() == null) {
 					continue;
 				}
 				int slotIndex = stats.getEquipment().getSlot();
-				if (GearSlot.fromSlotIndex(slotIndex) == null)
-				{
+				if (GearSlot.fromSlotIndex(slotIndex) == null) {
 					continue;
 				}
 				int power = powerScore(stats);
 				scanned.add(new ScannedItem(id, name, slotIndex, power, hasCombatStats(stats)));
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				// individual bad entries must never kill the scan
 			}
 		}
 		scanProgressPercent = count == 0 ? 0 : (int) (end * 100L / count);
-		if (end < count)
-		{
+		if (end < count) {
 			clientThread.invokeLater(() -> scanChunk(end));
 		}
-		else
-		{
+		else {
 			List<CardDefinition> cards = groupAndFinalize(scanned);
 			scanned = null;
-			if (cards.size() >= MIN_SANE_CARD_COUNT)
-			{
+			if (cards.size() >= MIN_SANE_CARD_COUNT) {
 				saveCache(cards);
 			}
-			else
-			{
+			else {
 				log.warn("Gachaman card DB scan looks incomplete ({} cards) — using in-memory only, no cache", cards.size());
 			}
 			log.info("Gachaman card DB built: {} cards from {} items", cards.size(), count);
@@ -229,8 +196,7 @@ public class CardDatabase
 	 * melee/ranged strength, magic damage, or prayer. Pure cosmetics have
 	 * none of these.
 	 */
-	private static boolean hasCombatStats(ItemStats stats)
-	{
+	private static boolean hasCombatStats(ItemStats stats) {
 		ItemEquipmentStats e = stats.getEquipment();
 		return e.getAstab() > 0 || e.getAslash() > 0 || e.getAcrush() > 0
 			|| e.getAmagic() > 0 || e.getArange() > 0
@@ -239,8 +205,7 @@ public class CardDatabase
 			|| e.getStr() > 0 || e.getRstr() > 0 || e.getMdmg() > 0 || e.getPrayer() > 0;
 	}
 
-	private static int powerScore(ItemStats stats)
-	{
+	private static int powerScore(ItemStats stats) {
 		ItemEquipmentStats e = stats.getEquipment();
 		int off = Math.max(Math.max(e.getAstab(), e.getAslash()),
 			Math.max(Math.max(e.getAcrush(), e.getAmagic()), e.getArange()));
@@ -249,18 +214,15 @@ public class CardDatabase
 		return Math.max(off, 0) + Math.max(def, 0) / 2 + Math.max(e.getStr(), 0) * 2;
 	}
 
-	private List<CardDefinition> groupAndFinalize(List<ScannedItem> items)
-	{
+	private List<CardDefinition> groupAndFinalize(List<ScannedItem> items) {
 		// group variants: (cleanName, slot) -> item ids
 		Map<String, TreeSet<Integer>> groups = new TreeMap<>();
 		Map<String, Integer> groupSlot = new HashMap<>();
 		Map<String, Integer> groupPower = new HashMap<>();
 		Map<String, Boolean> groupCombat = new HashMap<>();
-		for (ScannedItem item : items)
-		{
+		for (ScannedItem item : items) {
 			String clean = cleanName(item.getRawName());
-			if (clean.isEmpty())
-			{
+			if (clean.isEmpty()) {
 				continue;
 			}
 			String key = clean + " " + item.getSlotIndex();
@@ -274,16 +236,14 @@ public class CardDatabase
 		List<CardDefinition> cards = new ArrayList<>(groups.size());
 		Map<String, Integer> familyMinRank = new HashMap<>();
 		List<Object[]> pending = new ArrayList<>();
-		for (Map.Entry<String, TreeSet<Integer>> entry : groups.entrySet())
-		{
+		for (Map.Entry<String, TreeSet<Integer>> entry : groups.entrySet()) {
 			String clean = entry.getKey().substring(0, entry.getKey().lastIndexOf(' '));
 			// cosmetic-only equipment gets no card: a card exists only when at
 			// least one variant has combat stats (or the item is allowlisted).
 			// Items with ANY positive stat stay — by user ruling, stat-bearing
 			// novelty gear (camo sets, fish sacks...) keeps its cards.
 			if (!groupCombat.getOrDefault(entry.getKey(), false)
-				&& !COMBAT_ALLOWLIST.contains(clean))
-			{
+				&& !COMBAT_ALLOWLIST.contains(clean)) {
 				continue;
 			}
 			GearSlot slot = GearSlot.fromSlotIndex(groupSlot.get(entry.getKey()));
@@ -291,8 +251,7 @@ public class CardDatabase
 			String familyKey = null;
 			String tierKey = null;
 			int rank = 0;
-			if (match != null)
-			{
+			if (match != null) {
 				tierKey = match.getTierKey();
 				rank = match.getRank();
 				familyKey = match.getFamilyKey() + "/" + slot.name();
@@ -303,8 +262,7 @@ public class CardDatabase
 		}
 
 		// second pass: rarity + shiny eligibility need family context
-		for (Object[] p : pending)
-		{
+		for (Object[] p : pending) {
 			String clean = (String) p[0];
 			GearSlot slot = (GearSlot) p[1];
 			String tierKey = (String) p[2];
@@ -315,8 +273,7 @@ public class CardDatabase
 			int power = (Integer) p[6];
 
 			Rarity rarity = RarityOverrides.lookup(clean);
-			if (rarity == null)
-			{
+			if (rarity == null) {
 				rarity = tierKey != null ? rarityForRank(rank) : rarityForPower(power);
 			}
 			boolean shinyEligible = familyKey != null
@@ -328,53 +285,41 @@ public class CardDatabase
 		return cards;
 	}
 
-	static Rarity rarityForRank(int rank)
-	{
-		if (rank <= 2)
-		{
+	static Rarity rarityForRank(int rank) {
+		if (rank <= 2) {
 			return Rarity.COMMON;
 		}
-		if (rank <= 5)
-		{
+		if (rank <= 5) {
 			return Rarity.UNCOMMON;
 		}
-		if (rank <= 7)
-		{
+		if (rank <= 7) {
 			return Rarity.RARE;
 		}
 		return Rarity.EPIC;
 	}
 
-	static Rarity rarityForPower(int power)
-	{
-		if (power < 10)
-		{
+	static Rarity rarityForPower(int power) {
+		if (power < 10) {
 			return Rarity.COMMON;
 		}
-		if (power < 35)
-		{
+		if (power < 35) {
 			return Rarity.UNCOMMON;
 		}
-		if (power < 70)
-		{
+		if (power < 70) {
 			return Rarity.RARE;
 		}
-		if (power < 110)
-		{
+		if (power < 110) {
 			return Rarity.EPIC;
 		}
 		return Rarity.LEGENDARY;
 	}
 
-	static String cleanName(String raw)
-	{
+	static String cleanName(String raw) {
 		String name = raw.trim();
 		name = BARROWS_DEGRADE.matcher(name).replaceAll("");
-		while (true)
-		{
+		while (true) {
 			String stripped = TRAILING_PAREN.matcher(name).replaceAll("");
-			if (stripped.equals(name))
-			{
+			if (stripped.equals(name)) {
 				break;
 			}
 			name = stripped;
@@ -382,22 +327,18 @@ public class CardDatabase
 		return name.trim();
 	}
 
-	private synchronized void index(List<CardDefinition> cards)
-	{
+	private synchronized void index(List<CardDefinition> cards) {
 		Map<Integer, CardDefinition> byId = new HashMap<>();
 		Map<Integer, Integer> byItem = new HashMap<>();
 		Map<String, Integer> byName = new HashMap<>();
 		Map<String, List<CardDefinition>> families = new HashMap<>();
-		for (CardDefinition card : cards)
-		{
+		for (CardDefinition card : cards) {
 			byId.put(card.getCardId(), card);
 			byName.put(card.getName().toLowerCase(), card.getCardId());
-			for (int itemId : card.getItemIds())
-			{
+			for (int itemId : card.getItemIds()) {
 				byItem.put(itemId, card.getCardId());
 			}
-			if (card.getFamilyKey() != null)
-			{
+			if (card.getFamilyKey() != null) {
 				families.computeIfAbsent(card.getFamilyKey(), k -> new ArrayList<>()).add(card);
 			}
 		}
@@ -405,42 +346,33 @@ public class CardDatabase
 
 		// holograms: only tiers that exist on >= 2 distinct slots
 		Map<String, Set<GearSlot>> slotsPerTier = new HashMap<>();
-		for (CardDefinition card : cards)
-		{
-			if (card.getTierKey() != null)
-			{
+		for (CardDefinition card : cards) {
+			if (card.getTierKey() != null) {
 				slotsPerTier.computeIfAbsent(card.getTierKey(), k -> new HashSet<>()).add(card.getSlot());
 			}
 		}
 		Map<String, HologramDefinition> holos = new HashMap<>();
-		for (HologramDefinition holo : tierTable.getHolograms())
-		{
-			if (slotsPerTier.getOrDefault(holo.getTierKey(), Collections.emptySet()).size() >= 2)
-			{
+		for (HologramDefinition holo : tierTable.getHolograms()) {
+			if (slotsPerTier.getOrDefault(holo.getTierKey(), Collections.emptySet()).size() >= 2) {
 				holos.put(holo.getTierKey(), holo);
 			}
 		}
 
 		// set tag index: setKey -> member cards (matched by name)
 		Map<String, List<CardDefinition>> setIndex = new HashMap<>();
-		for (SetTable.CardSet set : setTable.getSets())
-		{
+		for (SetTable.CardSet set : setTable.getSets()) {
 			List<CardDefinition> members = new ArrayList<>();
 			List<String> unresolved = new ArrayList<>();
-			for (String cardName : set.getCardNames())
-			{
+			for (String cardName : set.getCardNames()) {
 				Integer cardId = byName.get(cardName.toLowerCase());
-				if (cardId != null)
-				{
+				if (cardId != null) {
 					members.add(byId.get(cardId));
 				}
-				else
-				{
+				else {
 					unresolved.add(cardName);
 				}
 			}
-			if (!unresolved.isEmpty())
-			{
+			if (!unresolved.isEmpty()) {
 				// SetPerkService refuses to complete a set whose names don't all
 				// resolve, so a typo or a renamed item bricks the set permanently.
 				// Say so loudly — silently it looks like ordinary bad luck.
@@ -458,14 +390,11 @@ public class CardDatabase
 		bySetTagIndexed = Collections.unmodifiableMap(setIndex);
 		ready = true;
 		scanProgressPercent = 100;
-		for (Runnable callback : readyCallbacks)
-		{
-			try
-			{
+		for (Runnable callback : readyCallbacks) {
+			try {
 				callback.run();
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				log.warn("card DB ready callback failed", e);
 			}
 		}
@@ -475,21 +404,18 @@ public class CardDatabase
 	// --- Queries ---
 
 	@Nullable
-	public CardDefinition card(int cardId)
-	{
+	public CardDefinition card(int cardId) {
 		return byCardId.get(cardId);
 	}
 
 	@Nullable
-	public CardDefinition cardForItem(int itemId)
-	{
+	public CardDefinition cardForItem(int itemId) {
 		Integer cardId = cardIdByItemId.get(itemId);
 		return cardId == null ? null : byCardId.get(cardId);
 	}
 
 	@Nullable
-	public CardDefinition cardByName(String name)
-	{
+	public CardDefinition cardByName(String name) {
 		Integer cardId = cardIdByName.get(name.toLowerCase());
 		return cardId == null ? null : byCardId.get(cardId);
 	}
@@ -509,37 +435,29 @@ public class CardDatabase
 	 * cache version and force every existing install into a full item rescan to
 	 * answer a question that is asked once per account.
 	 */
-	public Set<Integer> weaponCardIdsForStyle(@Nullable AttackStyle style)
-	{
+	public Set<Integer> weaponCardIdsForStyle(@Nullable AttackStyle style) {
 		Set<Integer> ids = new HashSet<>();
-		if (style == null)
-		{
+		if (style == null) {
 			return ids;
 		}
-		for (CardDefinition card : byCardId.values())
-		{
-			if (card.getSlot() != GearSlot.WEAPON || card.getRarity() != Rarity.COMMON)
-			{
+		for (CardDefinition card : byCardId.values()) {
+			if (card.getSlot() != GearSlot.WEAPON || card.getRarity() != Rarity.COMMON) {
 				continue;
 			}
-			try
-			{
+			try {
 				// cardId IS the lowest item id of the merged variant group, so it
 				// is always a concrete item (same idiom as lowStatSuspects)
 				ItemStats stats = itemManager.getItemStats(card.getCardId());
-				if (stats == null || stats.getEquipment() == null)
-				{
+				if (stats == null || stats.getEquipment() == null) {
 					continue;
 				}
 				ItemEquipmentStats e = stats.getEquipment();
 				if (dominantStyle(e.getAstab(), e.getAslash(), e.getAcrush(),
-					e.getArange(), e.getAmagic()) == style)
-				{
+					e.getArange(), e.getAmagic()) == style) {
 					ids.add(card.getCardId());
 				}
 			}
-			catch (Exception ex)
-			{
+			catch (Exception ex) {
 				// one unreadable item must never cost the player their gift
 			}
 		}
@@ -554,33 +472,26 @@ public class CardDatabase
 	 */
 	@Nullable
 	static AttackStyle dominantStyle(int astab, int aslash, int acrush,
-		int arange, int amagic)
-	{
+		int arange, int amagic) {
 		int melee = Math.max(astab, Math.max(aslash, acrush));
 		int best = Math.max(melee, Math.max(arange, amagic));
-		if (best <= 0)
-		{
+		if (best <= 0) {
 			return null;
 		}
 		int winners = 0;
-		if (melee == best)
-		{
+		if (melee == best) {
 			winners++;
 		}
-		if (arange == best)
-		{
+		if (arange == best) {
 			winners++;
 		}
-		if (amagic == best)
-		{
+		if (amagic == best) {
 			winners++;
 		}
-		if (winners != 1)
-		{
+		if (winners != 1) {
 			return null;
 		}
-		if (melee == best)
-		{
+		if (melee == best) {
 			return AttackStyle.MELEE;
 		}
 		return arange == best
@@ -588,23 +499,19 @@ public class CardDatabase
 			: AttackStyle.MAGIC;
 	}
 
-	public Map<Integer, CardDefinition> all()
-	{
+	public Map<Integer, CardDefinition> all() {
 		return byCardId;
 	}
 
-	public List<CardDefinition> family(String familyKey)
-	{
+	public List<CardDefinition> family(String familyKey) {
 		return byFamily.getOrDefault(familyKey, Collections.emptyList());
 	}
 
-	public Map<String, HologramDefinition> holograms()
-	{
+	public Map<String, HologramDefinition> holograms() {
 		return hologramsByTier;
 	}
 
-	public List<CardDefinition> setMembers(String setKey)
-	{
+	public List<CardDefinition> setMembers(String setKey) {
 		return bySetTagIndexed.getOrDefault(setKey, Collections.emptyList());
 	}
 
@@ -614,20 +521,15 @@ public class CardDatabase
 	 * that slipped the filter. Untiered cards only (tiered gear is legit by
 	 * construction); allowlisted names skipped.
 	 */
-	public List<String> lowStatSuspects(int maxTotalBonus)
-	{
+	public List<String> lowStatSuspects(int maxTotalBonus) {
 		List<String> suspects = new ArrayList<>();
-		for (CardDefinition card : byCardId.values())
-		{
-			if (card.getTierKey() != null || COMBAT_ALLOWLIST.contains(card.getName()))
-			{
+		for (CardDefinition card : byCardId.values()) {
+			if (card.getTierKey() != null || COMBAT_ALLOWLIST.contains(card.getName())) {
 				continue;
 			}
-			try
-			{
+			try {
 				ItemStats stats = itemManager.getItemStats(card.getCardId());
-				if (stats == null || stats.getEquipment() == null)
-				{
+				if (stats == null || stats.getEquipment() == null) {
 					continue;
 				}
 				ItemEquipmentStats e = stats.getEquipment();
@@ -639,13 +541,11 @@ public class CardDatabase
 					+ Math.max(0, e.getDrange())
 					+ Math.max(0, e.getStr()) + Math.max(0, e.getRstr())
 					+ Math.max(0, e.getPrayer()) + (int) Math.max(0, e.getMdmg());
-				if (total <= maxTotalBonus)
-				{
+				if (total <= maxTotalBonus) {
 					suspects.add(card.getName() + " (+" + total + ")");
 				}
 			}
-			catch (Exception ex)
-			{
+			catch (Exception ex) {
 				// skip unreadable entries
 			}
 		}
@@ -655,8 +555,7 @@ public class CardDatabase
 
 	// --- Cache ---
 
-	private File cacheFile()
-	{
+	private File cacheFile() {
 		// v5: "Runite" joins the rune tier's prefixes — "Runite bolts" is the one
 		//     equipable item spelt the long way, and it was landing untiered
 		//     (rarity by power, gated by nothing at all);
@@ -670,47 +569,37 @@ public class CardDatabase
 	}
 
 	@Nullable
-	private List<CardDefinition> loadCache()
-	{
+	private List<CardDefinition> loadCache() {
 		File f = cacheFile();
-		if (!f.exists())
-		{
+		if (!f.exists()) {
 			return null;
 		}
 		try (InputStreamReader r = new InputStreamReader(
-			new GZIPInputStream(Files.newInputStream(f.toPath())), StandardCharsets.UTF_8))
-		{
+			new GZIPInputStream(Files.newInputStream(f.toPath())), StandardCharsets.UTF_8)) {
 			List<CardDefinition> cards = gson.fromJson(r,
-				new TypeToken<List<CardDefinition>>()
-				{
+				new TypeToken<List<CardDefinition>>() {
 				}.getType());
 			return cards == null || cards.isEmpty() ? null : cards;
 		}
-		catch (Exception e)
-		{
+		catch (Exception e) {
 			log.warn("Failed to read card DB cache", e);
 			return null;
 		}
 	}
 
-	private void saveCache(List<CardDefinition> cards)
-	{
+	private void saveCache(List<CardDefinition> cards) {
 		File f = cacheFile();
-		try
-		{
+		try {
 			File dir = f.getParentFile();
-			if (!dir.exists() && !dir.mkdirs())
-			{
+			if (!dir.exists() && !dir.mkdirs()) {
 				return;
 			}
 			try (Writer w = new OutputStreamWriter(
-				new GZIPOutputStream(Files.newOutputStream(f.toPath())), StandardCharsets.UTF_8))
-			{
+				new GZIPOutputStream(Files.newOutputStream(f.toPath())), StandardCharsets.UTF_8)) {
 				gson.toJson(cards, w);
 			}
 		}
-		catch (IOException e)
-		{
+		catch (IOException e) {
 			log.warn("Failed to write card DB cache", e);
 		}
 	}

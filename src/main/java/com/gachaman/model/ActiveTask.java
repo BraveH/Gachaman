@@ -9,8 +9,7 @@ import lombok.With;
 @Value
 @With
 @Builder(toBuilder = true)
-public class ActiveTask
-{
+public class ActiveTask {
 	TaskDifficulty difficulty;
 	String monsterName;
 	int monsterCombatLevel;
@@ -107,8 +106,7 @@ public class ActiveTask
 	 */
 	Long partyProposalId;
 
-	public boolean isParty()
-	{
+	public boolean isParty() {
 		return partyLabel != null && !partyConvertedToSolo;
 	}
 }

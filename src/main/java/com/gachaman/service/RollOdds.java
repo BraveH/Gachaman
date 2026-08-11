@@ -14,8 +14,7 @@ import lombok.Value;
  * nothing here reads a Client, a GachaState or the RNG, which is also what makes it
  * the testable half of the feature (ChestService.isReachable dereferences Client).
  */
-public final class RollOdds
-{
+public final class RollOdds {
 	/**
 	 * Bucket key for cards the proximity gate never level-checks at all. Deliberately
 	 * the empty string rather than null so it can be a map key and compared with
@@ -25,8 +24,7 @@ public final class RollOdds
 
 	/** One disclosure row: a tier ladder in one reach band. */
 	@Value
-	public static class TierBand
-	{
+	public static class TierBand {
 		/** tierKey, or UNTIERED. */
 		String tierKey;
 		/**
@@ -44,14 +42,12 @@ public final class RollOdds
 	 * under — two independent derivations of "which row is this?" would be free
 	 * to disagree, and the tooltip would then name cards from the wrong band.
 	 */
-	public static TierBand bandOf(CardDefinition card, boolean wieldableNow)
-	{
+	public static TierBand bandOf(CardDefinition card, boolean wieldableNow) {
 		String key = card.getTierKey() == null ? UNTIERED : card.getTierKey();
 		return new TierBand(key, wieldableNow);
 	}
 
-	private RollOdds()
-	{
+	private RollOdds() {
 	}
 
 	/**
@@ -60,11 +56,9 @@ public final class RollOdds
 	 * purpose — the caller passes Tuning.CHEST_ODDS's shared array and must never see
 	 * it move.
 	 */
-	public static double[] adjustOdds(double[] odds, double pityBonusPercent)
-	{
+	public static double[] adjustOdds(double[] odds, double pityBonusPercent) {
 		double[] adjusted = odds.clone();
-		if (pityBonusPercent > 0)
-		{
+		if (pityBonusPercent > 0) {
 			double shift = Math.min(adjusted[0] - 1, pityBonusPercent);
 			adjusted[0] -= shift;
 			adjusted[3] += shift * 0.7;
@@ -74,8 +68,7 @@ public final class RollOdds
 	}
 
 	/** Never returns 0: headroom gear stays possible, just rarer. */
-	public static double leanWeight(boolean wieldableNow)
-	{
+	public static double leanWeight(boolean wieldableNow) {
 		return wieldableNow ? 1.0 : Tuning.HOUSE_LEAN_HEADROOM_WEIGHT;
 	}
 
@@ -90,14 +83,11 @@ public final class RollOdds
 	 * ChestService — could only be tested through isReachable, which dereferences
 	 * Client and is therefore untestable headless.
 	 */
-	public static int weightedIndex(double roll, double[] weights)
-	{
+	public static int weightedIndex(double roll, double[] weights) {
 		double cumulative = 0;
-		for (int i = 0; i < weights.length; i++)
-		{
+		for (int i = 0; i < weights.length; i++) {
 			cumulative += weights[i];
-			if (roll < cumulative)
-			{
+			if (roll < cumulative) {
 				return i;
 			}
 		}
@@ -105,20 +95,16 @@ public final class RollOdds
 	}
 
 	/** Weights to probabilities. An empty or all-zero vector returns all zeroes. */
-	public static double[] normalize(double[] weights)
-	{
+	public static double[] normalize(double[] weights) {
 		double total = 0;
-		for (double w : weights)
-		{
+		for (double w : weights) {
 			total += w;
 		}
 		double[] out = new double[weights.length];
-		if (total <= 0)
-		{
+		if (total <= 0) {
 			return out;
 		}
-		for (int i = 0; i < weights.length; i++)
-		{
+		for (int i = 0; i < weights.length; i++) {
 			out[i] = weights[i] / total;
 		}
 		return out;
@@ -132,26 +118,21 @@ public final class RollOdds
 	 * branches instead of quietly reporting a lean that never ran.
 	 */
 	public static Map<TierBand, Double> tierShares(List<CardDefinition> candidates,
-		boolean[] wieldableNow, boolean leaned)
-	{
+		boolean[] wieldableNow, boolean leaned) {
 		Map<TierBand, Double> shares = new LinkedHashMap<>();
-		if (candidates.isEmpty())
-		{
+		if (candidates.isEmpty()) {
 			return shares;
 		}
 		double[] weights = new double[candidates.size()];
 		double total = 0;
-		for (int i = 0; i < candidates.size(); i++)
-		{
+		for (int i = 0; i < candidates.size(); i++) {
 			weights[i] = leaned ? leanWeight(wieldableNow[i]) : 1.0;
 			total += weights[i];
 		}
-		if (total <= 0)
-		{
+		if (total <= 0) {
 			return shares;
 		}
-		for (int i = 0; i < candidates.size(); i++)
-		{
+		for (int i = 0; i < candidates.size(); i++) {
 			shares.merge(bandOf(candidates.get(i), wieldableNow[i]), weights[i] / total,
 				Double::sum);
 		}

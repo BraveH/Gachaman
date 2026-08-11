@@ -8,6 +8,8 @@ import java.util.function.UnaryOperator;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -16,10 +18,9 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Singleton
-public class GachaStateService
-{
-	public interface Listener
-	{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class GachaStateService {
+	public interface Listener {
 		void onStateChanged(GachaState newState);
 	}
 
@@ -27,36 +28,23 @@ public class GachaStateService
 	private final List<Listener> listeners = new ArrayList<>();
 
 	private volatile GachaState state;
+	@Getter
 	private volatile boolean loaded;
 
-	@Inject
-	public GachaStateService(StateStore store)
-	{
-		this.store = store;
-	}
-
 	@Nullable
-	public GachaState get()
-	{
+	public GachaState get() {
 		return state;
 	}
 
-	public boolean isLoaded()
-	{
-		return loaded;
-	}
 
 	/** Load for the current RS profile; creates fresh state when none exists. */
-	public synchronized void load(int combatLevel)
-	{
+	public synchronized void load(int combatLevel) {
 		GachaState s = store.load();
-		if (s == null)
-		{
+		if (s == null) {
 			s = GachaState.fresh(combatLevel);
 			log.info("Gachaman: fresh profile state created (cb {})", combatLevel);
 		}
-		else
-		{
+		else {
 			// older saves: fields added since deserialize as null
 			s = s.normalized();
 		}
@@ -65,10 +53,8 @@ public class GachaStateService
 		notifyListeners(s);
 	}
 
-	public synchronized void unload()
-	{
-		if (loaded && state != null)
-		{
+	public synchronized void unload() {
+		if (loaded && state != null) {
 			store.save(state, true);
 		}
 		state = null;
@@ -80,22 +66,18 @@ public class GachaStateService
 	 * RuneScapeProfileChanged fires after the profile key has already moved,
 	 * so saving here would write the old account's state under the new key.
 	 */
-	public synchronized void discard()
-	{
+	public synchronized void discard() {
 		state = null;
 		loaded = false;
 	}
 
 	/** Apply a pure mutation, persist, notify. No-op when not loaded. */
-	public synchronized GachaState mutate(UnaryOperator<GachaState> fn)
-	{
-		if (!loaded || state == null)
-		{
+	public synchronized GachaState mutate(UnaryOperator<GachaState> fn) {
+		if (!loaded || state == null) {
 			return null;
 		}
 		GachaState next = fn.apply(state);
-		if (next == null || next == state)
-		{
+		if (next == null || next == state) {
 			return state;
 		}
 		state = next;
@@ -105,34 +87,26 @@ public class GachaStateService
 	}
 
 	/** Force a save of the current snapshot (logout/shutdown checkpoints). */
-	public synchronized void checkpoint()
-	{
-		if (loaded && state != null)
-		{
+	public synchronized void checkpoint() {
+		if (loaded && state != null) {
 			store.save(state, true);
 		}
 	}
 
-	public synchronized void addListener(Listener l)
-	{
+	public synchronized void addListener(Listener l) {
 		listeners.add(l);
 	}
 
-	public synchronized void removeListener(Listener l)
-	{
+	public synchronized void removeListener(Listener l) {
 		listeners.remove(l);
 	}
 
-	private void notifyListeners(GachaState s)
-	{
-		for (Listener l : new ArrayList<>(listeners))
-		{
-			try
-			{
+	private void notifyListeners(GachaState s) {
+		for (Listener l : new ArrayList<>(listeners)) {
+			try {
 				l.onStateChanged(s);
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				log.warn("Gachaman state listener failed", e);
 			}
 		}

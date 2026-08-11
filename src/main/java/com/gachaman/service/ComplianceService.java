@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Actor;
@@ -24,25 +25,25 @@ import net.runelite.client.util.Text;
  */
 @Slf4j
 @Singleton
-public class ComplianceService implements StyleTracker.AttackListener
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class ComplianceService implements StyleTracker.AttackListener {
 	private static final int VIOLATING_DISPLAY_TICKS = 8;
 
-	public interface Listener
-	{
+	public interface Listener {
 		void onForbiddenAttack(AttackStyle used, AttackStyle allowed, long penaltyGc);
 
-		void onTaintAdded(int newTaint);
+		default void onTaintAdded(int newTaint) {
+		}
 
-		void onTaintCleared(int cleared, int remaining);
+		default void onTaintCleared(int cleared, int remaining) {
+		}
 
 		/**
 		 * A forbidden-attack verdict was retracted (the delayed Magic XP
 		 * proved the attack was actually a compliant cast); its penalty has
 		 * been refunded.
 		 */
-		default void onForbiddenPardoned(int tick, long refundedGc)
-		{
+		default void onForbiddenPardoned(int tick, long refundedGc) {
 		}
 
 		/**
@@ -50,14 +51,13 @@ public class ComplianceService implements StyleTracker.AttackListener
 		 * cleanse: nothing was worked off, so this must never be confused with
 		 * {@link #onTaintCleared} (which pays the first-cleanse bounty).
 		 */
-		default void onTaintRolledBack(int lifted, int remaining)
-		{
+		default void onTaintRolledBack(int lifted, int remaining) {
 		}
 	}
 
 	/** One convicted forbidden attack: when, and what it cost (for pardon refunds). */
-	private static final class ForbiddenAttack
-	{
+	@RequiredArgsConstructor
+	private static final class ForbiddenAttack {
 		final int tick;
 		final long deductedGc;
 		/**
@@ -66,12 +66,6 @@ public class ComplianceService implements StyleTracker.AttackListener
 		 * own taint and never someone else's.
 		 */
 		int taintPoints;
-
-		ForbiddenAttack(int tick, long deductedGc)
-		{
-			this.tick = tick;
-			this.deductedGc = deductedGc;
-		}
 	}
 
 	private final GachaStateService stateService;
@@ -95,37 +89,22 @@ public class ComplianceService implements StyleTracker.AttackListener
 	private List<Listener> listeners = new ArrayList<>();
 	private int currentTick;
 
-	@Inject
-	public ComplianceService(GachaStateService stateService, CreditSink creditSink,
-		Client client, QuestExemptionService questExemptionService)
-	{
-		this.stateService = stateService;
-		this.creditSink = creditSink;
-		this.client = client;
-		this.questExemptionService = questExemptionService;
-	}
-
-	public void addListener(Listener listener)
-	{
-		if (!listeners.contains(listener))
-		{
+	public void addListener(Listener listener) {
+		if (!listeners.contains(listener)) {
 			listeners.add(listener);
 		}
 	}
 
-	public void removeListener(Listener listener)
-	{
+	public void removeListener(Listener listener) {
 		listeners.remove(listener);
 	}
 
-	public void noteStyleChanged(int tick)
-	{
+	public void noteStyleChanged(int tick) {
 		styleChangedTick = tick;
 	}
 
 	/** True while the "in violation" chip should show. */
-	public boolean isViolating(int tick)
-	{
+	public boolean isViolating(int tick) {
 		return lastForbiddenAttackTick >= 0 && tick - lastForbiddenAttackTick <= VIOLATING_DISPLAY_TICKS
 			&& lastCompliantAttackTick < lastForbiddenAttackTick;
 	}
@@ -136,8 +115,7 @@ public class ComplianceService implements StyleTracker.AttackListener
 	 * bounded by the DEATH tick — an attack on the next target during the
 	 * settle window must never taint the finished kill.
 	 */
-	public boolean forbiddenAttackBetween(int fromTick, int toTick)
-	{
+	public boolean forbiddenAttackBetween(int fromTick, int toTick) {
 		return convictingAttackTick(fromTick, toTick) >= 0;
 	}
 
@@ -149,12 +127,9 @@ public class ComplianceService implements StyleTracker.AttackListener
 	 * match: with two convictions in one window the taint stays pinned to the
 	 * first, so pardoning only the second correctly lifts nothing.
 	 */
-	public int convictingAttackTick(int fromTick, int toTick)
-	{
-		for (ForbiddenAttack attack : recentForbiddenAttacks)
-		{
-			if (attack.tick >= fromTick && attack.tick <= toTick)
-			{
+	public int convictingAttackTick(int fromTick, int toTick) {
+		for (ForbiddenAttack attack : recentForbiddenAttacks) {
+			if (attack.tick >= fromTick && attack.tick <= toTick) {
 				return attack.tick;
 			}
 		}
@@ -162,31 +137,26 @@ public class ComplianceService implements StyleTracker.AttackListener
 	}
 
 	@Override
-	public void onAttack(AttackStyle style, int tick)
-	{
+	public void onAttack(AttackStyle style, int tick) {
 		currentTick = tick;
 		GachaState state = stateService.get();
 		if (state == null || state.getAllowedStyle() == null
-			|| (client != null && TutorialGate.onTutorial(client)))
-		{
+			|| (client != null && TutorialGate.onTutorial(client))) {
 			return;
 		}
 		AttackStyle allowed = AttackStyle.valueOf(state.getAllowedStyle());
-		if (style == allowed)
-		{
+		if (style == allowed) {
 			lastCompliantAttackTick = tick;
 			return;
 		}
 		// quest fights are style-exempt: some quest bosses require a specific
 		// style and a lock would soft-lock the quest
-		if (client != null)
-		{
+		if (client != null) {
 			Actor target = client.getLocalPlayer() == null
 				? null : client.getLocalPlayer().getInteracting();
 			if (target instanceof NPC && target.getName() != null
 				&& questExemptionService.isQuestTarget(
-					Text.removeTags(target.getName())))
-			{
+					Text.removeTags(target.getName()))) {
 				lastCompliantAttackTick = tick;
 				return;
 			}
@@ -195,18 +165,14 @@ public class ComplianceService implements StyleTracker.AttackListener
 		long penalty = penaltyFor(state.getActiveTask());
 		long deducted = creditSink.deduct(penalty);
 		recentForbiddenAttacks.addLast(new ForbiddenAttack(tick, deducted));
-		while (recentForbiddenAttacks.size() > 32)
-		{
+		while (recentForbiddenAttacks.size() > 32) {
 			recentForbiddenAttacks.removeFirst();
 		}
-		for (Listener listener : listeners)
-		{
-			try
-			{
+		for (Listener listener : listeners) {
+			try {
 				listener.onForbiddenAttack(style, allowed, deducted);
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				log.warn("compliance listener failed", e);
 			}
 		}
@@ -221,19 +187,15 @@ public class ComplianceService implements StyleTracker.AttackListener
 	 * combo, side bets and KC were already scored and cannot be replayed.
 	 */
 	@Override
-	public void onAttackPardoned(int judgedTick)
-	{
+	public void onAttackPardoned(int judgedTick) {
 		ForbiddenAttack pardoned = null;
-		for (ForbiddenAttack attack : recentForbiddenAttacks)
-		{
-			if (attack.tick == judgedTick)
-			{
+		for (ForbiddenAttack attack : recentForbiddenAttacks) {
+			if (attack.tick == judgedTick) {
 				pardoned = attack;
 				break;
 			}
 		}
-		if (pardoned == null)
-		{
+		if (pardoned == null) {
 			return; // that verdict was compliant anyway — nothing to undo
 		}
 		recentForbiddenAttacks.remove(pardoned);
@@ -249,46 +211,36 @@ public class ComplianceService implements StyleTracker.AttackListener
 			? stateService.mutate(s -> s.withTaint(s.getTaint() - lifted))
 			: null;
 		int latestRemaining = -1;
-		for (ForbiddenAttack attack : recentForbiddenAttacks)
-		{
+		for (ForbiddenAttack attack : recentForbiddenAttacks) {
 			latestRemaining = Math.max(latestRemaining, attack.tick);
 		}
 		lastForbiddenAttackTick = latestRemaining;
 		lastCompliantAttackTick = Math.max(lastCompliantAttackTick, judgedTick);
-		for (Listener listener : listeners)
-		{
-			try
-			{
+		for (Listener listener : listeners) {
+			try {
 				listener.onForbiddenPardoned(judgedTick, refunded);
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				log.warn("compliance listener failed", e);
 			}
 		}
 		// value-based, not null-based: @With returns the same instance when the
 		// value is unchanged and mutate hands that straight back, so a non-null
 		// state is no proof that any taint actually came off
-		if (afterRollback != null && afterRollback.getTaint() < standingTaint)
-		{
-			for (Listener listener : listeners)
-			{
-				try
-				{
+		if (afterRollback != null && afterRollback.getTaint() < standingTaint) {
+			for (Listener listener : listeners) {
+				try {
 					listener.onTaintRolledBack(lifted, afterRollback.getTaint());
 				}
-				catch (Exception e)
-				{
+				catch (Exception e) {
 					log.warn("compliance listener failed", e);
 				}
 			}
 		}
 	}
 
-	static long penaltyFor(ActiveTask task)
-	{
-		if (task == null)
-		{
+	static long penaltyFor(ActiveTask task) {
+		if (task == null) {
 			return Tuning.VIOLATION_ATTACK_PENALTY_NO_TASK;
 		}
 		return Math.max(Tuning.VIOLATION_ATTACK_PENALTY_FLOOR,
@@ -301,27 +253,20 @@ public class ComplianceService implements StyleTracker.AttackListener
 	 * attack can reverse this point. An unknown tick still taints — it is just
 	 * unattributable, and therefore permanent until worked off.
 	 */
-	public void addTaint(int convictionTick)
-	{
+	public void addTaint(int convictionTick) {
 		var state = stateService.mutate(s -> s.withTaint(s.getTaint() + 1));
-		if (state != null)
-		{
-			for (ForbiddenAttack attack : recentForbiddenAttacks)
-			{
-				if (attack.tick == convictionTick)
-				{
+		if (state != null) {
+			for (ForbiddenAttack attack : recentForbiddenAttacks) {
+				if (attack.tick == convictionTick) {
 					attack.taintPoints++;
 					break;
 				}
 			}
-			for (Listener listener : listeners)
-			{
-				try
-				{
+			for (Listener listener : listeners) {
+				try {
 					listener.onTaintAdded(state.getTaint());
 				}
-				catch (Exception e)
-				{
+				catch (Exception e) {
 					log.warn("compliance listener failed", e);
 				}
 			}
@@ -329,16 +274,13 @@ public class ComplianceService implements StyleTracker.AttackListener
 	}
 
 	/** Called on each compliant credited kill; works one taint off. */
-	public void workOffTaint()
-	{
+	public void workOffTaint() {
 		GachaState state = stateService.get();
-		if (state == null || state.getTaint() <= 0)
-		{
+		if (state == null || state.getTaint() <= 0) {
 			return;
 		}
 		var next = stateService.mutate(s -> s.withTaint(Math.max(0, s.getTaint() - 1)));
-		if (next != null)
-		{
+		if (next != null) {
 			// taint points are fungible against the global counter, so retire the
 			// OLDEST attributed point first — that keeps the ledger's total from
 			// running AHEAD of the counter, which is what stops a pardon from
@@ -347,22 +289,17 @@ public class ComplianceService implements StyleTracker.AttackListener
 			// unretired points with it while the counter keeps them. The ledger
 			// is therefore only ever <= the counter, and the pardon path still
 			// needs its own Math.min against the standing taint.
-			for (ForbiddenAttack attack : recentForbiddenAttacks)
-			{
-				if (attack.taintPoints > 0)
-				{
+			for (ForbiddenAttack attack : recentForbiddenAttacks) {
+				if (attack.taintPoints > 0) {
 					attack.taintPoints--;
 					break;
 				}
 			}
-			for (Listener listener : listeners)
-			{
-				try
-				{
+			for (Listener listener : listeners) {
+				try {
 					listener.onTaintCleared(1, next.getTaint());
 				}
-				catch (Exception e)
-				{
+				catch (Exception e) {
 					log.warn("compliance listener failed", e);
 				}
 			}
@@ -370,29 +307,23 @@ public class ComplianceService implements StyleTracker.AttackListener
 	}
 
 	/** Redemption task completion clears everything. */
-	public void clearAllTaint()
-	{
+	public void clearAllTaint() {
 		GachaState state = stateService.get();
-		if (state == null || state.getTaint() <= 0)
-		{
+		if (state == null || state.getTaint() <= 0) {
 			return;
 		}
 		int cleared = state.getTaint();
 		stateService.mutate(s -> s.withTaint(0));
 		// the counter is empty, so no conviction is answerable for anything any
 		// more — a later pardon must not "refund" taint redemption already wiped
-		for (ForbiddenAttack attack : recentForbiddenAttacks)
-		{
+		for (ForbiddenAttack attack : recentForbiddenAttacks) {
 			attack.taintPoints = 0;
 		}
-		for (Listener listener : listeners)
-		{
-			try
-			{
+		for (Listener listener : listeners) {
+			try {
 				listener.onTaintCleared(cleared, 0);
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				log.warn("compliance listener failed", e);
 			}
 		}
@@ -404,8 +335,7 @@ public class ComplianceService implements StyleTracker.AttackListener
 	 * outlived its own save would let a pardon reverse the NEXT character's
 	 * taint, so the convictions die with the profile.
 	 */
-	public void resetTransient()
-	{
+	public void resetTransient() {
 		recentForbiddenAttacks.clear();
 		lastForbiddenAttackTick = -1;
 		lastCompliantAttackTick = -1;

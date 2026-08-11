@@ -5,8 +5,7 @@ import lombok.With;
 
 @Value
 @With
-public class MonsterStats
-{
+public class MonsterStats {
 	long kills;
 	long gcEarned;
 	int tasksCompleted;

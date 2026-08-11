@@ -19,22 +19,18 @@ import net.runelite.api.Quest;
  * Fully deterministic for a given RNG seed and pool — party rolls rely on
  * this to produce identical offers on every participant's client.
  */
-public final class TaskGenerator
-{
-	private TaskGenerator()
-	{
+public final class TaskGenerator {
+	private TaskGenerator() {
 	}
 
 	public static List<TaskOffer> generateOffers(List<MonsterTable.Monster> pool, int playerCb,
-		boolean membersWorld, boolean tainted, GachaRng rng)
-	{
+		boolean membersWorld, boolean tainted, GachaRng rng) {
 		return generateOffers(pool, playerCb, 99, membersWorld, tainted, rng);
 	}
 
 	/** Quest gating disabled — see the {@code completedQuests} overload. */
 	public static List<TaskOffer> generateOffers(List<MonsterTable.Monster> pool, int playerCb,
-		int playerSlayerLevel, boolean membersWorld, boolean tainted, GachaRng rng)
-	{
+		int playerSlayerLevel, boolean membersWorld, boolean tainted, GachaRng rng) {
 		return generateOffers(pool, playerCb, playerSlayerLevel, membersWorld, null, tainted, rng);
 	}
 
@@ -48,8 +44,7 @@ public final class TaskGenerator
 	 */
 	public static List<TaskOffer> generateOffers(List<MonsterTable.Monster> pool, int playerCb,
 		int playerSlayerLevel, boolean membersWorld,
-		@javax.annotation.Nullable Set<String> completedQuests, boolean tainted, GachaRng rng)
-	{
+		@javax.annotation.Nullable Set<String> completedQuests, boolean tainted, GachaRng rng) {
 		// slayer-task-only monsters are unfulfillable contracts (a Gachaman
 		// task is not a slayer task); slayer-level-gated ones need the level;
 		// quest-locked ones cannot be reached or damaged at all
@@ -61,14 +56,12 @@ public final class TaskGenerator
 		List<TaskOffer> offers = new ArrayList<>(5);
 		// no monster may appear on more than one offer in the same roll
 		Set<String> usedMonsters = new HashSet<>();
-		for (TaskDifficulty difficulty : TaskDifficulty.values())
-		{
+		for (TaskDifficulty difficulty : TaskDifficulty.values()) {
 			TaskOffer offer = generate(pool, playerCb, membersWorld, difficulty, false, usedMonsters, rng);
 			usedMonsters.add(offer.getMonsterName());
 			offers.add(offer);
 		}
-		if (tainted)
-		{
+		if (tainted) {
 			TaskOffer redemption = generate(pool, playerCb, membersWorld, TaskDifficulty.MEDIUM,
 				true, usedMonsters, rng);
 			offers.add(redemption);
@@ -85,11 +78,9 @@ public final class TaskGenerator
 	 * different orders must still agree monster for monster.
 	 */
 	static boolean questsSatisfied(MonsterTable.Monster monster,
-		@javax.annotation.Nullable Set<String> completedQuests)
-	{
+		@javax.annotation.Nullable Set<String> completedQuests) {
 		List<String> required = monster.getQuests();
-		if (required == null || required.isEmpty())
-		{
+		if (required == null || required.isEmpty()) {
 			return true;
 		}
 		// null = gating off; empty = a player who has finished nothing
@@ -98,8 +89,7 @@ public final class TaskGenerator
 
 	static TaskOffer generate(List<MonsterTable.Monster> pool, int playerCb, boolean membersWorld,
 		TaskDifficulty difficulty, boolean redemption,
-		Set<String> excludeMonsters, GachaRng rng)
-	{
+		Set<String> excludeMonsters, GachaRng rng) {
 		List<MonsterTable.Monster> eligible = eligibleMonsters(pool, playerCb, membersWorld, difficulty);
 		List<MonsterTable.Monster> distinct = eligible.stream()
 			.filter(m -> !excludeMonsters.contains(m.getName()))
@@ -108,8 +98,7 @@ public final class TaskGenerator
 		MonsterTable.Monster monster = rng.pick(distinct.isEmpty() ? eligible : distinct);
 
 		int kills = rng.between(difficulty.getMinKills(), difficulty.getMaxKills());
-		if (redemption)
-		{
+		if (redemption) {
 			kills = (int) Math.ceil(kills * Tuning.REDEMPTION_KILL_MULT);
 		}
 		int perKill = redemption ? 0 : Tuning.PER_KILL_GC.get(difficulty);
@@ -125,8 +114,7 @@ public final class TaskGenerator
 	 * cap excludes everything, the lowest-level monsters are used instead.
 	 */
 	static List<MonsterTable.Monster> eligibleMonsters(List<MonsterTable.Monster> pool, int playerCb,
-		boolean membersWorld, TaskDifficulty difficulty)
-	{
+		boolean membersWorld, TaskDifficulty difficulty) {
 		int cap = (int) Math.max(2, Math.floor(playerCb * difficulty.getCbCapFraction()));
 		List<MonsterTable.Monster> available = pool.stream()
 			.filter(m -> membersWorld || !m.isMembers())
@@ -134,8 +122,7 @@ public final class TaskGenerator
 		List<MonsterTable.Monster> eligible = available.stream()
 			.filter(m -> m.getCombatLevel() <= cap)
 			.collect(Collectors.toList());
-		if (!eligible.isEmpty())
-		{
+		if (!eligible.isEmpty()) {
 			// bias toward the top of the band so harder difficulties feel harder
 			int floor = (int) Math.floor(cap * (difficulty == TaskDifficulty.EASY ? 0.0 : 0.35));
 			List<MonsterTable.Monster> banded = eligible.stream()
@@ -150,17 +137,14 @@ public final class TaskGenerator
 			.collect(Collectors.toList());
 	}
 
-	static List<SideBet> rollSideBets(int playerCb, int completionGc, GachaRng rng)
-	{
+	static List<SideBet> rollSideBets(int playerCb, int completionGc, GachaRng rng) {
 		int count = rng.chance(0.5) ? 2 : 1;
 		List<SideBet> bets = new ArrayList<>(count);
-		for (int i = 0; i < count; i++)
-		{
+		for (int i = 0; i < count; i++) {
 			SideBet.Kind kind = SideBet.Kind.values()[rng.nextInt(SideBet.Kind.values().length)];
 			int threshold = 0;
 			int window = 0;
-			switch (kind)
-			{
+			switch (kind) {
 				case BIG_HIT:
 					threshold = Math.max(5, Math.min(40, 5 + playerCb / 8));
 					break;
@@ -181,93 +165,4 @@ public final class TaskGenerator
 		return bets;
 	}
 
-	// --- The Charter Office ---------------------------------------------------
-	// A chartered contract is a BOUGHT board offer, so it must be indistinguishable
-	// from a rolled one once it lands: same difficulty bands, same gates, same
-	// reward tables. Everything below is appended rather than woven into the roll
-	// path on purpose — party rolls replay generateOffers() from a shared seed, and
-	// Random.nextInt() burns a variable number of draws for non-power-of-two
-	// bounds, so a single extra call anywhere above would desync every client.
-	// The charter always runs on its OWN GachaRng instance.
-
-	/**
-	 * The combat-level ceiling a difficulty will offer at this combat level —
-	 * the same expression eligibleMonsters() bands by, exposed so the Charter
-	 * Office can price and gate a target without rolling a board.
-	 */
-	public static int cbCap(int playerCb, TaskDifficulty difficulty)
-	{
-		return (int) Math.max(2, Math.floor(playerCb * difficulty.getCbCapFraction()));
-	}
-
-	/**
-	 * The difficulty a chartered target lands at: the FIRST band whose ceiling
-	 * covers it, so a target is always sold at the cheapest honest difficulty it
-	 * qualifies for. Null means the target is above even INSANE's ceiling — the
-	 * board would never offer it, so the Charter Office must not sell it either.
-	 *
-	 * Relies on cbCapFraction ascending across TaskDifficulty.values(); the test
-	 * suite pins that ordering so a future band insert cannot quietly invert it.
-	 */
-	@javax.annotation.Nullable
-	public static TaskDifficulty charterDifficulty(int playerCb, int npcCb)
-	{
-		for (TaskDifficulty difficulty : TaskDifficulty.values())
-		{
-			if (npcCb <= cbCap(playerCb, difficulty))
-			{
-				return difficulty;
-			}
-		}
-		return null;
-	}
-
-	/** Quest gating disabled — see the {@code completedQuests} overload. */
-	public static boolean charterEligible(MonsterTable.Monster monster, int playerCb,
-		int playerSlayerLevel, boolean membersWorld)
-	{
-		return charterEligible(monster, playerCb, playerSlayerLevel, membersWorld, null);
-	}
-
-	/**
-	 * Exactly the gates the board applies, and no others: slayer-task-only
-	 * monsters are unfulfillable, slayer-level-gated ones need the level, members
-	 * monsters need a members world, quest-locked ones need the quests, and
-	 * nothing above INSANE's ceiling is offerable. Paying GC must never buy past
-	 * a rule the roll enforces — and a deed is bought with a purse the player
-	 * does not get back if the target turns out to be unreachable.
-	 */
-	public static boolean charterEligible(MonsterTable.Monster monster, int playerCb,
-		int playerSlayerLevel, boolean membersWorld,
-		@javax.annotation.Nullable Set<String> completedQuests)
-	{
-		return monster != null
-			&& !monster.isSlayerTaskOnly()
-			&& monster.getSlayerLevel() <= playerSlayerLevel
-			&& (membersWorld || !monster.isMembers())
-			&& questsSatisfied(monster, completedQuests)
-			&& charterDifficulty(playerCb, monster.getCombatLevel()) != null;
-	}
-
-	/**
-	 * Build the chartered contract. Draw order matches generate()'s (kills, then
-	 * side bets) so a chartered offer is priced off the same tables a rolled one
-	 * would be. Never a redemption, never a party roll: a deed is bought by one
-	 * player, out of one purse, and binds only them.
-	 */
-	@javax.annotation.Nullable
-	public static TaskOffer charterOffer(MonsterTable.Monster monster, int playerCb, GachaRng rng)
-	{
-		TaskDifficulty difficulty = monster == null
-			? null : charterDifficulty(playerCb, monster.getCombatLevel());
-		if (difficulty == null)
-		{
-			return null;
-		}
-		int kills = rng.between(difficulty.getMinKills(), difficulty.getMaxKills());
-		int completion = Tuning.COMPLETION_GC.get(difficulty);
-		List<SideBet> sideBets = rollSideBets(playerCb, completion, rng);
-		return new TaskOffer(difficulty, monster.getName(), monster.getCombatLevel(), kills,
-			Tuning.PER_KILL_GC.get(difficulty), completion, sideBets, false, false);
-	}
 }

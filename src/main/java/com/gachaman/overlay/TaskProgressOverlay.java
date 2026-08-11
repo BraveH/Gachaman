@@ -28,6 +28,7 @@ import net.runelite.client.ui.overlay.components.LayoutableRenderableEntity;
 import net.runelite.client.ui.overlay.components.LineComponent;
 import net.runelite.client.ui.overlay.components.ProgressBarComponent;
 import net.runelite.client.ui.overlay.components.TitleComponent;
+import lombok.Getter;
 
 /**
  * Movable/dockable task progress panel: standard RuneLite OverlayPanel the
@@ -39,8 +40,7 @@ import net.runelite.client.ui.overlay.components.TitleComponent;
  * rebuilt when the underlying counts change.
  */
 @Singleton
-public class TaskProgressOverlay extends OverlayPanel
-{
+public class TaskProgressOverlay extends OverlayPanel {
 	private static final Color GOLD = new Color(255, 205, 70);
 	private static final Color MUTED = new Color(170, 170, 170);
 	private static final Color BAR_BG = new Color(24, 24, 24, 210);
@@ -90,8 +90,7 @@ public class TaskProgressOverlay extends OverlayPanel
 
 	@Inject
 	public TaskProgressOverlay(GachaStateService stateService, Client client,
-		TaskService taskService, KillTracker killTracker)
-	{
+		TaskService taskService, KillTracker killTracker) {
 		this.stateService = stateService;
 		this.client = client;
 		this.taskService = taskService;
@@ -105,11 +104,9 @@ public class TaskProgressOverlay extends OverlayPanel
 	}
 
 	@Override
-	public Dimension render(Graphics2D graphics)
-	{
+	public Dimension render(Graphics2D graphics) {
 		GachaState state = stateService.get();
-		if (state == null || TutorialGate.onTutorial(client))
-		{
+		if (state == null || TutorialGate.onTutorial(client)) {
 			return null;
 		}
 		ActiveTask task = state.getActiveTask();
@@ -117,8 +114,7 @@ public class TaskProgressOverlay extends OverlayPanel
 
 		panelComponent.getChildren().clear();
 
-		if (task == null)
-		{
+		if (task == null) {
 			// combat is locked without a task — always tell the player what to do
 			boolean offersWaiting = offers != null && !offers.isEmpty();
 			panelComponent.getChildren().add(LineComponent.builder()
@@ -136,8 +132,7 @@ public class TaskProgressOverlay extends OverlayPanel
 			.build());
 
 		if (monsterLine == null || difficulty != monsterLineDifficulty
-			|| !task.getMonsterName().equals(monsterLineName))
-		{
+			|| !task.getMonsterName().equals(monsterLineName)) {
 			monsterLineName = task.getMonsterName();
 			monsterLineDifficulty = difficulty;
 			monsterLine = monsterLineName + " (" + difficulty.getDisplayName() + ")";
@@ -150,15 +145,13 @@ public class TaskProgressOverlay extends OverlayPanel
 		// shared (party) contracts pool everyone's kills into the quota
 		int pooledKills = task.getKillsDone() + (task.isParty() ? task.getPartyOtherKills() : 0);
 		if (pooledKills != progressKills || task.getKillsRequired() != progressRequired
-			|| task.isHalfKillPending() != progressHalf)
-		{
+			|| task.isHalfKillPending() != progressHalf) {
 			progressKills = pooledKills;
 			progressRequired = task.getKillsRequired();
 			progressHalf = task.isHalfKillPending();
 			progressLabel = progressKills + (progressHalf ? ".5" : "") + "/" + progressRequired;
 		}
-		if (difficulty != barColorDifficulty)
-		{
+		if (difficulty != barColorDifficulty) {
 			barColorDifficulty = difficulty;
 			Color c = difficulty.getColor();
 			barColor = new Color(c.getRed(), c.getGreen(), c.getBlue(), 200);
@@ -174,8 +167,7 @@ public class TaskProgressOverlay extends OverlayPanel
 		// rhythm combo meter (transient — lives in TaskService, KillTracker ticks)
 		int nowTick = killTracker.currentTick();
 		int stacks = taskService.comboStacksAt(nowTick);
-		if (stacks >= 1)
-		{
+		if (stacks >= 1) {
 			comboMeter.set(stacks, taskService.comboWindowFraction(nowTick),
 				taskService.comboIdleTicksRemaining(nowTick));
 			panelComponent.getChildren().add(comboMeter);
@@ -184,8 +176,7 @@ public class TaskProgressOverlay extends OverlayPanel
 		// Latched-only here: the HUD is the terse view, so it states the bonus a
 		// player HAS. The sidebar carries the always-visible "not your Slayer
 		// task" case and the rule behind it.
-		if (task.isSlayerAligned())
-		{
+		if (task.isSlayerAligned()) {
 			panelComponent.getChildren().add(LineComponent.builder()
 				.left(DOCKET_LABEL)
 				.leftColor(DONE_GREEN)
@@ -196,21 +187,17 @@ public class TaskProgressOverlay extends OverlayPanel
 
 		List<SideBet> sideBets = task.getSideBets();
 		int total = sideBets == null ? 0 : sideBets.size();
-		if (total > 0)
-		{
+		if (total > 0) {
 			int done = 0;
-			for (int i = 0; i < total; i++)
-			{
-				if (sideBets.get(i).isCompleted())
-				{
+			for (int i = 0; i < total; i++) {
+				if (sideBets.get(i).isCompleted()) {
 					done++;
 				}
 			}
 			// rebuild the per-bet lines only when the task or a completion changes
 			if (sideBetLines == null || done != sideBetDone || total != sideBetTotal
 				|| !task.getMonsterName().equals(sideBetTaskName)
-				|| task.getAcceptedAtMs() != sideBetAcceptedAt)
-			{
+				|| task.getAcceptedAtMs() != sideBetAcceptedAt) {
 				sideBetDone = done;
 				sideBetTotal = total;
 				sideBetTaskName = task.getMonsterName();
@@ -218,8 +205,7 @@ public class TaskProgressOverlay extends OverlayPanel
 				sideBetLines = new String[total];
 				sideBetStatus = new String[total];
 				sideBetDoneFlags = new boolean[total];
-				for (int i = 0; i < total; i++)
-				{
+				for (int i = 0; i < total; i++) {
 					SideBet bet = sideBets.get(i);
 					sideBetLines[i] = TaskService.describeSideBet(bet);
 					sideBetDoneFlags[i] = bet.isCompleted();
@@ -236,8 +222,7 @@ public class TaskProgressOverlay extends OverlayPanel
 				.left(SIDE_BETS_LABEL)
 				.leftColor(MUTED)
 				.build());
-			for (int i = 0; i < total; i++)
-			{
+			for (int i = 0; i < total; i++) {
 				panelComponent.getChildren().add(LineComponent.builder()
 					.left(sideBetLines[i])
 					.leftColor(sideBetDoneFlags[i] ? DONE_GREEN : Color.WHITE)
@@ -258,10 +243,10 @@ public class TaskProgressOverlay extends OverlayPanel
 	 * dim to telegraph that the next kill maintains but does not build.
 	 */
 	private static final class ComboMeterComponent
-		implements LayoutableRenderableEntity
-	{
+		implements LayoutableRenderableEntity {
 		private static final int HEIGHT = 16;
 
+		@Getter
 		private final Rectangle bounds = new Rectangle();
 		private Point preferredLocation = new Point();
 		private Dimension preferredSize = new Dimension(150, HEIGHT);
@@ -274,28 +259,24 @@ public class TaskProgressOverlay extends OverlayPanel
 		private String secondsLabel = "";
 		private int labelSeconds = -1;
 
-		void set(int stacks, double windowFraction, int idleTicksRemaining)
-		{
+		void set(int stacks, double windowFraction, int idleTicksRemaining) {
 			this.stacks = stacks;
 			this.windowFraction = windowFraction;
 			this.idleTicksRemaining = idleTicksRemaining;
-			if (stacks != labelStacks)
-			{
+			if (stacks != labelStacks) {
 				labelStacks = stacks;
 				label = "x" + stacks;
 			}
 			// 1 game tick = 0.6s; round up so the label never reads 0s early
 			int seconds = (int) Math.ceil(idleTicksRemaining * 0.6);
-			if (seconds != labelSeconds)
-			{
+			if (seconds != labelSeconds) {
 				labelSeconds = seconds;
 				secondsLabel = seconds + "s";
 			}
 		}
 
 		@Override
-		public Dimension render(Graphics2D g)
-		{
+		public Dimension render(Graphics2D g) {
 			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
 				RenderingHints.VALUE_ANTIALIAS_ON);
 			int x = preferredLocation.x;
@@ -312,8 +293,7 @@ public class TaskProgressOverlay extends OverlayPanel
 			int py = y + 5;
 			Color filled = held ? new Color(255, 205, 70, 140) : GOLD;
 			Color empty = new Color(255, 205, 70, 60);
-			for (int i = 0; i < 10; i++)
-			{
+			for (int i = 0; i < 10; i++) {
 				g.setColor(i < stacks ? filled : empty);
 				g.fillOval(px + i * 7, py, 5, 5);
 			}
@@ -338,23 +318,15 @@ public class TaskProgressOverlay extends OverlayPanel
 			return new Dimension(width, HEIGHT);
 		}
 
-		@Override
-		public Rectangle getBounds()
-		{
-			return bounds;
-		}
 
 		@Override
-		public void setPreferredLocation(Point location)
-		{
+		public void setPreferredLocation(Point location) {
 			this.preferredLocation = location;
 		}
 
 		@Override
-		public void setPreferredSize(Dimension size)
-		{
-			if (size != null)
-			{
+		public void setPreferredSize(Dimension size) {
+			if (size != null) {
 				this.preferredSize = size;
 			}
 		}

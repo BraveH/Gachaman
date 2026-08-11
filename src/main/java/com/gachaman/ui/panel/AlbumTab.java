@@ -64,6 +64,7 @@ import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
@@ -85,8 +86,7 @@ import net.runelite.client.util.QuantityFormatter;
  */
 @Slf4j
 @Singleton
-public class AlbumTab extends JPanel
-{
+public class AlbumTab extends JPanel {
 	private static final int THUMB_W = 90;
 	private static final int THUMB_H = 120;
 	private static final int GAP = 6;
@@ -141,8 +141,7 @@ public class AlbumTab extends JPanel
 
 	@Inject
 	public AlbumTab(GachaStateService stateService, CardDatabase cardDatabase,
-		CardImageService cardImageService)
-	{
+		CardImageService cardImageService) {
 		this.stateService = stateService;
 		this.cardDatabase = cardDatabase;
 		this.cardImageService = cardImageService;
@@ -259,45 +258,36 @@ public class AlbumTab extends JPanel
 			ensureSorted();
 			applyFilters();
 		});
-		searchField.getDocument().addDocumentListener(new DocumentListener()
-		{
+		searchField.getDocument().addDocumentListener(new DocumentListener() {
 			@Override
-			public void insertUpdate(DocumentEvent e)
-			{
+			public void insertUpdate(DocumentEvent e) {
 				applyFilters();
 			}
 
 			@Override
-			public void removeUpdate(DocumentEvent e)
-			{
+			public void removeUpdate(DocumentEvent e) {
 				applyFilters();
 			}
 
 			@Override
-			public void changedUpdate(DocumentEvent e)
-			{
+			public void changedUpdate(DocumentEvent e) {
 				applyFilters();
 			}
 		});
 	}
 
-	void rebuild()
-	{
+	void rebuild() {
 		GachaState state = stateService.get();
 		ensureSorted();
 
 		Map<Integer, Variant> ownedVariants = new HashMap<>();
-		if (state != null)
-		{
-			for (OwnedCard owned : state.getOwnedCards())
-			{
-				if (owned.isHologram())
-				{
+		if (state != null) {
+			for (OwnedCard owned : state.getOwnedCards()) {
+				if (owned.isHologram()) {
 					continue;
 				}
 				Variant existing = ownedVariants.get(owned.getCardId());
-				if (existing == null || (existing == Variant.NORMAL && owned.getVariant() == Variant.SHINY))
-				{
+				if (existing == null || (existing == Variant.NORMAL && owned.getVariant() == Variant.SHINY)) {
 					ownedVariants.put(owned.getCardId(), owned.getVariant());
 				}
 			}
@@ -311,17 +301,14 @@ public class AlbumTab extends JPanel
 		applyFilters();
 	}
 
-	private void ensureSorted()
-	{
-		if (!cardDatabase.isReady())
-		{
+	private void ensureSorted() {
+		if (!cardDatabase.isReady()) {
 			sorted = Collections.emptyList();
 			sortedSource = null;
 			return;
 		}
 		Map<Integer, CardDefinition> source = cardDatabase.all();
-		if (source == sortedSource && sortedDescending == sortDescending)
-		{
+		if (source == sortedSource && sortedDescending == sortDescending) {
 			return;
 		}
 		final boolean descending = sortDescending;
@@ -330,8 +317,7 @@ public class AlbumTab extends JPanel
 		// descending; name A-Z within a rarity either way
 		cards.sort((a, b) -> {
 			int cmp = Integer.compare(a.getRarity().ordinal(), b.getRarity().ordinal());
-			if (cmp != 0)
-			{
+			if (cmp != 0) {
 				return descending ? -cmp : cmp;
 			}
 			return a.getName().compareToIgnoreCase(b.getName());
@@ -341,17 +327,14 @@ public class AlbumTab extends JPanel
 		sortedDescending = descending;
 	}
 
-	private void updateHeader()
-	{
+	private void updateHeader() {
 		int total = sorted.size();
 		int ownedCount = 0;
 		Map<Rarity, Integer> ownedByRarity = new EnumMap<>(Rarity.class);
 		Map<Rarity, Integer> totalByRarity = new EnumMap<>(Rarity.class);
-		for (CardDefinition card : sorted)
-		{
+		for (CardDefinition card : sorted) {
 			totalByRarity.merge(card.getRarity(), 1, Integer::sum);
-			if (ownedVariantByCardId.containsKey(card.getCardId()))
-			{
+			if (ownedVariantByCardId.containsKey(card.getCardId())) {
 				ownedCount++;
 				ownedByRarity.merge(card.getRarity(), 1, Integer::sum);
 			}
@@ -371,10 +354,8 @@ public class AlbumTab extends JPanel
 
 		StringBuilder html = new StringBuilder("<html>");
 		boolean first = true;
-		for (Rarity rarity : Rarity.values())
-		{
-			if (!first)
-			{
+		for (Rarity rarity : Rarity.values()) {
+			if (!first) {
 				html.append("&nbsp;&nbsp;");
 			}
 			first = false;
@@ -389,24 +370,19 @@ public class AlbumTab extends JPanel
 		rarityCountsLabel.setText(html.toString());
 	}
 
-	private void rebuildHoloSection(@Nullable GachaState state)
-	{
+	private void rebuildHoloSection(@Nullable GachaState state) {
 		holoPanel.removeAll();
-		if (state == null || !cardDatabase.isReady())
-		{
+		if (state == null || !cardDatabase.isReady()) {
 			return;
 		}
 		Set<String> seenTiers = new LinkedHashSet<>();
 		List<OwnedCard> holos = new ArrayList<>();
-		for (OwnedCard owned : state.getOwnedCards())
-		{
-			if (owned.isHologram() && seenTiers.add(owned.getTierKey()))
-			{
+		for (OwnedCard owned : state.getOwnedCards()) {
+			if (owned.isHologram() && seenTiers.add(owned.getTierKey())) {
 				holos.add(owned);
 			}
 		}
-		if (holos.isEmpty())
-		{
+		if (holos.isEmpty()) {
 			return;
 		}
 		JLabel title = new JLabel("Holograms");
@@ -414,8 +390,7 @@ public class AlbumTab extends JPanel
 		title.setForeground(new Color(120, 220, 255));
 		title.setAlignmentX(Component.LEFT_ALIGNMENT);
 		holoPanel.add(title);
-		for (OwnedCard owned : holos)
-		{
+		for (OwnedCard owned : holos) {
 			HologramDefinition def = cardDatabase.holograms().get(owned.getTierKey());
 			String name = def != null ? def.getName() : "Hologram (" + owned.getTierKey() + ")";
 			GearSlot assigned = assignedSlotOf(state, owned);
@@ -441,8 +416,7 @@ public class AlbumTab extends JPanel
 			detail.setToolTipText(full);
 			holoPanel.add(detail);
 
-			if (served > 0)
-			{
+			if (served > 0) {
 				JLabel service = GachamanPanel.smallLine("    present for "
 						+ QuantityFormatter.formatNumber(served) + (served == 1 ? " kill" : " kills"),
 					ColorScheme.MEDIUM_GRAY_COLOR);
@@ -454,18 +428,13 @@ public class AlbumTab extends JPanel
 	}
 
 	@Nullable
-	private static GearSlot assignedSlotOf(GachaState state, OwnedCard owned)
-	{
-		for (Map.Entry<String, String> entry : state.getLoadout().entrySet())
-		{
-			if (owned.getUuid().equals(entry.getValue()))
-			{
-				try
-				{
+	private static GearSlot assignedSlotOf(GachaState state, OwnedCard owned) {
+		for (Map.Entry<String, String> entry : state.getLoadout().entrySet()) {
+			if (owned.getUuid().equals(entry.getValue())) {
+				try {
 					return GearSlot.valueOf(entry.getKey());
 				}
-				catch (IllegalArgumentException e)
-				{
+				catch (IllegalArgumentException e) {
 					return null;
 				}
 			}
@@ -473,8 +442,7 @@ public class AlbumTab extends JPanel
 		return null;
 	}
 
-	private void applyFilters()
-	{
+	private void applyFilters() {
 		GearSlot slotSel = slotFilter.getSelectedIndex() <= 0 ? null
 			: GearSlot.values()[slotFilter.getSelectedIndex() - 1];
 		Rarity raritySel = rarityFilter.getSelectedIndex() <= 0 ? null
@@ -485,28 +453,22 @@ public class AlbumTab extends JPanel
 		String query = searchField.getText() == null ? "" : searchField.getText().trim().toLowerCase();
 
 		List<Entry> entries = new ArrayList<>();
-		for (CardDefinition card : sorted)
-		{
-			if (slotSel != null && card.getSlot() != slotSel)
-			{
+		for (CardDefinition card : sorted) {
+			if (slotSel != null && card.getSlot() != slotSel) {
 				continue;
 			}
-			if (raritySel != null && card.getRarity() != raritySel)
-			{
+			if (raritySel != null && card.getRarity() != raritySel) {
 				continue;
 			}
 			Variant ownedVariant = ownedVariantByCardId.get(card.getCardId());
 			boolean owned = ownedVariant != null;
-			if (ownedOnly && !owned)
-			{
+			if (ownedOnly && !owned) {
 				continue;
 			}
-			if (variantSel != null && (!owned || ownedVariant != variantSel))
-			{
+			if (variantSel != null && (!owned || ownedVariant != variantSel)) {
 				continue;
 			}
-			if (!query.isEmpty() && !card.getName().toLowerCase().contains(query))
-			{
+			if (!query.isEmpty() && !card.getName().toLowerCase().contains(query)) {
 				continue;
 			}
 			entries.add(new Entry(card, owned, owned ? ownedVariant : Variant.NORMAL,
@@ -517,8 +479,7 @@ public class AlbumTab extends JPanel
 		repaint();
 	}
 
-	private static JComboBox<String> comboOf(String allLabel, String[] values)
-	{
+	private static JComboBox<String> comboOf(String allLabel, String[] values) {
 		String[] items = new String[values.length + 1];
 		items[0] = allLabel;
 		System.arraycopy(values, 0, items, 1, values.length);
@@ -527,23 +488,19 @@ public class AlbumTab extends JPanel
 		return combo;
 	}
 
-	private static String[] slotNames()
-	{
+	private static String[] slotNames() {
 		GearSlot[] slots = GearSlot.values();
 		String[] names = new String[slots.length];
-		for (int i = 0; i < slots.length; i++)
-		{
+		for (int i = 0; i < slots.length; i++) {
 			names[i] = slots[i].getDisplayName();
 		}
 		return names;
 	}
 
-	private static String[] rarityNames()
-	{
+	private static String[] rarityNames() {
 		Rarity[] rarities = Rarity.values();
 		String[] names = new String[rarities.length];
-		for (int i = 0; i < rarities.length; i++)
-		{
+		for (int i = 0; i < rarities.length; i++) {
 			names[i] = rarities[i].getDisplayName();
 		}
 		return names;
@@ -551,24 +508,15 @@ public class AlbumTab extends JPanel
 
 	// --- Grid entry ---
 
-	private static final class Entry
-	{
+	@RequiredArgsConstructor
+	private static final class Entry {
 		private final CardDefinition card;
 		private final boolean owned;
 		private final Variant variant;
 		private final int serviceKills;
-
-		Entry(CardDefinition card, boolean owned, Variant variant, int serviceKills)
-		{
-			this.card = card;
-			this.owned = owned;
-			this.variant = variant;
-			this.serviceKills = serviceKills;
-		}
 	}
 
-	private static String keyOf(Entry entry)
-	{
+	private static String keyOf(Entry entry) {
 		// the Service Record is baked into the raster and the LRU is never
 		// cleared on rebuild, so it must key the cache or thumbnails go stale
 		return entry.card.getCardId() + (entry.owned ? ":o:" : ":u:") + entry.variant
@@ -576,8 +524,7 @@ public class AlbumTab extends JPanel
 	}
 
 	/** True for cells the live (non-rasterized) effect pass animates. */
-	private static boolean hasLiveEffect(Entry entry)
-	{
+	private static boolean hasLiveEffect(Entry entry) {
 		return entry.owned
 			&& (entry.variant == Variant.SHINY
 			|| entry.variant == Variant.HOLOGRAM
@@ -585,16 +532,12 @@ public class AlbumTab extends JPanel
 	}
 
 	/** Cheap scan (item sprites are 36x32) for any non-transparent pixel. */
-	private static boolean hasVisiblePixel(BufferedImage img)
-	{
+	private static boolean hasVisiblePixel(BufferedImage img) {
 		int w = img.getWidth();
 		int h = img.getHeight();
-		for (int y = 0; y < h; y++)
-		{
-			for (int x = 0; x < w; x++)
-			{
-				if ((img.getRGB(x, y) >>> 24) != 0)
-				{
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				if ((img.getRGB(x, y) >>> 24) != 0) {
 					return true;
 				}
 			}
@@ -608,17 +551,14 @@ public class AlbumTab extends JPanel
 	 * mark was nearly invisible on the dark panel.
 	 */
 	/** Static 4-point sparkle in pale violet — the stardust counter's icon. */
-	private static final class StardustIcon implements Icon
-	{
+	private static final class StardustIcon implements Icon {
 		private static final int SIZE = 13;
 		private static final Color SPARKLE = new Color(190, 170, 255);
 
 		@Override
-		public void paintIcon(Component c, Graphics g, int x, int y)
-		{
+		public void paintIcon(Component c, Graphics g, int x, int y) {
 			Graphics2D g2 = (Graphics2D) g.create();
-			try
-			{
+			try {
 				g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 				int cx = x + SIZE / 2;
 				int cy = y + SIZE / 2;
@@ -632,87 +572,73 @@ public class AlbumTab extends JPanel
 				g2.setColor(Color.WHITE);
 				g2.fillOval(cx - 1, cy - 1, 2, 2);
 			}
-			finally
-			{
+			finally {
 				g2.dispose();
 			}
 		}
 
 		@Override
-		public int getIconWidth()
-		{
+		public int getIconWidth() {
 			return SIZE;
 		}
 
 		@Override
-		public int getIconHeight()
-		{
+		public int getIconHeight() {
 			return SIZE;
 		}
 	}
 
-	private static final class CheckboxIcon implements Icon
-	{
+	private static final class CheckboxIcon implements Icon {
 		private static final int SIZE = 13;
 		private static final BasicStroke CHECK_STROKE =
 			new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
 
 		private final boolean selected;
 
-		CheckboxIcon(boolean selected)
-		{
+		CheckboxIcon(boolean selected) {
 			this.selected = selected;
 		}
 
 		@Override
-		public void paintIcon(Component c, Graphics g, int x, int y)
-		{
+		public void paintIcon(Component c, Graphics g, int x, int y) {
 			Graphics2D g2 = (Graphics2D) g.create();
-			try
-			{
+			try {
 				g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 				g2.setColor(ColorScheme.DARKER_GRAY_COLOR);
 				g2.fillRoundRect(x, y, SIZE, SIZE, 4, 4);
 				g2.setColor(ColorScheme.LIGHT_GRAY_COLOR);
 				g2.drawRoundRect(x, y, SIZE - 1, SIZE - 1, 4, 4);
-				if (selected)
-				{
+				if (selected) {
 					g2.setColor(Color.WHITE);
 					g2.setStroke(CHECK_STROKE);
 					g2.drawLine(x + 3, y + 7, x + 5, y + 9);
 					g2.drawLine(x + 5, y + 9, x + 10, y + 3);
 				}
 			}
-			finally
-			{
+			finally {
 				g2.dispose();
 			}
 		}
 
 		@Override
-		public int getIconWidth()
-		{
+		public int getIconWidth() {
 			return SIZE;
 		}
 
 		@Override
-		public int getIconHeight()
-		{
+		public int getIconHeight() {
 			return SIZE;
 		}
 	}
 
 	// --- Grid panel ---
 
-	private final class GridPanel extends JPanel implements Scrollable
-	{
+	private final class GridPanel extends JPanel implements Scrollable {
 		private List<Entry> entries = Collections.emptyList();
 		private final LinkedHashMap<String, BufferedImage> cache =
-			new LinkedHashMap<String, BufferedImage>(64, 0.75f, true)
-			{
+			new LinkedHashMap<String, BufferedImage>(64, 0.75f, true) {
 				@Override
-				protected boolean removeEldestEntry(Map.Entry<String, BufferedImage> eldest)
-				{
+				protected boolean removeEldestEntry(Map.Entry<String, BufferedImage> eldest) {
 					return size() > CACHE_MAX;
 				}
 			};
@@ -739,16 +665,13 @@ public class AlbumTab extends JPanel
 		 */
 		private final Timer effectTimer = new Timer(EFFECT_TICK_MS, e -> tickEffects());
 
-		GridPanel()
-		{
+		GridPanel() {
 			setOpaque(false);
 			setToolTipText("");
 		}
 
-		private void tickEffects()
-		{
-			if (!isShowing() || !hasVisibleEffectCells())
-			{
+		private void tickEffects() {
+			if (!isShowing() || !hasVisibleEffectCells()) {
 				effectTimer.stop();
 				return;
 			}
@@ -756,32 +679,25 @@ public class AlbumTab extends JPanel
 			repaint(vis.x, vis.y, vis.width, vis.height);
 		}
 
-		private boolean hasVisibleEffectCells()
-		{
-			if (entries.isEmpty())
-			{
+		private boolean hasVisibleEffectCells() {
+			if (entries.isEmpty()) {
 				return false;
 			}
 			Rectangle vis = getVisibleRect();
-			if (vis.isEmpty())
-			{
+			if (vis.isEmpty()) {
 				return false;
 			}
 			int c = cols();
 			int rowH = THUMB_H + GAP;
 			int firstRow = Math.max(0, (vis.y - GAP) / rowH);
 			int lastRow = Math.max(firstRow, (vis.y + vis.height) / rowH);
-			for (int row = firstRow; row <= lastRow; row++)
-			{
-				for (int col = 0; col < c; col++)
-				{
+			for (int row = firstRow; row <= lastRow; row++) {
+				for (int col = 0; col < c; col++) {
 					int index = row * c + col;
-					if (index >= entries.size())
-					{
+					if (index >= entries.size()) {
 						return false;
 					}
-					if (hasLiveEffect(entries.get(index)))
-					{
+					if (hasLiveEffect(entries.get(index))) {
 						return true;
 					}
 				}
@@ -789,36 +705,30 @@ public class AlbumTab extends JPanel
 			return false;
 		}
 
-		void setEntries(List<Entry> next)
-		{
+		void setEntries(List<Entry> next) {
 			entries = next == null ? Collections.emptyList() : next;
 			revalidate();
 			repaint();
 		}
 
-		private int cols()
-		{
+		private int cols() {
 			int width = Math.max(getWidth(), THUMB_W);
 			return Math.max(1, (width + GAP) / (THUMB_W + GAP));
 		}
 
 		@Override
-		public Dimension getPreferredSize()
-		{
+		public Dimension getPreferredSize() {
 			int c = cols();
 			int rows = entries.isEmpty() ? 0 : (entries.size() + c - 1) / c;
 			return new Dimension(THUMB_W, Math.max(rows * (THUMB_H + GAP) + GAP, 40));
 		}
 
 		@Override
-		protected void paintComponent(Graphics g)
-		{
+		protected void paintComponent(Graphics g) {
 			super.paintComponent(g);
 			Graphics2D g2 = (Graphics2D) g.create();
-			try
-			{
-				if (entries.isEmpty())
-				{
+			try {
+				if (entries.isEmpty()) {
 					g2.setColor(ColorScheme.MEDIUM_GRAY_COLOR);
 					g2.setFont(FontManager.getRunescapeSmallFont());
 					g2.drawString("No cards match the filters.", 8, 20);
@@ -826,8 +736,7 @@ public class AlbumTab extends JPanel
 				}
 				long now = System.currentTimeMillis();
 				Rectangle clip = g2.getClipBounds();
-				if (clip == null)
-				{
+				if (clip == null) {
 					clip = new Rectangle(0, 0, getWidth(), getHeight());
 				}
 				int c = cols();
@@ -836,61 +745,48 @@ public class AlbumTab extends JPanel
 				int firstRow = Math.max(0, (clip.y - GAP) / rowH);
 				int lastRow = Math.max(firstRow, (clip.y + clip.height) / rowH);
 				List<Entry> missing = new ArrayList<>();
-				for (int row = firstRow; row <= lastRow; row++)
-				{
-					for (int col = 0; col < c; col++)
-					{
+				for (int row = firstRow; row <= lastRow; row++) {
+					for (int col = 0; col < c; col++) {
 						int index = row * c + col;
-						if (index >= entries.size())
-						{
+						if (index >= entries.size()) {
 							break;
 						}
 						Entry entry = entries.get(index);
 						int x = col * cellW + (cellW - THUMB_W) / 2;
 						int y = GAP + row * rowH;
 						BufferedImage thumb = cache.get(keyOf(entry));
-						if (thumb != null)
-						{
+						if (thumb != null) {
 							g2.drawImage(thumb, x, y, null);
-							if (hasLiveEffect(entry))
-							{
+							if (hasLiveEffect(entry)) {
 								paintLiveEffect(g2, x, y, entry, now);
 							}
 						}
-						else
-						{
+						else {
 							g2.setColor(PLACEHOLDER);
 							g2.fillRoundRect(x, y, THUMB_W, THUMB_H, 12, 12);
-							if (missing.size() < BATCH_MAX)
-							{
+							if (missing.size() < BATCH_MAX) {
 								missing.add(entry);
 							}
 						}
 					}
 				}
-				if (!missing.isEmpty())
-				{
+				if (!missing.isEmpty()) {
 					scheduleRaster(missing);
 				}
 				updateEffectTimer();
 			}
-			finally
-			{
+			finally {
 				g2.dispose();
 			}
 		}
 
-		private void updateEffectTimer()
-		{
-			if (isShowing() && hasVisibleEffectCells())
-			{
-				if (!effectTimer.isRunning())
-				{
+		private void updateEffectTimer() {
+			if (isShowing() && hasVisibleEffectCells()) {
+				if (!effectTimer.isRunning()) {
 					effectTimer.start();
 				}
 			}
-			else if (effectTimer.isRunning())
-			{
+			else if (effectTimer.isRunning()) {
 				effectTimer.stop();
 			}
 		}
@@ -901,15 +797,13 @@ public class AlbumTab extends JPanel
 		 * prismatic border (shiny) and drifting scanlines (hologram). Cheap
 		 * gradient/line fills clipped to the cell — never re-rasterization.
 		 */
-		private void paintLiveEffect(Graphics2D g, int x, int y, Entry entry, long now)
-		{
+		private void paintLiveEffect(Graphics2D g, int x, int y, Entry entry, long now) {
 			boolean shiny = entry.variant == Variant.SHINY;
 			boolean holo = entry.variant == Variant.HOLOGRAM;
 			RoundRectangle2D cell = new RoundRectangle2D.Float(
 				x, y, THUMB_W, THUMB_H, CELL_ARC, CELL_ARC);
 
-			if (shiny || entry.card.getRarity().atLeast(Rarity.EPIC))
-			{
+			if (shiny || entry.card.getRarity().atLeast(Rarity.EPIC)) {
 				Graphics2D gs = (Graphics2D) g.create();
 				gs.setClip(cell);
 				gs.rotate(SHEEN_ANGLE_RAD, x + THUMB_W / 2.0, y + THUMB_H / 2.0);
@@ -923,21 +817,18 @@ public class AlbumTab extends JPanel
 				gs.dispose();
 			}
 
-			if (holo)
-			{
+			if (holo) {
 				Graphics2D gs = (Graphics2D) g.create();
 				gs.setClip(cell);
 				gs.setColor(HOLO_SCAN);
 				int offset = (int) ((now / 90) % 6);
-				for (int sy = y + offset; sy < y + THUMB_H; sy += 6)
-				{
+				for (int sy = y + offset; sy < y + THUMB_H; sy += 6) {
 					gs.drawLine(x, sy, x + THUMB_W, sy);
 				}
 				gs.dispose();
 			}
 
-			if (shiny || holo)
-			{
+			if (shiny || holo) {
 				Graphics2D gs = (Graphics2D) g.create();
 				gs.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 				gs.setColor(shiny ? CardRenderer.prismaticColor(now, 0) : HOLO_EDGE);
@@ -947,35 +838,27 @@ public class AlbumTab extends JPanel
 			}
 		}
 
-		private Color shinySheenColor(long now)
-		{
+		private Color shinySheenColor(long now) {
 			Color c = CardRenderer.prismaticColor(now, 60);
 			return new Color(c.getRed(), c.getGreen(), c.getBlue(), 64);
 		}
 
-		private void scheduleRaster(List<Entry> batch)
-		{
-			if (workerRunning)
-			{
+		private void scheduleRaster(List<Entry> batch) {
+			if (workerRunning) {
 				return;
 			}
 			workerRunning = true;
 			final List<Entry> copy = new ArrayList<>(batch);
-			new SwingWorker<Void, Object[]>()
-			{
+			new SwingWorker<Void, Object[]>() {
 				@Override
-				protected Void doInBackground()
-				{
-					for (Entry entry : copy)
-					{
-						try
-						{
+				protected Void doInBackground() {
+					for (Entry entry : copy) {
+						try {
 							String key = keyOf(entry);
 							int version = versionOf(key);
 							publish(new Object[]{key, rasterize(entry, key), version});
 						}
-						catch (Exception e)
-						{
+						catch (Exception e) {
 							log.debug("album thumbnail raster failed", e);
 						}
 					}
@@ -983,13 +866,10 @@ public class AlbumTab extends JPanel
 				}
 
 				@Override
-				protected void process(List<Object[]> chunks)
-				{
-					for (Object[] chunk : chunks)
-					{
+				protected void process(List<Object[]> chunks) {
+					for (Object[] chunk : chunks) {
 						String key = (String) chunk[0];
-						if (versionOf(key) == (Integer) chunk[2])
-						{
+						if (versionOf(key) == (Integer) chunk[2]) {
 							cache.put(key, (BufferedImage) chunk[1]);
 						}
 						// else: a sprite finished loading mid-raster; drop the
@@ -999,8 +879,7 @@ public class AlbumTab extends JPanel
 				}
 
 				@Override
-				protected void done()
-				{
+				protected void done() {
 					workerRunning = false;
 					// repaint requests the next missing batch, if any
 					scheduleRepaint();
@@ -1008,10 +887,8 @@ public class AlbumTab extends JPanel
 			}.execute();
 		}
 
-		private void scheduleRepaint()
-		{
-			if (!repaintScheduled.compareAndSet(false, true))
-			{
+		private void scheduleRepaint() {
+			if (!repaintScheduled.compareAndSet(false, true)) {
 				return;
 			}
 			SwingUtilities.invokeLater(() -> {
@@ -1020,8 +897,7 @@ public class AlbumTab extends JPanel
 			});
 		}
 
-		private int versionOf(String key)
-		{
+		private int versionOf(String key) {
 			return rasterVersion.getOrDefault(key, 0);
 		}
 
@@ -1035,12 +911,9 @@ public class AlbumTab extends JPanel
 		 * is what makes the raster pipeline converge instead of evicting its
 		 * own output forever.
 		 */
-		private Runnable artLoadHook(String key, int itemId)
-		{
-			return () ->
-			{
-				if (!loadedItemIds.add(itemId))
-				{
+		private Runnable artLoadHook(String key, int itemId) {
+			return () -> {
+				if (!loadedItemIds.add(itemId)) {
 					return; // already knew — the raster saw loaded pixels
 				}
 				rasterVersion.merge(key, 1, Integer::sum);
@@ -1052,8 +925,7 @@ public class AlbumTab extends JPanel
 		}
 
 		@Nullable
-		private BufferedImage fetchArt(String key, int itemId)
-		{
+		private BufferedImage fetchArt(String key, int itemId) {
 			return cardImageService.itemImage(itemId, artLoadHook(key, itemId));
 		}
 
@@ -1065,36 +937,29 @@ public class AlbumTab extends JPanel
 		 * used as-is: its load hook re-rasters the cell once it arrives.
 		 */
 		@Nullable
-		private BufferedImage resolveArt(Entry entry, String key)
-		{
+		private BufferedImage resolveArt(Entry entry, String key) {
 			int cardId = entry.card.getCardId();
 			Integer resolved = resolvedArtIds.get(cardId);
-			if (resolved != null)
-			{
+			if (resolved != null) {
 				return fetchArt(key, resolved);
 			}
 			Set<Integer> ids = entry.card.getItemIds();
 			List<Integer> candidates = ids == null ? new ArrayList<>() : new ArrayList<>(ids);
-			if (!candidates.contains(cardId))
-			{
+			if (!candidates.contains(cardId)) {
 				candidates.add(cardId);
 			}
 			Collections.sort(candidates);
 			BufferedImage fallback = null;
-			for (int itemId : candidates)
-			{
+			for (int itemId : candidates) {
 				BufferedImage art = fetchArt(key, itemId);
-				if (art == null)
-				{
+				if (art == null) {
 					continue;
 				}
-				if (hasVisiblePixel(art))
-				{
+				if (hasVisiblePixel(art)) {
 					resolvedArtIds.put(cardId, itemId);
 					return art;
 				}
-				if (!loadedItemIds.contains(itemId))
-				{
+				if (!loadedItemIds.contains(itemId)) {
 					// still loading, so blank is inconclusive; draw with it
 					// and let its load hook re-raster this cell
 					fallback = art;
@@ -1105,13 +970,11 @@ public class AlbumTab extends JPanel
 			return fallback;
 		}
 
-		private BufferedImage rasterize(Entry entry, String key)
-		{
+		private BufferedImage rasterize(Entry entry, String key) {
 			BufferedImage art = resolveArt(entry, key);
 			BufferedImage img = new BufferedImage(THUMB_W, THUMB_H, BufferedImage.TYPE_INT_ARGB);
 			Graphics2D g2 = img.createGraphics();
-			try
-			{
+			try {
 				g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 				// base raster is always the NORMAL face: time-varying variant
 				// effects (shiny bands, holo scanlines, prismatic border) are
@@ -1126,12 +989,10 @@ public class AlbumTab extends JPanel
 					.build();
 				CardRenderer.drawFace(g2, 0, 0, THUMB_W, THUMB_H, view, STATIC_TIME_MS);
 			}
-			finally
-			{
+			finally {
 				g2.dispose();
 			}
-			if (!entry.owned)
-			{
+			if (!entry.owned) {
 				RescaleOp darken = new RescaleOp(
 					new float[]{0.16f, 0.16f, 0.20f, 1f}, new float[4], null);
 				img = darken.filter(img, null);
@@ -1140,10 +1001,8 @@ public class AlbumTab extends JPanel
 		}
 
 		@Override
-		public String getToolTipText(MouseEvent event)
-		{
-			if (event == null || entries.isEmpty())
-			{
+		public String getToolTipText(MouseEvent event) {
+			if (event == null || entries.isEmpty()) {
 				return null;
 			}
 			int c = cols();
@@ -1152,13 +1011,11 @@ public class AlbumTab extends JPanel
 			int col = event.getX() / cellW;
 			int row = Math.max(0, (event.getY() - GAP) / rowH);
 			int index = row * c + col;
-			if (col >= c || index < 0 || index >= entries.size())
-			{
+			if (col >= c || index < 0 || index >= entries.size()) {
 				return null;
 			}
 			Entry entry = entries.get(index);
-			if (!entry.owned)
-			{
+			if (!entry.owned) {
 				return "Undiscovered card";
 			}
 			String variantText = entry.variant == Variant.SHINY ? " — Shiny" : "";
@@ -1175,32 +1032,27 @@ public class AlbumTab extends JPanel
 		// --- Scrollable ---
 
 		@Override
-		public Dimension getPreferredScrollableViewportSize()
-		{
+		public Dimension getPreferredScrollableViewportSize() {
 			return getPreferredSize();
 		}
 
 		@Override
-		public int getScrollableUnitIncrement(Rectangle visibleRect, int orientation, int direction)
-		{
+		public int getScrollableUnitIncrement(Rectangle visibleRect, int orientation, int direction) {
 			return THUMB_H / 3;
 		}
 
 		@Override
-		public int getScrollableBlockIncrement(Rectangle visibleRect, int orientation, int direction)
-		{
+		public int getScrollableBlockIncrement(Rectangle visibleRect, int orientation, int direction) {
 			return orientation == SwingConstants.VERTICAL ? visibleRect.height : visibleRect.width;
 		}
 
 		@Override
-		public boolean getScrollableTracksViewportWidth()
-		{
+		public boolean getScrollableTracksViewportWidth() {
 			return true;
 		}
 
 		@Override
-		public boolean getScrollableTracksViewportHeight()
-		{
+		public boolean getScrollableTracksViewportHeight() {
 			return false;
 		}
 	}

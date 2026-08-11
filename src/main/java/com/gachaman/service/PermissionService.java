@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Set;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 
@@ -27,8 +28,8 @@ import net.runelite.api.Client;
  */
 @Slf4j
 @Singleton
-public class PermissionService implements GachaStateService.Listener
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class PermissionService implements GachaStateService.Listener {
 	private final GachaStateService stateService;
 	private final CardDatabase cardDatabase;
 	private final Client client;
@@ -37,134 +38,97 @@ public class PermissionService implements GachaStateService.Listener
 	private volatile Set<Integer> allowedItemIds = Collections.emptySet();
 	private volatile Set<String> deededSlots = Collections.emptySet();
 
-	@Inject
-	public PermissionService(GachaStateService stateService, CardDatabase cardDatabase,
-		Client client, GachamanConfig config)
-	{
-		this.stateService = stateService;
-		this.cardDatabase = cardDatabase;
-		this.client = client;
-		this.config = config;
-	}
-
 	/** Re-derive permissions from the current state (config toggles etc.). */
-	public void refresh()
-	{
+	public void refresh() {
 		GachaState state = stateService.get();
-		if (state != null)
-		{
+		if (state != null) {
 			rebuild(state);
 		}
 	}
 
-	public void start()
-	{
+	public void start() {
 		stateService.addListener(this);
 		cardDatabase.onReady(() -> {
 			GachaState state = stateService.get();
-			if (state != null)
-			{
+			if (state != null) {
 				rebuild(state);
 			}
 		});
 	}
 
-	public void stop()
-	{
+	public void stop() {
 		stateService.removeListener(this);
 	}
 
 	@Override
-	public void onStateChanged(GachaState state)
-	{
+	public void onStateChanged(GachaState state) {
 		rebuild(state);
 	}
 
 	/** Is equipping this item forbidden by Gachaman rules right now? */
-	public boolean isForbidden(int itemId)
-	{
-		if (!cardDatabase.isReady() || stateService.get() == null)
-		{
+	public boolean isForbidden(int itemId) {
+		if (!cardDatabase.isReady() || stateService.get() == null) {
 			return false; // fail-open
 		}
-		if (TutorialGate.onTutorial(client))
-		{
+		if (TutorialGate.onTutorial(client)) {
 			return false; // NO Gachaman locks on Tutorial Island — it force-equips items
 		}
 		CardDefinition card = cardDatabase.cardForItem(itemId);
-		if (card == null)
-		{
+		if (card == null) {
 			return false; // not equipment we track
 		}
-		if (!deededSlots.contains(card.getSlot().name()))
-		{
+		if (!deededSlots.contains(card.getSlot().name())) {
 			return true; // slot itself locked
 		}
 		return !allowedItemIds.contains(itemId);
 	}
 
-	public boolean isSlotDeeded(GearSlot slot)
-	{
+	public boolean isSlotDeeded(GearSlot slot) {
 		return deededSlots.contains(slot.name());
 	}
 
-	void rebuild(GachaState state)
-	{
-		if (!cardDatabase.isReady())
-		{
+	void rebuild(GachaState state) {
+		if (!cardDatabase.isReady()) {
 			return;
 		}
-		if (!config.oneCardPerSlot())
-		{
+		if (!config.oneCardPerSlot()) {
 			rebuildOwnershipOnly(state);
 			return;
 		}
 		Set<Integer> allowed = new HashSet<>();
 		Map<String, OwnedCard> byUuid = new HashMap<>();
-		for (OwnedCard card : state.getOwnedCards())
-		{
+		for (OwnedCard card : state.getOwnedCards()) {
 			byUuid.put(card.getUuid(), card);
 		}
-		for (Map.Entry<String, String> entry : state.getLoadout().entrySet())
-		{
+		for (Map.Entry<String, String> entry : state.getLoadout().entrySet()) {
 			GearSlot slot;
-			try
-			{
+			try {
 				slot = GearSlot.valueOf(entry.getKey());
 			}
-			catch (IllegalArgumentException e)
-			{
+			catch (IllegalArgumentException e) {
 				continue;
 			}
 			OwnedCard owned = byUuid.get(entry.getValue());
-			if (owned == null)
-			{
+			if (owned == null) {
 				continue;
 			}
-			if (owned.isHologram())
-			{
+			if (owned.isHologram()) {
 				// tier-wide permission scoped to this slot
-				for (CardDefinition card : cardDatabase.all().values())
-				{
-					if (owned.getTierKey().equals(card.getTierKey()) && card.getSlot() == slot)
-					{
+				for (CardDefinition card : cardDatabase.all().values()) {
+					if (owned.getTierKey().equals(card.getTierKey()) && card.getSlot() == slot) {
 						allowed.addAll(card.getItemIds());
 					}
 				}
 				continue;
 			}
 			CardDefinition card = cardDatabase.card(owned.getCardId());
-			if (card == null || card.getSlot() != slot)
-			{
+			if (card == null || card.getSlot() != slot) {
 				continue;
 			}
 			allowed.addAll(card.getItemIds());
-			if (owned.getVariant() == Variant.SHINY && card.getFamilyKey() != null)
-			{
-				for (CardDefinition member : cardDatabase.family(card.getFamilyKey()))
-				{
-					if (member.getTierRank() <= card.getTierRank())
-					{
+			if (owned.getVariant() == Variant.SHINY && card.getFamilyKey() != null) {
+				for (CardDefinition member : cardDatabase.family(card.getFamilyKey())) {
+					if (member.getTierRank() <= card.getTierRank()) {
 						allowed.addAll(member.getItemIds());
 					}
 				}
@@ -180,34 +144,25 @@ public class PermissionService implements GachaStateService.Listener
 	 * lower tiers of its family; a hologram unlocks its whole tier in every
 	 * slot. Deed gating is unchanged.
 	 */
-	private void rebuildOwnershipOnly(GachaState state)
-	{
+	private void rebuildOwnershipOnly(GachaState state) {
 		Set<Integer> allowed = new HashSet<>();
-		for (OwnedCard owned : state.getOwnedCards())
-		{
-			if (owned.isHologram())
-			{
-				for (CardDefinition card : cardDatabase.all().values())
-				{
-					if (owned.getTierKey().equals(card.getTierKey()))
-					{
+		for (OwnedCard owned : state.getOwnedCards()) {
+			if (owned.isHologram()) {
+				for (CardDefinition card : cardDatabase.all().values()) {
+					if (owned.getTierKey().equals(card.getTierKey())) {
 						allowed.addAll(card.getItemIds());
 					}
 				}
 				continue;
 			}
 			CardDefinition card = cardDatabase.card(owned.getCardId());
-			if (card == null)
-			{
+			if (card == null) {
 				continue;
 			}
 			allowed.addAll(card.getItemIds());
-			if (owned.getVariant() == Variant.SHINY && card.getFamilyKey() != null)
-			{
-				for (CardDefinition member : cardDatabase.family(card.getFamilyKey()))
-				{
-					if (member.getTierRank() <= card.getTierRank())
-					{
+			if (owned.getVariant() == Variant.SHINY && card.getFamilyKey() != null) {
+				for (CardDefinition member : cardDatabase.family(card.getFamilyKey())) {
+					if (member.getTierRank() <= card.getTierRank()) {
 						allowed.addAll(member.getItemIds());
 					}
 				}

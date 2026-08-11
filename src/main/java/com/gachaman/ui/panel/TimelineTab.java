@@ -38,8 +38,7 @@ import net.runelite.client.ui.FontManager;
  * sweeps 0 -> from through 1 -> to, revealing history up to the scrub point.
  */
 @Singleton
-public class TimelineTab extends JPanel
-{
+public class TimelineTab extends JPanel {
 	private static final int SLIDER_MAX = 1000;
 	/**
 	 * The window controls carry the year; the rows do not. A player can scrub the
@@ -78,8 +77,7 @@ public class TimelineTab extends JPanel
 	private boolean suppressSpinnerEvents;
 
 	@Inject
-	public TimelineTab(GachaStateService stateService)
-	{
+	public TimelineTab(GachaStateService stateService) {
 		this.stateService = stateService;
 		setLayout(new BorderLayout(0, 6));
 		setOpaque(false);
@@ -136,15 +134,13 @@ public class TimelineTab extends JPanel
 		add(scroll, BorderLayout.CENTER);
 
 		fromSpinner.addChangeListener(e -> {
-			if (!suppressSpinnerEvents)
-			{
+			if (!suppressSpinnerEvents) {
 				userTouchedRange = true;
 				refreshList();
 			}
 		});
 		toSpinner.addChangeListener(e -> {
-			if (!suppressSpinnerEvents)
-			{
+			if (!suppressSpinnerEvents) {
 				userTouchedRange = true;
 				refreshList();
 			}
@@ -155,19 +151,16 @@ public class TimelineTab extends JPanel
 		// and keep the caption live, which is the part the player is actually reading
 		// while they drag.
 		scrubber.addChangeListener(e -> {
-			if (scrubber.getValueIsAdjusting())
-			{
+			if (scrubber.getValueIsAdjusting()) {
 				updateScrubLabel();
 			}
-			else
-			{
+			else {
 				refreshList();
 			}
 		});
 	}
 
-	private static JPanel spinnerRow(String label, JSpinner spinner)
-	{
+	private static JPanel spinnerRow(String label, JSpinner spinner) {
 		JPanel row = new JPanel();
 		row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
 		row.setOpaque(false);
@@ -184,26 +177,22 @@ public class TimelineTab extends JPanel
 		return row;
 	}
 
-	void rebuild()
-	{
+	void rebuild() {
 		// entering the tab always starts at the END (scrub = 1): the newest
 		// events show first and the player scrubs BACK through time. While
 		// the tab is already visible, live state refreshes must not yank the
 		// thumb out of the player's hand.
-		if (!isShowing())
-		{
+		if (!isShowing()) {
 			scrubber.setValue(SLIDER_MAX);
 		}
 		GachaState state = stateService.get();
 		List<TimelineEvent> timeline = state == null ? null : state.getTimeline();
-		if (state == null)
-		{
+		if (state == null) {
 			list.setText(htmlWrap("<font color='#909090'>Log in to view your fortune timeline.</font>"));
 			scrubLabel.setText(" ");
 			return;
 		}
-		if (!userTouchedRange)
-		{
+		if (!userTouchedRange) {
 			long now = System.currentTimeMillis();
 			long first = timeline != null && !timeline.isEmpty()
 				? timeline.get(0).getAt() : now - 3_600_000L;
@@ -221,12 +210,10 @@ public class TimelineTab extends JPanel
 	 * <p>Shared by the rebuild and the caption so a drag cannot show a timestamp
 	 * computed from one window and a count from another.
 	 */
-	private long[] scrubWindow()
-	{
+	private long[] scrubWindow() {
 		long from = ((Date) fromSpinner.getValue()).getTime();
 		long to = ((Date) toSpinner.getValue()).getTime();
-		if (to < from)
-		{
+		if (to < from) {
 			long swap = from;
 			from = to;
 			to = swap;
@@ -243,8 +230,7 @@ public class TimelineTab extends JPanel
 	 * re-parsing the document. Deliberately does not touch {@code list}: leaving the
 	 * old rows standing for the length of a drag is the whole point.
 	 */
-	private void updateScrubLabel()
-	{
+	private void updateScrubLabel() {
 		GachaState state = stateService.get();
 		List<TimelineEvent> timeline = state == null ? null : state.getTimeline();
 		long[] window = scrubWindow();
@@ -252,12 +238,9 @@ public class TimelineTab extends JPanel
 		long scrub = window[1];
 
 		int shown = 0;
-		if (timeline != null)
-		{
-			for (TimelineEvent event : timeline)
-			{
-				if (event.getAt() >= from && event.getAt() <= scrub)
-				{
+		if (timeline != null) {
+			for (TimelineEvent event : timeline) {
+				if (event.getAt() >= from && event.getAt() <= scrub) {
 					shown++;
 				}
 			}
@@ -265,12 +248,10 @@ public class TimelineTab extends JPanel
 		scrubLabel.setText(scrubCaption(scrub, shown));
 	}
 
-	private void refreshList()
-	{
+	private void refreshList() {
 		GachaState state = stateService.get();
 		List<TimelineEvent> timeline = state == null ? List.of() : state.getTimeline();
-		if (timeline == null)
-		{
+		if (timeline == null) {
 			timeline = List.of();
 		}
 		long[] window = scrubWindow();
@@ -279,10 +260,8 @@ public class TimelineTab extends JPanel
 
 		StringBuilder html = new StringBuilder();
 		int shown = 0;
-		for (TimelineEvent event : timeline)
-		{
-			if (event.getAt() < from || event.getAt() > scrub)
-			{
+		for (TimelineEvent event : timeline) {
+			if (event.getAt() < from || event.getAt() > scrub) {
 				continue;
 			}
 			shown++;
@@ -291,8 +270,7 @@ public class TimelineTab extends JPanel
 				.append(GachamanPanel.escape(event.getText()))
 				.append("</font><br/>");
 		}
-		if (shown == 0)
-		{
+		if (shown == 0) {
 			html.append("<font color='#909090'>No events in this window — fate has been quiet.</font>");
 		}
 		list.setText(htmlWrap(html.toString()));
@@ -305,23 +283,18 @@ public class TimelineTab extends JPanel
 	 * path both write it and a copy of the string in each drifted — one of them
 	 * still said "1 events".
 	 */
-	static String scrubCaption(long scrub, int shown)
-	{
+	static String scrubCaption(long scrub, int shown) {
 		return "Up to " + RANGE_FORMAT.format(new Date(scrub))
 			+ "  (" + shown + (shown == 1 ? " event)" : " events)");
 	}
 
-	private static String htmlWrap(String body)
-	{
+	private static String htmlWrap(String body) {
 		return "<html><body>" + body + "</body></html>";
 	}
 
-	private static Color colorFor(TimelineEvent event)
-	{
-		try
-		{
-			switch (event.getKind())
-			{
+	private static Color colorFor(TimelineEvent event) {
+		try {
+			switch (event.getKind()) {
 				case TimelineEvent.KIND_STYLE:
 					return event.getMeta() != null
 						? AttackStyle.valueOf(event.getMeta()).getColor() : CHARGE_PURPLE;
@@ -341,11 +314,6 @@ public class TimelineTab extends JPanel
 					return LUCK_GOLD;
 				case TimelineEvent.KIND_CHARGE:
 					return CHARGE_PURPLE;
-				case TimelineEvent.KIND_CHARTER:
-					// a chartered deed reads as the contract it becomes; a refund
-					// carries no difficulty and falls back to the neutral gold
-					return event.getMeta() != null
-						? TaskDifficulty.valueOf(event.getMeta()).getColor() : LUCK_GOLD;
 				case TimelineEvent.KIND_VIOLATION:
 				case TimelineEvent.KIND_TAINT:
 					return BAD_RED;
@@ -355,14 +323,12 @@ public class TimelineTab extends JPanel
 					return ColorScheme.LIGHT_GRAY_COLOR;
 			}
 		}
-		catch (IllegalArgumentException e)
-		{
+		catch (IllegalArgumentException e) {
 			return ColorScheme.LIGHT_GRAY_COLOR; // unknown meta from a future version
 		}
 	}
 
-	private static String hex(Color color)
-	{
+	private static String hex(Color color) {
 		return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
 	}
 }

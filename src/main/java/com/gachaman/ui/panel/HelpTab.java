@@ -46,8 +46,7 @@ import net.runelite.client.ui.PluginPanel;
  * the live viewport instead and rebuilds whenever that measurement changes.
  */
 @Singleton
-public class HelpTab extends JPanel
-{
+public class HelpTab extends JPanel {
 	/**
 	 * Pre-realization fallback only: the 242px non-wrapped PluginPanel minus
 	 * its 6px borders and a full stock 17px scrollbar — the NARROWEST the
@@ -75,19 +74,16 @@ public class HelpTab extends JPanel
 	private boolean viewportHooked;
 
 	@Inject
-	public HelpTab()
-	{
+	public HelpTab() {
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		setOpaque(false);
 		setBorder(new EmptyBorder(0, 0, 6, 0));
 	}
 
 	/** Rebuilds only when the measured viewport width changed; no-op otherwise. */
-	void rebuild()
-	{
+	void rebuild() {
 		int width = measuredWidth();
-		if (width == builtWidth)
-		{
+		if (width == builtWidth) {
 			return;
 		}
 		builtWidth = width;
@@ -98,14 +94,11 @@ public class HelpTab extends JPanel
 	}
 
 	/** The scroll viewport's ACTUAL extent width — the only trustworthy budget. */
-	private int measuredWidth()
-	{
+	private int measuredWidth() {
 		Container ancestor = SwingUtilities.getAncestorOfClass(JViewport.class, this);
-		if (ancestor instanceof JViewport)
-		{
+		if (ancestor instanceof JViewport) {
 			int width = ((JViewport) ancestor).getExtentSize().width;
-			if (width > 0)
-			{
+			if (width > 0) {
 				return width;
 			}
 		}
@@ -113,29 +106,24 @@ public class HelpTab extends JPanel
 	}
 
 	@Override
-	public void addNotify()
-	{
+	public void addNotify() {
 		super.addNotify();
 		Container ancestor = SwingUtilities.getAncestorOfClass(JViewport.class, this);
-		if (!viewportHooked && ancestor instanceof JViewport)
-		{
+		if (!viewportHooked && ancestor instanceof JViewport) {
 			// the viewport narrows when the scrollbar appears (and would widen
 			// if the LAF ever changed its width) — re-measure and rebuild; the
 			// equal-width check makes this settle in at most two passes
 			viewportHooked = true;
-			ancestor.addComponentListener(new ComponentAdapter()
-			{
+			ancestor.addComponentListener(new ComponentAdapter() {
 				@Override
-				public void componentResized(ComponentEvent e)
-				{
+				public void componentResized(ComponentEvent e) {
 					SwingUtilities.invokeLater(HelpTab.this::rebuild);
 				}
 			});
 		}
 	}
 
-	private void addSection(JPanel section, int width)
-	{
+	private void addSection(JPanel section, int width) {
 		add(new WidthCap(section, width));
 		add(Box.createVerticalStrut(6));
 	}
@@ -151,15 +139,11 @@ public class HelpTab extends JPanel
 	 * this method owns the rendering, and the illustrations stay in Java
 	 * because they are drawn, not written.
 	 */
-	private void buildSections(int width)
-	{
-		for (Section section : document().sections)
-		{
+	private void buildSections(int width) {
+		for (Section section : document().sections) {
 			JPanel panel = GachamanPanel.section(section.title);
-			for (com.google.gson.JsonElement element : section.body)
-			{
-				if (element.isJsonPrimitive())
-				{
+			for (com.google.gson.JsonElement element : section.body) {
+				if (element.isJsonPrimitive()) {
 					paragraph(panel, width, element.getAsString());
 					continue;
 				}
@@ -175,39 +159,30 @@ public class HelpTab extends JPanel
 	 * on purpose (the blocked-equipment glyph gets 6px, the padlock 4px), and a
 	 * renderer that averaged them would quietly restyle the page.
 	 */
-	private void element(JPanel panel, int width, com.google.gson.JsonObject el)
-	{
-		if (el.has("note"))
-		{
+	private void element(JPanel panel, int width, com.google.gson.JsonObject el) {
+		if (el.has("note")) {
 			panel.add(GachamanPanel.smallLine(el.get("note").getAsString(), MUTED));
 		}
-		else if (el.has("muted"))
-		{
+		else if (el.has("muted")) {
 			panel.add(textBlock(el.get("muted").getAsString(), MUTED, width - SECTION_PADDING));
 		}
-		else if (el.has("icon"))
-		{
+		else if (el.has("icon")) {
 			ImageIcon icon = "padlock".equals(el.get("icon").getAsString())
 				? padlockIcon() : crossedCircleIcon();
 			panel.add(iconRow(width, icon, textBlock(el.get("text").getAsString(),
 				BODY, width - SECTION_PADDING - ICON_COLUMN)));
 		}
-		else
-		{
+		else {
 			widget(panel, width, el);
 		}
-		if (el.has("gap"))
-		{
+		if (el.has("gap")) {
 			panel.add(Box.createVerticalStrut(el.get("gap").getAsInt()));
 		}
 	}
 
-	private void widget(JPanel panel, int width, com.google.gson.JsonObject el)
-	{
-		switch (el.get("widget").getAsString())
-		{
-			case "styleRow":
-			{
+	private void widget(JPanel panel, int width, com.google.gson.JsonObject el) {
+		switch (el.get("widget").getAsString()) {
+			case "styleRow": {
 				JPanel styles = flowRow(width);
 				styles.add(styleLabel("Melee", MELEE));
 				styles.add(styleLabel("Ranged", RANGED));
@@ -216,14 +191,12 @@ public class HelpTab extends JPanel
 				break;
 			}
 			case "rarityLadder":
-				for (Rarity rarity : Rarity.values())
-				{
+				for (Rarity rarity : Rarity.values()) {
 					panel.add(GachamanPanel.smallLine(rarity.getDisplayName(), rarity.getColor()));
 					panel.add(Box.createVerticalStrut(1));
 				}
 				break;
-			case "cardSamples":
-			{
+			case "cardSamples": {
 				JPanel cards = flowRow(width);
 				cards.add(new JLabel(cardIcon(sample("Rune scimitar", Rarity.RARE, Variant.NORMAL, null))));
 				cards.add(new JLabel(cardIcon(sample("Rune scimitar", Rarity.RARE, Variant.SHINY, null))));
@@ -236,8 +209,7 @@ public class HelpTab extends JPanel
 				panel.add(new GachamanPanel.MeterBar(12 / 30.0, ColorScheme.BRAND_ORANGE, "12 / 30"));
 				break;
 			case "commandList":
-				for (com.google.gson.JsonElement command : el.getAsJsonArray("items"))
-				{
+				for (com.google.gson.JsonElement command : el.getAsJsonArray("items")) {
 					panel.add(GachamanPanel.smallLine(command.getAsString(), BODY));
 					panel.add(Box.createVerticalStrut(1));
 				}
@@ -248,8 +220,7 @@ public class HelpTab extends JPanel
 	}
 
 	private static CardRenderer.CardView sample(String name, Rarity rarity, Variant variant,
-		String subtitle)
-	{
+		String subtitle) {
 		return CardRenderer.CardView.builder()
 			.name(name)
 			.rarity(rarity)
@@ -261,39 +232,31 @@ public class HelpTab extends JPanel
 
 	// --- the document ---
 
-	private static final class Doc
-	{
+	private static final class Doc {
 		List<Section> sections;
 	}
 
-	private static final class Section
-	{
+	private static final class Section {
 		String title;
 		List<com.google.gson.JsonElement> body;
 	}
 
 	private static Doc document;
 
-	private static Doc document()
-	{
-		if (document == null)
-		{
+	private static Doc document() {
+		if (document == null) {
 			Doc loaded = null;
 			try (InputStream in = HelpTab.class.getResourceAsStream(
-				"/com/gachaman/ui/help.json"))
-			{
-				if (in != null)
-				{
+				"/com/gachaman/ui/help.json")) {
+				if (in != null) {
 					loaded = new com.google.gson.Gson().fromJson(new InputStreamReader(
 						in, StandardCharsets.UTF_8), Doc.class);
 				}
 			}
-			catch (Exception e)
-			{
+			catch (Exception e) {
 				loaded = null;
 			}
-			if (loaded == null || loaded.sections == null)
-			{
+			if (loaded == null || loaded.sections == null) {
 				loaded = new Doc();
 				loaded.sections = Collections.emptyList();
 			}
@@ -305,8 +268,7 @@ public class HelpTab extends JPanel
 
 	// --- Layout helpers ---
 
-	private static void paragraph(JPanel section, int w, String text)
-	{
+	private static void paragraph(JPanel section, int w, String text) {
 		section.add(textBlock(text, BODY, w - SECTION_PADDING));
 		section.add(Box.createVerticalStrut(4));
 	}
@@ -318,8 +280,7 @@ public class HelpTab extends JPanel
 	 * the width it is given; sizing it up front makes its preferred height
 	 * correct before the BoxLayout ever asks.
 	 */
-	private static JTextArea textBlock(String text, Color color, int width)
-	{
+	private static JTextArea textBlock(String text, Color color, int width) {
 		JTextArea area = new JTextArea(text);
 		area.setEditable(false);
 		area.setFocusable(false);
@@ -345,14 +306,11 @@ public class HelpTab extends JPanel
 	 * while every other child of the same section subtracted first, so the cap
 	 * it enforced was 16px wider than the column it sits in.
 	 */
-	private static JPanel flowRow(int outerWidth)
-	{
+	private static JPanel flowRow(int outerWidth) {
 		final int w = outerWidth - SECTION_PADDING;
-		JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0))
-		{
+		JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0)) {
 			@Override
-			public Dimension getMaximumSize()
-			{
+			public Dimension getMaximumSize() {
 				return new Dimension(w, getPreferredSize().height);
 			}
 		};
@@ -366,14 +324,11 @@ public class HelpTab extends JPanel
 	 * the SECTION-OUTER width and subtracts the padding itself, for the same
 	 * reason {@link #flowRow} does.
 	 */
-	private static JPanel iconRow(int outerWidth, ImageIcon icon, JComponent text)
-	{
+	private static JPanel iconRow(int outerWidth, ImageIcon icon, JComponent text) {
 		final int w = outerWidth - SECTION_PADDING;
-		JPanel panel = new JPanel(new BorderLayout(6, 0))
-		{
+		JPanel panel = new JPanel(new BorderLayout(6, 0)) {
 			@Override
-			public Dimension getMaximumSize()
-			{
+			public Dimension getMaximumSize() {
 				return new Dimension(w, getPreferredSize().height);
 			}
 		};
@@ -386,8 +341,7 @@ public class HelpTab extends JPanel
 		return panel;
 	}
 
-	private static JLabel styleLabel(String name, Color color)
-	{
+	private static JLabel styleLabel(String name, Color color) {
 		JLabel label = new JLabel(name, squareIcon(color), SwingConstants.LEFT);
 		label.setFont(FontManager.getRunescapeSmallFont());
 		label.setForeground(color);
@@ -400,12 +354,10 @@ public class HelpTab extends JPanel
 	 * scroll pane never scrolls horizontally, so no child may push a section
 	 * past the measured viewport width.
 	 */
-	private static final class WidthCap extends JPanel
-	{
+	private static final class WidthCap extends JPanel {
 		private final int cap;
 
-		WidthCap(JComponent inner, int cap)
-		{
+		WidthCap(JComponent inner, int cap) {
 			super(new BorderLayout());
 			this.cap = cap;
 			setOpaque(false);
@@ -414,15 +366,13 @@ public class HelpTab extends JPanel
 		}
 
 		@Override
-		public Dimension getPreferredSize()
-		{
+		public Dimension getPreferredSize() {
 			Dimension d = super.getPreferredSize();
 			return new Dimension(Math.min(d.width, cap), d.height);
 		}
 
 		@Override
-		public Dimension getMaximumSize()
-		{
+		public Dimension getMaximumSize() {
 			return new Dimension(cap, getPreferredSize().height);
 		}
 	}
@@ -430,8 +380,7 @@ public class HelpTab extends JPanel
 	// --- Procedural illustrations ---
 
 	/** A small filled swatch for the attack-style legend. */
-	private static ImageIcon squareIcon(Color color)
-	{
+	private static ImageIcon squareIcon(Color color) {
 		BufferedImage image = new BufferedImage(10, 10, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = image.createGraphics();
 		g.setColor(color);
@@ -443,8 +392,7 @@ public class HelpTab extends JPanel
 	}
 
 	/** The 14px crossed-circle glyph, mirroring ForbiddenItemOverlay's icon. */
-	private static ImageIcon crossedCircleIcon()
-	{
+	private static ImageIcon crossedCircleIcon() {
 		int size = 14;
 		BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = image.createGraphics();
@@ -461,8 +409,7 @@ public class HelpTab extends JPanel
 	}
 
 	/** A small padlock glyph for the locked gear slots. */
-	private static ImageIcon padlockIcon()
-	{
+	private static ImageIcon padlockIcon() {
 		int size = 16;
 		BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = image.createGraphics();
@@ -481,8 +428,7 @@ public class HelpTab extends JPanel
 	}
 
 	/** A mini card face rendered through the shared CardRenderer. */
-	private static ImageIcon cardIcon(CardRenderer.CardView view)
-	{
+	private static ImageIcon cardIcon(CardRenderer.CardView view) {
 		BufferedImage image = new BufferedImage(CARD_W, CARD_H, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = image.createGraphics();
 		CardRenderer.drawFace(g, 1, 1, CARD_W - 2, CARD_H - 2, view, 300L);
