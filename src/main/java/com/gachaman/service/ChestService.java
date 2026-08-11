@@ -5,11 +5,14 @@ import com.gachaman.data.CardDatabase;
 import com.gachaman.data.CardDefinition;
 import com.gachaman.data.HologramDefinition;
 import com.gachaman.data.RangedMetal;
+import com.gachaman.data.TierTable;
 import com.gachaman.model.GachaState;
+import com.gachaman.model.GearSlot;
 import com.gachaman.model.OwnedCard;
 import com.gachaman.model.Rarity;
 import com.gachaman.model.Variant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -17,7 +20,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -25,6 +31,8 @@ import javax.inject.Singleton;
 import lombok.Value;
 import lombok.With;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.Client;
+import net.runelite.api.Skill;
 
 /**
  * Chest purchasing and roll math: rarity odds with pity, jackpot upgrades,
@@ -128,16 +136,16 @@ public class ChestService
 	private final GachaRng rng;
 	private final com.google.gson.Gson gson;
 	@Nullable
-	private final net.runelite.api.Client client;
+	private final Client client;
 	@Nullable
-	private final com.gachaman.data.TierTable tierTable;
+	private final TierTable tierTable;
 
 	/** Commit-time hooks (Firsts Journal stamps chest events through this). */
 	public interface ChestListener
 	{
 		void onChestCommitted(ChestOpenResult result, long dupeGc);
 
-		void onDeedClaimed(com.gachaman.model.GearSlot slot);
+		void onDeedClaimed(GearSlot slot);
 
 		void onRerollSpent();
 	}
@@ -165,7 +173,7 @@ public class ChestService
 	@Inject
 	public ChestService(GachaStateService stateService, CreditSink creditSink,
 		CardDatabase cardDatabase, CeremonyBus ceremonyBus, GachaRng rng, com.google.gson.Gson gson,
-		net.runelite.api.Client client, com.gachaman.data.TierTable tierTable)
+		Client client, TierTable tierTable)
 	{
 		this.stateService = stateService;
 		this.creditSink = creditSink;
@@ -266,7 +274,7 @@ public class ChestService
 	 * gear slot's pool (Gilded odds; pity applies; no jackpot upgrade).
 	 */
 	@Nullable
-	public synchronized ChestOpenResult openSlotChest(com.gachaman.model.GearSlot slot)
+	public synchronized ChestOpenResult openSlotChest(GearSlot slot)
 	{
 		if (pending != null || !cardDatabase.isReady() || slot == null)
 		{
@@ -350,7 +358,7 @@ public class ChestService
 		{
 			return null;
 		}
-		java.util.function.Predicate<CardDefinition> require =
+		Predicate<CardDefinition> require =
 			preferredCardIds == null || preferredCardIds.isEmpty()
 				? null
 				: c -> preferredCardIds.contains(c.getCardId());
@@ -366,7 +374,7 @@ public class ChestService
 	}
 
 	ChestOpenResult roll(Tuning.Chest tier, @Nullable String themedSetTag,
-		@Nullable com.gachaman.model.GearSlot targetSlot, long price)
+		@Nullable GearSlot targetSlot, long price)
 	{
 		return roll(tier, themedSetTag, targetSlot, price, null);
 	}
@@ -377,8 +385,8 @@ public class ChestService
 	 * the card they see first, while the rest of the box stays honest gacha.
 	 */
 	ChestOpenResult roll(Tuning.Chest tier, @Nullable String themedSetTag,
-		@Nullable com.gachaman.model.GearSlot targetSlot, long price,
-		@Nullable java.util.function.Predicate<CardDefinition> require)
+		@Nullable GearSlot targetSlot, long price,
+		@Nullable Predicate<CardDefinition> require)
 	{
 		GachaState state = stateService.get();
 		int prestige = state == null ? 0 : state.getPrestigeRank();
@@ -468,7 +476,7 @@ public class ChestService
 		List<RolledSlot> slots = new ArrayList<>(cardCount);
 		for (int i = 0; i < cardCount; i++)
 		{
-			final java.util.function.Predicate<CardDefinition> steer = i == 0 ? require : null;
+			final Predicate<CardDefinition> steer = i == 0 ? require : null;
 			if (i == 0 && pityBreak)
 			{
 				RolledSlot slot = rollSlot(pool, Rarity.LEGENDARY, hologramsAllowed,
@@ -526,7 +534,7 @@ public class ChestService
 
 	RolledSlot rollSlot(List<CardDefinition> pool, Rarity rarity, boolean hologramsAllowed,
 		double shinyChance, int shinyAttempts, Set<String> ownedKeys,
-		@Nullable java.util.function.Predicate<CardDefinition> require)
+		@Nullable Predicate<CardDefinition> require)
 	{
 		// hologram replaces the card entirely
 		if (hologramsAllowed && !cardDatabase.holograms().isEmpty() && rng.chance(Tuning.HOLOGRAM_CHANCE))
@@ -575,7 +583,7 @@ public class ChestService
 	 * seed moves.
 	 */
 	CardDefinition pickCardOfRarity(List<CardDefinition> pool, Rarity rarity,
-		@Nullable java.util.function.Predicate<CardDefinition> require)
+		@Nullable Predicate<CardDefinition> require)
 	{
 		RollBucket bucket = bucketFor(pool, rarity, require);
 		return bucket.isLeaned() ? pickLeaned(bucket.getCards()) : rng.pick(bucket.getCards());
@@ -593,7 +601,7 @@ public class ChestService
 	 * instead of a parallel transcription that would drift.
 	 */
 	RollBucket bucketFor(List<CardDefinition> pool, Rarity rarity,
-		@Nullable java.util.function.Predicate<CardDefinition> require)
+		@Nullable Predicate<CardDefinition> require)
 	{
 		// Epic+ rolls may land anywhere; below that, stay near what the
 		// player's levels can actually wield (see isReachable for the headroom).
@@ -669,7 +677,7 @@ public class ChestService
 	 * bound must stay bit-identical to the unconstrained build.
 	 */
 	static List<CardDefinition> constrained(List<CardDefinition> candidates,
-		@Nullable java.util.function.Predicate<CardDefinition> require)
+		@Nullable Predicate<CardDefinition> require)
 	{
 		if (require == null || candidates.isEmpty())
 		{
@@ -730,8 +738,8 @@ public class ChestService
 					// (a rune crossbow is 61, not 40). Measured in levels like dhide/robes, so
 					// the level headroom; no ranged weapon or ammunition carries a Defence gate.
 					return Tuning.withinReach(
-						client.getRealSkillLevel(net.runelite.api.Skill.RANGED),
-						client.getRealSkillLevel(net.runelite.api.Skill.DEFENCE),
+						client.getRealSkillLevel(Skill.RANGED),
+						client.getRealSkillLevel(Skill.DEFENCE),
 						ranged.reqRangedLevel(card.getTierKey(),
 							tierTable.reqLevelOf(card.getTierKey())),
 						1,
@@ -742,16 +750,16 @@ public class ChestService
 				// too — metal weapons gate on Attack and metal armour on Defence, never both,
 				// so a second Defence term here would lock an Attack pure out of rune weapons
 				// it can wield today.
-				int metalLevel = Math.max(client.getRealSkillLevel(net.runelite.api.Skill.ATTACK),
-					client.getRealSkillLevel(net.runelite.api.Skill.DEFENCE));
+				int metalLevel = Math.max(client.getRealSkillLevel(Skill.ATTACK),
+					client.getRealSkillLevel(Skill.DEFENCE));
 				return card.getTierRank() <= Tuning.maxRankForLevel(metalLevel)
 					+ (allowHeadroom ? Tuning.ROLL_TIER_HEADROOM : 0);
 			case "dhide":
 				return ladderWithinReach(card,
-					client.getRealSkillLevel(net.runelite.api.Skill.RANGED), allowHeadroom);
+					client.getRealSkillLevel(Skill.RANGED), allowHeadroom);
 			case "robes":
 				return ladderWithinReach(card,
-					client.getRealSkillLevel(net.runelite.api.Skill.MAGIC), allowHeadroom);
+					client.getRealSkillLevel(Skill.MAGIC), allowHeadroom);
 			default:
 				return true;
 		}
@@ -767,11 +775,11 @@ public class ChestService
 	 */
 	private boolean ladderWithinReach(CardDefinition card, int primaryLevel, boolean allowHeadroom)
 	{
-		int reqDefence = card.getSlot() == com.gachaman.model.GearSlot.BODY
+		int reqDefence = card.getSlot() == GearSlot.BODY
 			? tierTable.reqDefenceOf(card.getTierKey())
 			: 1;
 		return Tuning.withinReach(primaryLevel,
-			client.getRealSkillLevel(net.runelite.api.Skill.DEFENCE),
+			client.getRealSkillLevel(Skill.DEFENCE),
 			tierTable.reqLevelOf(card.getTierKey()), reqDefence,
 			allowHeadroom ? Tuning.ROLL_LEVEL_HEADROOM : 0);
 	}
@@ -864,7 +872,7 @@ public class ChestService
 		// names per row, for the tooltip that has to name the pieces a split tier
 		// leaves out of reach. Sorted and de-duplicated: a card can be revisited
 		// across rarity buckets, and an arbitrary order would reshuffle every rebuild.
-		Map<RollOdds.TierBand, java.util.SortedSet<String>> namesByBand = new HashMap<>();
+		Map<RollOdds.TierBand, SortedSet<String>> namesByBand = new HashMap<>();
 		for (Rarity rarity : Rarity.values())
 		{
 			double share = rarityShare[rarity.ordinal()];
@@ -883,7 +891,7 @@ public class ChestService
 			{
 				namesByBand
 					.computeIfAbsent(RollOdds.bandOf(cards.get(i), flags[i]),
-						k -> new java.util.TreeSet<>(String.CASE_INSENSITIVE_ORDER))
+						k -> new TreeSet<>(String.CASE_INSENSITIVE_ORDER))
 					.add(cards.get(i).getName());
 			}
 			for (Map.Entry<RollOdds.TierBand, Double> entry
@@ -921,9 +929,9 @@ public class ChestService
 			String display = untiered || tierTable == null
 				? band.getTierKey()
 				: tierTable.displayNameOf(band.getTierKey());
-			java.util.SortedSet<String> names = namesByBand.get(band);
+			SortedSet<String> names = namesByBand.get(band);
 			rows.add(new TierOdds(band.getTierKey(), display, band.isWieldableNow(), probability,
-				names == null ? java.util.Collections.emptyList() : new ArrayList<>(names)));
+				names == null ? Collections.emptyList() : new ArrayList<>(names)));
 		}
 		rows.sort(Comparator.comparingDouble(TierOdds::getProbability).reversed());
 
@@ -963,7 +971,7 @@ public class ChestService
 		List<CardDefinition> pool;
 		if (pending.getTargetSlot() != null)
 		{
-			com.gachaman.model.GearSlot slot = com.gachaman.model.GearSlot.valueOf(pending.getTargetSlot());
+			GearSlot slot = GearSlot.valueOf(pending.getTargetSlot());
 			pool = cardDatabase.all().values().stream()
 				.filter(c -> c.getSlot() == slot)
 				.collect(Collectors.toList());
@@ -1052,7 +1060,7 @@ public class ChestService
 		stateService.mutate(s -> {
 			List<OwnedCard> owned = new ArrayList<>(s.getOwnedCards());
 			owned.addAll(newCards);
-			java.util.Map<String, Integer> byTier = new java.util.HashMap<>(s.getChestsOpenedByTier());
+			Map<String, Integer> byTier = new HashMap<>(s.getChestsOpenedByTier());
 			byTier.merge(result.getPurchasedTier().name(), 1, Integer::sum);
 			GachaState next = s.withOwnedCards(owned).withChestsOpenedByTier(byTier)
 				.withPendingChestBlob(null);
@@ -1090,7 +1098,7 @@ public class ChestService
 			}
 			if (result.isDeedGranted())
 			{
-				boolean saturated = s.getDeededSlots().size() >= com.gachaman.model.GearSlot.values().length;
+				boolean saturated = s.getDeededSlots().size() >= GearSlot.values().length;
 				if (!saturated)
 				{
 					next = next.withPendingDeeds(s.getPendingDeeds() + 1);
@@ -1116,7 +1124,7 @@ public class ChestService
 		if (result.isDeedGranted())
 		{
 			GachaState state = stateService.get();
-			if (state != null && state.getDeededSlots().size() >= com.gachaman.model.GearSlot.values().length)
+			if (state != null && state.getDeededSlots().size() >= GearSlot.values().length)
 			{
 				creditSink.award(Tuning.DEED_SATURATED_GC,
 					new CreditSink.GcContext(CreditSink.Source.DEED_SATURATED, null, null));
@@ -1142,7 +1150,7 @@ public class ChestService
 
 	// --- Deed choice ---
 
-	public boolean claimDeed(com.gachaman.model.GearSlot slot)
+	public boolean claimDeed(GearSlot slot)
 	{
 		GachaState state = stateService.get();
 		if (state == null || state.getPendingDeeds() <= 0

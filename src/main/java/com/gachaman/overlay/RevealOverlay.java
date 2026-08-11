@@ -11,6 +11,7 @@ import com.gachaman.model.Rarity;
 import com.gachaman.model.SideBet;
 import com.gachaman.model.TaskOffer;
 import com.gachaman.model.Variant;
+import com.gachaman.party.PartyRollService;
 import com.gachaman.service.CeremonyBus;
 import com.gachaman.service.ChestService;
 import com.gachaman.service.GachaStateService;
@@ -23,6 +24,7 @@ import com.gachaman.ui.CardRenderer;
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Composite;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -32,18 +34,21 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.geom.AffineTransform;
+import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.GameState;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.ui.overlay.Overlay;
@@ -317,7 +322,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		// screen never renders (ABOVE_WIDGETS) yet its modal input listener
 		// would eat every login-screen click. Declined requests stay parked in
 		// the CeremonyBus queue and re-present after login.
-		if (client.getGameState() != net.runelite.api.GameState.LOGGED_IN)
+		if (client.getGameState() != GameState.LOGGED_IN)
 		{
 			return false;
 		}
@@ -808,17 +813,17 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 	 * reflected on the very next frame instead of going stale on the parchment.
 	 */
 	@Nullable
-	private java.util.function.Supplier<com.gachaman.party.PartyRollService.VoteView> partyVoteSupplier;
+	private Supplier<PartyRollService.VoteView> partyVoteSupplier;
 
 	public void setPartyVoteSupplier(
-		@Nullable java.util.function.Supplier<com.gachaman.party.PartyRollService.VoteView> supplier)
+		@Nullable Supplier<PartyRollService.VoteView> supplier)
 	{
 		this.partyVoteSupplier = supplier;
 	}
 
 	/** The vote snapshot for the frame being painted; see the offer render loop. */
 	@Nullable
-	private com.gachaman.party.PartyRollService.VoteView frameVotes;
+	private PartyRollService.VoteView frameVotes;
 
 	public void abortActiveCeremony()
 	{
@@ -1595,7 +1600,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		float chestAlpha = (float) clamp01((total - el) / 320.0);
 		if (chestAlpha > 0.02f)
 		{
-			java.awt.Composite old = g.getComposite();
+			Composite old = g.getComposite();
 			g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, chestAlpha));
 			// openT must be exactly 1.0 here: values above 1 add blast lift,
 			// which detaches the lid from the hinge while the chest slides
@@ -2121,7 +2126,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 
 		// subtle radial sheen (light from the upper left)
 		Graphics2D gs = (Graphics2D) g.create();
-		gs.setClip(new java.awt.geom.Ellipse2D.Float(cx - radius, cy - radius, radius * 2, radius * 2));
+		gs.setClip(new Ellipse2D.Float(cx - radius, cy - radius, radius * 2, radius * 2));
 		for (int i = 4; i >= 1; i--)
 		{
 			float a = 0.030f * (5 - i);
@@ -2672,7 +2677,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 			int rewardW = reward == null ? 0 : fm.stringWidth(reward);
 			// wrapped, not clipped: a side bet cut to "A kill without taking dam…"
 			// has lost the one part that matters, which is the condition
-			java.util.List<String> parts = wrapText(fm, conds[i], w);
+			List<String> parts = wrapText(fm, conds[i], w);
 			for (int p = 0; p < parts.size(); p++)
 			{
 				if (y + fm.getHeight() > parchBot - 6)
@@ -2725,7 +2730,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 	 * @return the next free y, so the caller's footer keeps stacking
 	 */
 	private static int drawVoters(Graphics2D g,
-		java.util.List<com.gachaman.party.PartyRollService.Voter> voters,
+		List<PartyRollService.Voter> voters,
 		int x, int y, int maxWidth, int parchBot)
 	{
 		if (voters == null || voters.isEmpty())
@@ -2749,7 +2754,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		int cx = x;
 		for (int v = 0; v < voters.size(); v++)
 		{
-			com.gachaman.party.PartyRollService.Voter voter = voters.get(v);
+			PartyRollService.Voter voter = voters.get(v);
 			boolean last = v == voters.size() - 1;
 			String name = voter.getName() + (last ? "" : ",");
 			int faceW = voter.getAvatar() != null ? VOTER_FACE + 3 : 0;
@@ -2796,18 +2801,18 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 	 * scratch image, washed with a sepia tint through SRC_ATOP so only the avatar's
 	 * own pixels take the colour, then framed with the same hairline the rules use.
 	 */
-	private static void drawVoterFace(Graphics2D g, java.awt.image.BufferedImage src,
+	private static void drawVoterFace(Graphics2D g, BufferedImage src,
 		int x, int y)
 	{
-		java.awt.image.BufferedImage tinted = new java.awt.image.BufferedImage(
-			VOTER_FACE, VOTER_FACE, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+		BufferedImage tinted = new BufferedImage(
+			VOTER_FACE, VOTER_FACE, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D tg = tinted.createGraphics();
 		try
 		{
 			tg.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
 				RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 			tg.drawImage(src, 0, 0, VOTER_FACE, VOTER_FACE, null);
-			tg.setComposite(java.awt.AlphaComposite.SrcAtop);
+			tg.setComposite(AlphaComposite.SrcAtop);
 			tg.setColor(FACE_WASH);
 			tg.fillRect(0, 0, VOTER_FACE, VOTER_FACE);
 		}
@@ -2828,9 +2833,9 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 	 * across a line boundary is harder to read than one that runs slightly wide,
 	 * and this is a contract, not a newspaper column.
 	 */
-	private static java.util.List<String> wrapText(FontMetrics fm, String text, int maxWidth)
+	private static List<String> wrapText(FontMetrics fm, String text, int maxWidth)
 	{
-		java.util.List<String> lines = new java.util.ArrayList<>();
+		List<String> lines = new ArrayList<>();
 		if (text == null || text.isEmpty())
 		{
 			return lines;
@@ -2873,7 +2878,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 	{
 		g.setFont(font);
 		FontMetrics fm = g.getFontMetrics();
-		java.util.List<String> lines = wrapText(fm, text, maxWidth);
+		List<String> lines = wrapText(fm, text, maxWidth);
 		for (String line : lines)
 		{
 			if (y > parchBot - 8)
@@ -3243,7 +3248,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 
 	private boolean isSlotDeeded(GearSlot slot)
 	{
-		com.gachaman.model.GachaState state = stateService.get();
+		GachaState state = stateService.get();
 		return state != null && state.getDeededSlots().contains(slot.name());
 	}
 
@@ -3253,7 +3258,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer
 		drawCenteredText(g, "SLOT DEED EARNED", cw / 2, 46, FONT_TITLE, GOLD, true);
 		drawCenteredText(g, "Choose a locked slot to unlock forever", cw / 2, 70, FONT_BODY,
 			Color.WHITE, true);
-		com.gachaman.model.GachaState state = stateService.get();
+		GachaState state = stateService.get();
 		int pending = state == null ? 0 : state.getPendingDeeds();
 		if (pending > 1)
 		{

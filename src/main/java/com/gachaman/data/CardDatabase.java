@@ -1,5 +1,6 @@
 package com.gachaman.data;
 
+import com.gachaman.model.AttackStyle;
 import com.gachaman.model.GearSlot;
 import com.gachaman.model.Rarity;
 import com.google.gson.Gson;
@@ -12,6 +13,7 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -34,6 +36,7 @@ import net.runelite.api.Client;
 import net.runelite.api.ItemComposition;
 import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.game.ItemEquipmentStats;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStats;
 
@@ -89,7 +92,7 @@ public class CardDatabase
 	}
 
 	/** Zero-stat items that are genuinely combat equipment. */
-	private static final Set<String> COMBAT_ALLOWLIST = new HashSet<>(java.util.Arrays.asList(
+	private static final Set<String> COMBAT_ALLOWLIST = new HashSet<>(Arrays.asList(
 		"Chinchompa", "Red chinchompa", "Black chinchompa",
 		"Training sword", "Training shield", "Training bow", "Training arrows"));
 
@@ -228,7 +231,7 @@ public class CardDatabase
 	 */
 	private static boolean hasCombatStats(ItemStats stats)
 	{
-		net.runelite.client.game.ItemEquipmentStats e = stats.getEquipment();
+		ItemEquipmentStats e = stats.getEquipment();
 		return e.getAstab() > 0 || e.getAslash() > 0 || e.getAcrush() > 0
 			|| e.getAmagic() > 0 || e.getArange() > 0
 			|| e.getDstab() > 0 || e.getDslash() > 0 || e.getDcrush() > 0
@@ -238,7 +241,7 @@ public class CardDatabase
 
 	private static int powerScore(ItemStats stats)
 	{
-		net.runelite.client.game.ItemEquipmentStats e = stats.getEquipment();
+		ItemEquipmentStats e = stats.getEquipment();
 		int off = Math.max(Math.max(e.getAstab(), e.getAslash()),
 			Math.max(Math.max(e.getAcrush(), e.getAmagic()), e.getArange()));
 		int def = Math.max(Math.max(e.getDstab(), e.getDslash()),
@@ -506,7 +509,7 @@ public class CardDatabase
 	 * cache version and force every existing install into a full item rescan to
 	 * answer a question that is asked once per account.
 	 */
-	public Set<Integer> weaponCardIdsForStyle(@Nullable com.gachaman.model.AttackStyle style)
+	public Set<Integer> weaponCardIdsForStyle(@Nullable AttackStyle style)
 	{
 		Set<Integer> ids = new HashSet<>();
 		if (style == null)
@@ -528,7 +531,7 @@ public class CardDatabase
 				{
 					continue;
 				}
-				net.runelite.client.game.ItemEquipmentStats e = stats.getEquipment();
+				ItemEquipmentStats e = stats.getEquipment();
 				if (dominantStyle(e.getAstab(), e.getAslash(), e.getAcrush(),
 					e.getArange(), e.getAmagic()) == style)
 				{
@@ -550,7 +553,7 @@ public class CardDatabase
 	 * because an item only ever swings with one of them.
 	 */
 	@Nullable
-	static com.gachaman.model.AttackStyle dominantStyle(int astab, int aslash, int acrush,
+	static AttackStyle dominantStyle(int astab, int aslash, int acrush,
 		int arange, int amagic)
 	{
 		int melee = Math.max(astab, Math.max(aslash, acrush));
@@ -578,11 +581,11 @@ public class CardDatabase
 		}
 		if (melee == best)
 		{
-			return com.gachaman.model.AttackStyle.MELEE;
+			return AttackStyle.MELEE;
 		}
 		return arange == best
-			? com.gachaman.model.AttackStyle.RANGED
-			: com.gachaman.model.AttackStyle.MAGIC;
+			? AttackStyle.RANGED
+			: AttackStyle.MAGIC;
 	}
 
 	public Map<Integer, CardDefinition> all()
@@ -627,7 +630,7 @@ public class CardDatabase
 				{
 					continue;
 				}
-				net.runelite.client.game.ItemEquipmentStats e = stats.getEquipment();
+				ItemEquipmentStats e = stats.getEquipment();
 				int total = Math.max(0, e.getAstab()) + Math.max(0, e.getAslash())
 					+ Math.max(0, e.getAcrush()) + Math.max(0, e.getAmagic())
 					+ Math.max(0, e.getArange())
@@ -646,7 +649,7 @@ public class CardDatabase
 				// skip unreadable entries
 			}
 		}
-		java.util.Collections.sort(suspects, String.CASE_INSENSITIVE_ORDER);
+		Collections.sort(suspects, String.CASE_INSENSITIVE_ORDER);
 		return suspects;
 	}
 

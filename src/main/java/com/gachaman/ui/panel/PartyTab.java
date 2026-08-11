@@ -1,11 +1,14 @@
 package com.gachaman.ui.panel;
 
+import com.gachaman.GachamanConfig;
 import com.gachaman.model.GachaState;
 import com.gachaman.model.PatronRecord;
 import com.gachaman.party.PartyPresenceService;
+import com.gachaman.party.PartyRollService;
 import com.gachaman.service.AccountKey;
 import com.gachaman.service.GachaStateService;
 import com.gachaman.service.PatronMark;
+import java.awt.AlphaComposite;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -15,8 +18,12 @@ import java.awt.FlowLayout;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
+import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -29,8 +36,6 @@ import javax.swing.JTextArea;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
-import java.awt.event.ComponentAdapter;
-import java.awt.event.ComponentEvent;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
@@ -97,7 +102,7 @@ public class PartyTab extends JPanel
 
 	private final PartyPresenceService presenceService;
 	private final GachaStateService stateService;
-	private final com.gachaman.GachamanConfig config;
+	private final GachamanConfig config;
 
 	/** Wrap width the current content was built for; -1 = never built. */
 	private int builtWidth = -1;
@@ -109,17 +114,17 @@ public class PartyTab extends JPanel
 	 * vote column at all instead of an empty one on every row.
 	 */
 	@Nullable
-	private java.util.function.Supplier<com.gachaman.party.PartyRollService.VoteView> voteViewSupplier;
+	private Supplier<PartyRollService.VoteView> voteViewSupplier;
 
 	public void setVoteViewSupplier(
-		@Nullable java.util.function.Supplier<com.gachaman.party.PartyRollService.VoteView> supplier)
+		@Nullable Supplier<PartyRollService.VoteView> supplier)
 	{
 		this.voteViewSupplier = supplier;
 	}
 
 	@Inject
 	public PartyTab(PartyPresenceService presenceService, GachaStateService stateService,
-		com.gachaman.GachamanConfig config)
+		GachamanConfig config)
 	{
 		this.presenceService = presenceService;
 		this.stateService = stateService;
@@ -200,7 +205,7 @@ public class PartyTab extends JPanel
 				// likewise once per rebuild: every row on the page must be reading
 				// the same instant of the tally, or two names could show votes from
 				// either side of an incoming ballot
-				com.gachaman.party.PartyRollService.VoteView votes =
+				PartyRollService.VoteView votes =
 					voteViewSupplier == null ? null : voteViewSupplier.get();
 				for (PartyPresenceService.Group group : groups)
 				{
@@ -228,7 +233,7 @@ public class PartyTab extends JPanel
 	 * The names stack; the meter does not.
 	 */
 	private JComponent buildGroup(PartyPresenceService.Group group, int w, Marks marks,
-		@Nullable com.gachaman.party.PartyRollService.VoteView votes)
+		@Nullable PartyRollService.VoteView votes)
 	{
 		JPanel outer = new JPanel()
 		{
@@ -298,7 +303,7 @@ public class PartyTab extends JPanel
 
 	/** One member's line: style chip, name and level, their vote, then their badges. */
 	private static JComponent memberHeader(PartyPresenceService.Row row, int w, Marks marks,
-		@Nullable com.gachaman.party.PartyRollService.VoteView votes)
+		@Nullable PartyRollService.VoteView votes)
 	{
 		boolean live = row.isHeard() && row.isLoggedIn();
 		JPanel header = new JPanel(new BorderLayout(6, 0))
@@ -346,7 +351,7 @@ public class PartyTab extends JPanel
 	 * member can see what the party is converging on without reopening it.
 	 */
 	private static String voteSuffix(PartyPresenceService.Row row,
-		@Nullable com.gachaman.party.PartyRollService.VoteView votes)
+		@Nullable PartyRollService.VoteView votes)
 	{
 		if (votes == null)
 		{
@@ -545,10 +550,10 @@ public class PartyTab extends JPanel
 	 */
 	private static final class Face extends JComponent
 	{
-		private final java.awt.image.BufferedImage image;
+		private final BufferedImage image;
 		private final boolean live;
 
-		Face(java.awt.image.BufferedImage image, boolean live)
+		Face(BufferedImage image, boolean live)
 		{
 			this.image = image;
 			this.live = live;
@@ -564,12 +569,12 @@ public class PartyTab extends JPanel
 			Graphics2D g2 = (Graphics2D) g.create();
 			try
 			{
-				g2.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
-					java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+				g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+					RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 				if (!live)
 				{
-					g2.setComposite(java.awt.AlphaComposite.getInstance(
-						java.awt.AlphaComposite.SRC_OVER, 0.45f));
+					g2.setComposite(AlphaComposite.getInstance(
+						AlphaComposite.SRC_OVER, 0.45f));
 				}
 				int y = Math.max(0, getHeight() / 2 - FACE / 2);
 				g2.drawImage(image, 0, y, FACE, FACE, null);

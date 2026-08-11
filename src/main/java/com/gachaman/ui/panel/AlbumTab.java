@@ -1,5 +1,6 @@
 package com.gachaman.ui.panel;
 
+import com.gachaman.Tuning;
 import com.gachaman.data.CardDatabase;
 import com.gachaman.data.CardDefinition;
 import com.gachaman.data.HologramDefinition;
@@ -43,6 +44,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.Icon;
@@ -53,8 +55,8 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
-import javax.swing.Scrollable;
 import javax.swing.ScrollPaneConstants;
+import javax.swing.Scrollable;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
@@ -216,9 +218,9 @@ public class AlbumTab extends JPanel
 		searchField.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		searchField.setForeground(Color.WHITE);
 		searchField.setCaretColor(Color.WHITE);
-		searchField.setBorder(javax.swing.BorderFactory.createCompoundBorder(
-			javax.swing.BorderFactory.createLineBorder(ColorScheme.MEDIUM_GRAY_COLOR),
-			new javax.swing.border.EmptyBorder(2, 5, 2, 5)));
+		searchField.setBorder(BorderFactory.createCompoundBorder(
+			BorderFactory.createLineBorder(ColorScheme.MEDIUM_GRAY_COLOR),
+			new EmptyBorder(2, 5, 2, 5)));
 		searchField.setToolTipText("Search by card name");
 		JPanel searchRow = new JPanel();
 		searchRow.setLayout(new BoxLayout(searchRow, BoxLayout.X_AXIS));
@@ -360,11 +362,11 @@ public class AlbumTab extends JPanel
 		GachaState stardustState = stateService.get();
 		int dust = stardustState == null ? 0 : stardustState.getStardust();
 		boolean armed = stardustState != null && stardustState.isStardustBlessArmed();
-		stardustLabel.setText(armed ? "Blessed!" : dust + "/" + com.gachaman.Tuning.STARDUST_REQUIRED);
+		stardustLabel.setText(armed ? "Blessed!" : dust + "/" + Tuning.STARDUST_REQUIRED);
 		stardustLabel.setForeground(armed ? new Color(230, 190, 80) : new Color(190, 170, 255));
 		stardustLabel.setToolTipText(armed
 			? "Stardust blessing armed — the next chest rolls every card's shiny twice"
-			: "Stardust " + dust + "/" + com.gachaman.Tuning.STARDUST_REQUIRED
+			: "Stardust " + dust + "/" + Tuning.STARDUST_REQUIRED
 				+ " — shiny near-misses bank stardust; a full bank blesses your next chest");
 
 		StringBuilder html = new StringBuilder("<html>");

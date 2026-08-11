@@ -7,8 +7,11 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import javax.annotation.Nullable;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
@@ -77,7 +80,7 @@ public class TierTable
 	 */
 	private final Map<String, String> displayNameByTier = new HashMap<>();
 	/** tierKey -> lowercased families its prefixes must not classify. */
-	private final Map<String, java.util.Set<String>> excludedFamiliesByTier = new HashMap<>();
+	private final Map<String, Set<String>> excludedFamiliesByTier = new HashMap<>();
 	private final List<HologramDefinition> holograms = new ArrayList<>();
 
 	public static TierTable load(Gson gson)
@@ -106,10 +109,10 @@ public class TierTable
 					}
 					if (tier.excludeFamilies != null && !tier.excludeFamilies.isEmpty())
 					{
-						java.util.Set<String> excluded = new java.util.HashSet<>();
+						Set<String> excluded = new HashSet<>();
 						for (String family : tier.excludeFamilies)
 						{
-							excluded.add(family.toLowerCase(java.util.Locale.ROOT));
+							excluded.add(family.toLowerCase(Locale.ROOT));
 						}
 						table.excludedFamiliesByTier.put(tier.tierKey, excluded);
 					}
@@ -153,14 +156,14 @@ public class TierTable
 			{
 				Match m = entry.getValue();
 				String family = cleanName.substring(entry.getKey().length()).trim()
-					.toLowerCase(java.util.Locale.ROOT);
+					.toLowerCase(Locale.ROOT);
 				if (family.isEmpty())
 				{
 					return null;
 				}
 				// "Black mask" / "Black wizard hat" share the metal prefix but
 				// are not metal gear — excluded families stay untiered
-				java.util.Set<String> excluded = excludedFamiliesByTier.get(m.getTierKey());
+				Set<String> excluded = excludedFamiliesByTier.get(m.getTierKey());
 				if (excluded != null && excluded.contains(family))
 				{
 					return null;

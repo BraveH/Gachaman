@@ -5,6 +5,7 @@ import com.gachaman.model.ActiveTask;
 import com.gachaman.model.AttackStyle;
 import com.gachaman.model.FirstStamp;
 import com.gachaman.model.GachaState;
+import com.gachaman.model.GearSlot;
 import com.gachaman.model.OwnedCard;
 import com.gachaman.model.Rarity;
 import com.gachaman.model.SideBet;
@@ -186,7 +187,7 @@ public class FirstsService implements TaskService.Listener, ComplianceService.Li
 	}
 
 	@Override
-	public void onDeedClaimed(com.gachaman.model.GearSlot slot)
+	public void onDeedClaimed(GearSlot slot)
 	{
 		claim(FirstStamp.FIRST_DEED);
 	}

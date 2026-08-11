@@ -1,8 +1,10 @@
 package com.gachaman.ui.panel;
 
+import com.gachaman.GachamanConfig;
 import com.gachaman.data.CardDatabase;
 import com.gachaman.model.ContractRecord;
 import com.gachaman.model.GachaState;
+import com.gachaman.party.PartyRollService;
 import com.gachaman.service.GachaStateService;
 import com.gachaman.service.PatronMark;
 import java.awt.BasicStroke;
@@ -19,6 +21,8 @@ import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
+import java.awt.Insets;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -26,6 +30,7 @@ import java.awt.geom.Area;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
 import java.awt.geom.QuadCurve2D;
+import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -33,23 +38,39 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.DefaultListCellRenderer;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
+import javax.swing.JEditorPane;
+import javax.swing.JFormattedTextField;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
+import javax.swing.JSlider;
+import javax.swing.JSpinner;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
+import javax.swing.plaf.basic.BasicArrowButton;
+import javax.swing.plaf.basic.BasicComboBoxUI;
+import javax.swing.plaf.basic.BasicScrollBarUI;
+import javax.swing.plaf.basic.BasicSliderUI;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
@@ -117,11 +138,11 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	private final AtomicBoolean refreshQueued = new AtomicBoolean();
 
 	private Tab selected = Tab.OVERVIEW;
-	private javax.swing.Timer scanTimer;
+	private Timer scanTimer;
 	private volatile boolean started;
 	private volatile boolean active;
 
-	private final com.gachaman.GachamanConfig config;
+	private final GachamanConfig config;
 	private JPanel tabRow;
 
 	@Inject
@@ -139,7 +160,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		PatronsTab patronsTab,
 		LoadoutTab loadoutTab,
 		HelpTab helpTab,
-		com.gachaman.GachamanConfig config)
+		GachamanConfig config)
 	{
 		super(false);
 		this.config = config;
@@ -185,7 +206,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 			JButton button = new JButton(tab.label);
 			button.setFont(FontManager.getRunescapeSmallFont());
 			button.setFocusPainted(false);
-			button.setMargin(new java.awt.Insets(2, 2, 2, 2));
+			button.setMargin(new Insets(2, 2, 2, 2));
 			button.addActionListener(e -> selectTab(tab));
 			tabButtons.put(tab, button);
 			tabRow.add(button);
@@ -266,7 +287,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 * that points backwards.
 	 */
 	public void setVoteViewSupplier(
-		java.util.function.Supplier<com.gachaman.party.PartyRollService.VoteView> supplier)
+		Supplier<PartyRollService.VoteView> supplier)
 	{
 		partyTab.setVoteViewSupplier(supplier);
 	}
@@ -547,9 +568,9 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		Area mark = new Area(new Ellipse2D.Float(1.7f, 4.2f, 14.6f, 10.2f));
 		mark.add(new Area(triangle(3.1f, 6.8f, 3.5f, 1.6f, 7.6f, 4.6f)));   // left ear
 		mark.add(new Area(triangle(14.9f, 6.8f, 14.5f, 1.6f, 10.4f, 4.6f))); // right ear
-		mark.add(new Area(new java.awt.geom.RoundRectangle2D.Float(
+		mark.add(new Area(new RoundRectangle2D.Float(
 			5.5f, 11.6f, 2.4f, 5.6f, 1.8f, 1.8f)));                         // left leg
-		mark.add(new Area(new java.awt.geom.RoundRectangle2D.Float(
+		mark.add(new Area(new RoundRectangle2D.Float(
 			10.1f, 11.6f, 2.4f, 5.6f, 1.8f, 1.8f)));                        // right leg
 
 		g.setColor(hover ? Color.WHITE : ColorScheme.LIGHT_GRAY_COLOR);
@@ -613,7 +634,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		}
 		if (scanTimer == null)
 		{
-			scanTimer = new javax.swing.Timer(SCAN_POLL_MS, e -> {
+			scanTimer = new Timer(SCAN_POLL_MS, e -> {
 				if (cardDatabase.isReady())
 				{
 					stopScanTimer();
@@ -655,13 +676,13 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	/** Slim, dark, game-styled scrollbar (stone thumb, no arrow buttons). */
 	public static void styleScrollbar(JScrollPane scroll)
 	{
-		javax.swing.JScrollBar bar = scroll.getVerticalScrollBar();
+		JScrollBar bar = scroll.getVerticalScrollBar();
 		bar.setUI(new GameScrollBarUI());
-		bar.setPreferredSize(new java.awt.Dimension(9, 0));
+		bar.setPreferredSize(new Dimension(9, 0));
 		bar.setOpaque(false);
 	}
 
-	private static final class GameScrollBarUI extends javax.swing.plaf.basic.BasicScrollBarUI
+	private static final class GameScrollBarUI extends BasicScrollBarUI
 	{
 		private static final Color TRACK = new Color(28, 27, 25);
 		private static final Color THUMB = new Color(82, 72, 58);
@@ -669,14 +690,14 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		private static final Color THUMB_EDGE_DARK = new Color(46, 40, 32);
 
 		@Override
-		protected void paintTrack(java.awt.Graphics g, JComponent c, java.awt.Rectangle r)
+		protected void paintTrack(Graphics g, JComponent c, Rectangle r)
 		{
 			g.setColor(TRACK);
 			g.fillRect(r.x, r.y, r.width, r.height);
 		}
 
 		@Override
-		protected void paintThumb(java.awt.Graphics g, JComponent c, java.awt.Rectangle r)
+		protected void paintThumb(Graphics g, JComponent c, Rectangle r)
 		{
 			if (r.isEmpty() || !scrollbar.isEnabled())
 			{
@@ -693,21 +714,21 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		}
 
 		@Override
-		protected javax.swing.JButton createDecreaseButton(int orientation)
+		protected JButton createDecreaseButton(int orientation)
 		{
 			return zeroButton();
 		}
 
 		@Override
-		protected javax.swing.JButton createIncreaseButton(int orientation)
+		protected JButton createIncreaseButton(int orientation)
 		{
 			return zeroButton();
 		}
 
-		private static javax.swing.JButton zeroButton()
+		private static JButton zeroButton()
 		{
-			javax.swing.JButton button = new javax.swing.JButton();
-			java.awt.Dimension zero = new java.awt.Dimension(0, 0);
+			JButton button = new JButton();
+			Dimension zero = new Dimension(0, 0);
 			button.setPreferredSize(zero);
 			button.setMinimumSize(zero);
 			button.setMaximumSize(zero);
@@ -720,7 +741,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	static JPanel section(@Nullable String title)
 	{
 		JPanel panel = new JPanel();
-		panel.setLayout(new javax.swing.BoxLayout(panel, javax.swing.BoxLayout.Y_AXIS));
+		panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
 		panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		panel.setBorder(new EmptyBorder(8, 8, 8, 8));
 		panel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -795,16 +816,16 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 */
 	static JComponent wrapped(String text, Color color, Font font)
 	{
-		javax.swing.JEditorPane pane = new javax.swing.JEditorPane();
+		JEditorPane pane = new JEditorPane();
 		pane.setContentType("text/html");
 		pane.setEditable(false);
 		pane.setFocusable(false);
 		pane.setOpaque(false);
 		pane.setBorder(null);
-		pane.setMargin(new java.awt.Insets(0, 0, 0, 0));
+		pane.setMargin(new Insets(0, 0, 0, 0));
 		// without this the pane renders in the HTML default face and colour and
 		// ignores setFont/setForeground entirely — the panel would go serif black
-		pane.putClientProperty(javax.swing.JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
+		pane.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
 		pane.setFont(font);
 		pane.setForeground(color);
 		// no CSS width: the wrap comes from the size pinned below, which unlike the
@@ -986,13 +1007,13 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	}
 
 	/** Dark, RuneLite-styled combo box: colors, font, renderer and arrow. */
-	static void styleCombo(javax.swing.JComboBox<?> combo)
+	static void styleCombo(JComboBox<?> combo)
 	{
 		styleCombo(combo, value -> value == null ? "" : String.valueOf(value));
 	}
 
 	/**
-	 * As {@link #styleCombo(javax.swing.JComboBox)}, but rendering each entry
+	 * As {@link #styleCombo(JComboBox)}, but rendering each entry
 	 * through {@code labeller} instead of its {@code toString()}.
 	 *
 	 * A combo box has exactly one renderer, and this method installs it — so a
@@ -1001,19 +1022,19 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 * "Ornate Chest"). Passing the label function in is the only ordering that
 	 * cannot be got wrong.
 	 */
-	static <T> void styleCombo(javax.swing.JComboBox<T> combo,
-		java.util.function.Function<T, String> labeller)
+	static <T> void styleCombo(JComboBox<T> combo,
+		Function<T, String> labeller)
 	{
 		combo.setFont(FontManager.getRunescapeSmallFont());
 		combo.setForeground(Color.WHITE);
 		combo.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		combo.setFocusable(false);
-		combo.setUI(new javax.swing.plaf.basic.BasicComboBoxUI()
+		combo.setUI(new BasicComboBoxUI()
 		{
 			@Override
 			protected JButton createArrowButton()
 			{
-				javax.swing.plaf.basic.BasicArrowButton arrow = new javax.swing.plaf.basic.BasicArrowButton(
+				BasicArrowButton arrow = new BasicArrowButton(
 					SwingConstants.SOUTH, ColorScheme.DARKER_GRAY_COLOR.darker(),
 					ColorScheme.DARKER_GRAY_COLOR.darker(), ColorScheme.LIGHT_GRAY_COLOR,
 					ColorScheme.DARKER_GRAY_COLOR.darker());
@@ -1022,11 +1043,11 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 			}
 		});
 		combo.setBorder(BorderFactory.createLineBorder(ColorScheme.MEDIUM_GRAY_COLOR));
-		javax.swing.DefaultListCellRenderer renderer = new javax.swing.DefaultListCellRenderer()
+		DefaultListCellRenderer renderer = new DefaultListCellRenderer()
 		{
 			@Override
 			@SuppressWarnings("unchecked")
-			public Component getListCellRendererComponent(javax.swing.JList<?> list, Object value,
+			public Component getListCellRendererComponent(JList<?> list, Object value,
 				int index, boolean isSelected, boolean cellHasFocus)
 			{
 				super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
@@ -1046,18 +1067,18 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	/** Dark, RuneLite-styled spinner (date/number editors alike). */
 	static void styleSpinner(JComponent spinner)
 	{
-		if (!(spinner instanceof javax.swing.JSpinner))
+		if (!(spinner instanceof JSpinner))
 		{
 			return;
 		}
-		javax.swing.JSpinner s = (javax.swing.JSpinner) spinner;
+		JSpinner s = (JSpinner) spinner;
 		s.setBorder(BorderFactory.createLineBorder(ColorScheme.MEDIUM_GRAY_COLOR));
 		s.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		JComponent editor = s.getEditor();
-		if (editor instanceof javax.swing.JSpinner.DefaultEditor)
+		if (editor instanceof JSpinner.DefaultEditor)
 		{
-			javax.swing.JFormattedTextField field =
-				((javax.swing.JSpinner.DefaultEditor) editor).getTextField();
+			JFormattedTextField field =
+				((JSpinner.DefaultEditor) editor).getTextField();
 			field.setFont(FontManager.getRunescapeSmallFont());
 			field.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 			field.setForeground(Color.WHITE);
@@ -1074,13 +1095,13 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	}
 
 	/** Dark game-styled slider: stone thumb on a slim dark track. */
-	static final class GameSliderUI extends javax.swing.plaf.basic.BasicSliderUI
+	static final class GameSliderUI extends BasicSliderUI
 	{
 		private static final Color TRACK = new Color(28, 27, 25);
 		private static final Color THUMB = new Color(82, 72, 58);
 		private static final Color THUMB_EDGE = new Color(115, 102, 82);
 
-		GameSliderUI(javax.swing.JSlider slider)
+		GameSliderUI(JSlider slider)
 		{
 			super(slider);
 		}

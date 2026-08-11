@@ -1,5 +1,6 @@
 package com.gachaman.service;
 
+import com.gachaman.GachamanConfig;
 import com.gachaman.data.CardDatabase;
 import com.gachaman.data.CardDefinition;
 import com.gachaman.model.GachaState;
@@ -14,6 +15,7 @@ import java.util.Set;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.Client;
 
 /**
  * Computes the allowed item-id set from the loadout:
@@ -29,15 +31,15 @@ public class PermissionService implements GachaStateService.Listener
 {
 	private final GachaStateService stateService;
 	private final CardDatabase cardDatabase;
-	private final net.runelite.api.Client client;
-	private final com.gachaman.GachamanConfig config;
+	private final Client client;
+	private final GachamanConfig config;
 
 	private volatile Set<Integer> allowedItemIds = Collections.emptySet();
 	private volatile Set<String> deededSlots = Collections.emptySet();
 
 	@Inject
 	public PermissionService(GachaStateService stateService, CardDatabase cardDatabase,
-		net.runelite.api.Client client, com.gachaman.GachamanConfig config)
+		Client client, GachamanConfig config)
 	{
 		this.stateService = stateService;
 		this.cardDatabase = cardDatabase;

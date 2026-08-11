@@ -14,6 +14,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import net.runelite.api.Client;
 import net.runelite.api.MenuAction;
+import net.runelite.api.Point;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.ui.overlay.Overlay;
@@ -166,7 +167,7 @@ public class LoadoutButtonOverlay extends Overlay
 		buttonRect.setBounds(x, y, BUTTON_W, BUTTON_H);
 
 		boolean pressed = loadoutOverlay.isOpen();
-		net.runelite.api.Point mouse = client.getMouseCanvasPosition();
+		Point mouse = client.getMouseCanvasPosition();
 		boolean hovered = mouse != null
 			&& mouse.getX() >= x && mouse.getX() < x + BUTTON_W
 			&& mouse.getY() >= y && mouse.getY() < y + BUTTON_H;

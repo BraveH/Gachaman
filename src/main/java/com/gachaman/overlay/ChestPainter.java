@@ -10,6 +10,7 @@ import java.awt.Shape;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Arc2D;
 import java.awt.geom.Ellipse2D;
+import java.awt.geom.Line2D;
 import java.awt.geom.Path2D;
 
 /**
@@ -1185,7 +1186,7 @@ final class ChestPainter
 			double m = Math.max(1e-3, Math.hypot(vx, vy));
 			gl.setColor(withAlpha((p & 1) == 0 ? CHAIN_SPEC : METAL_GOLD_HI,
 				vis * (0.55f + 0.45f * a2)));
-			gl.draw(new java.awt.geom.Line2D.Double(fx, fy,
+			gl.draw(new Line2D.Double(fx, fy,
 				fx - vx / m * trail, fy - vy / m * trail));
 		}
 		gl.dispose();

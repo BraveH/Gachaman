@@ -10,6 +10,7 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.Insets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
@@ -94,7 +95,7 @@ public class TimelineTab extends JPanel
 		controls.add(spinnerRow("From", fromSpinner));
 		controls.add(Box.createVerticalStrut(3));
 		JButton nowButton = GachamanPanel.button("Now");
-		nowButton.setMargin(new java.awt.Insets(1, 6, 1, 6));
+		nowButton.setMargin(new Insets(1, 6, 1, 6));
 		nowButton.setToolTipText("Snap the window back to first event -> now and keep following");
 		nowButton.addActionListener(e -> {
 			userTouchedRange = false;

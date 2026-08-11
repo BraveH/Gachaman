@@ -1,6 +1,7 @@
 package com.gachaman.service;
 
 import com.gachaman.data.BossTable;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -119,7 +120,7 @@ public class BossKcService
 		stateService.mutate(s -> {
 			Set<String> claims = new HashSet<>(s.getBossKcClaims());
 			claims.add(claimKey);
-			var queued = new java.util.ArrayList<>(s.getQueuedThemedChests());
+			var queued = new ArrayList<>(s.getQueuedThemedChests());
 			queued.add(boss.getSetTag());
 			return s.withBossKcClaims(claims).withQueuedThemedChests(queued);
 		});

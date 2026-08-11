@@ -4,6 +4,8 @@ import com.gachaman.data.CardDatabase;
 import com.gachaman.data.CardDefinition;
 import com.gachaman.data.HologramDefinition;
 import com.gachaman.data.RangedMetal;
+import com.gachaman.data.TierTable;
+import com.gachaman.model.AttackStyle;
 import com.gachaman.model.GachaState;
 import com.gachaman.model.GearSlot;
 import com.gachaman.model.OwnedCard;
@@ -15,6 +17,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -32,22 +35,22 @@ public class LoadoutService
 {
 	private final GachaStateService stateService;
 	private final CardDatabase cardDatabase;
-	private final com.gachaman.data.TierTable tierTable;
+	private final TierTable tierTable;
 
 	/** Optional hook fired after a successful assignment (Firsts + Timeline). */
 	@Nullable
-	private java.util.function.BiConsumer<GearSlot, OwnedCard> assignHook;
+	private BiConsumer<GearSlot, OwnedCard> assignHook;
 
 	@Inject
 	public LoadoutService(GachaStateService stateService, CardDatabase cardDatabase,
-		com.gachaman.data.TierTable tierTable)
+		TierTable tierTable)
 	{
 		this.stateService = stateService;
 		this.cardDatabase = cardDatabase;
 		this.tierTable = tierTable;
 	}
 
-	public void setAssignHook(@Nullable java.util.function.BiConsumer<GearSlot, OwnedCard> hook)
+	public void setAssignHook(@Nullable BiConsumer<GearSlot, OwnedCard> hook)
 	{
 		this.assignHook = hook;
 	}
@@ -186,8 +189,8 @@ public class LoadoutService
 		}
 		// group 1: cards matching the rolled attack style (or style-neutral);
 		// group 2: everything else — A-Z within both groups
-		com.gachaman.model.AttackStyle allowed = state.getAllowedStyle() == null
-			? null : com.gachaman.model.AttackStyle.valueOf(state.getAllowedStyle());
+		AttackStyle allowed = state.getAllowedStyle() == null
+			? null : AttackStyle.valueOf(state.getAllowedStyle());
 		result.sort(Comparator
 			.comparing((OwnedCard owned) -> !matchesStyle(owned, allowed))
 			.thenComparing(this::displayName, String.CASE_INSENSITIVE_ORDER));
@@ -195,19 +198,19 @@ public class LoadoutService
 	}
 
 	/** Does this card belong to the rolled style's gear family? Neutral gear always matches. */
-	public boolean matchesStyle(OwnedCard owned, @Nullable com.gachaman.model.AttackStyle allowed)
+	public boolean matchesStyle(OwnedCard owned, @Nullable AttackStyle allowed)
 	{
 		if (allowed == null)
 		{
 			return true;
 		}
-		com.gachaman.model.AttackStyle style = styleOf(owned);
+		AttackStyle style = styleOf(owned);
 		return style == null || style == allowed;
 	}
 
 	/** MELEE/RANGED/MAGIC by tier ladder; null = style-neutral or unknown. */
 	@Nullable
-	public com.gachaman.model.AttackStyle styleOf(OwnedCard owned)
+	public AttackStyle styleOf(OwnedCard owned)
 	{
 		String tierKey = null;
 		String name = null;
@@ -240,12 +243,12 @@ public class LoadoutService
 				// Calling them melee sorted them into the non-matching half of a ranger's own
 				// loadout picker. Holograms carry no item name, so they keep the melee default.
 				return RangedMetal.of(name) != null
-					? com.gachaman.model.AttackStyle.RANGED
-					: com.gachaman.model.AttackStyle.MELEE;
+					? AttackStyle.RANGED
+					: AttackStyle.MELEE;
 			case "dhide":
-				return com.gachaman.model.AttackStyle.RANGED;
+				return AttackStyle.RANGED;
 			case "robes":
-				return com.gachaman.model.AttackStyle.MAGIC;
+				return AttackStyle.MAGIC;
 			default:
 				return null;
 		}

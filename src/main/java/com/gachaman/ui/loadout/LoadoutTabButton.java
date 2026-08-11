@@ -1,9 +1,12 @@
 package com.gachaman.ui.loadout;
 
+import com.gachaman.GachamanConfig;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
+import net.runelite.api.SpriteID;
+import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.ItemQuantityMode;
 import net.runelite.api.widgets.JavaScriptCallback;
@@ -11,7 +14,6 @@ import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetType;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.eventbus.Subscribe;
-import net.runelite.api.events.WidgetLoaded;
 
 /**
  * The loadout toggle as a REAL game widget: a child created on the worn-
@@ -34,7 +36,7 @@ public class LoadoutTabButton
 	private final Client client;
 	private final ClientThread clientThread;
 	private final LoadoutOverlay loadoutOverlay;
-	private final com.gachaman.GachamanConfig config;
+	private final GachamanConfig config;
 
 	private Widget tile;
 	private Widget button;
@@ -42,7 +44,7 @@ public class LoadoutTabButton
 
 	@Inject
 	public LoadoutTabButton(Client client, ClientThread clientThread, LoadoutOverlay loadoutOverlay,
-		com.gachaman.GachamanConfig config)
+		GachamanConfig config)
 	{
 		this.client = client;
 		this.clientThread = clientThread;
@@ -87,7 +89,7 @@ public class LoadoutTabButton
 
 			// the same beveled square the real equipment slots use
 			Widget bg = parent.createChild(-1, WidgetType.GRAPHIC);
-			bg.setSpriteId(net.runelite.api.SpriteID.EQUIPMENT_SLOT_TILE);
+			bg.setSpriteId(SpriteID.EQUIPMENT_SLOT_TILE);
 			bg.setOriginalWidth(tileSize);
 			bg.setOriginalHeight(tileSize);
 			bg.setOriginalX(x);

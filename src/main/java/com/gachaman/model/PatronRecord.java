@@ -1,5 +1,6 @@
 package com.gachaman.model;
 
+import com.gachaman.service.PatronMark;
 import javax.annotation.Nullable;
 import lombok.Value;
 
@@ -17,7 +18,7 @@ import lombok.Value;
  * <p>Both the key and the name arrive over the party relay from another
  * player's client, so both are self-reported and neither is authenticated.
  * That is acceptable because this whole ledger is cosmetic; see
- * {@link com.gachaman.service.PatronMark}.
+ * {@link PatronMark}.
  */
 @Value
 public class PatronRecord

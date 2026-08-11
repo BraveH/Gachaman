@@ -1,9 +1,12 @@
 package com.gachaman.party;
 
+import com.gachaman.service.AccountKey;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import net.runelite.api.Quest;
 import net.runelite.client.party.messages.PartyMemberMessage;
 
 /**
@@ -41,16 +44,16 @@ public class PartyRollResponseMessage extends PartyMemberMessage
 	 */
 	private int rollProtocol;
 	/**
-	 * The {@link net.runelite.api.Quest} names this member has FINISHED, out of
+	 * The {@link Quest} names this member has FINISHED, out of
 	 * the ones that lock a monster in the table — see the propose message for
 	 * why it is names and not a bitmask. The roll intersects every agreeing
 	 * member's list, so a quest one member has not done withholds that monster
 	 * from the whole party rather than handing three of them a contract the
 	 * fourth cannot start.
 	 */
-	private java.util.List<String> completedQuests;
+	private List<String> completedQuests;
 	/**
-	 * The sender's {@link com.gachaman.service.AccountKey}; null from a client
+	 * The sender's {@link AccountKey}; null from a client
 	 * that predates it or one that is not logged in. Display and bookkeeping
 	 * only — see the propose message for why it needs no protocol bump.
 	 *

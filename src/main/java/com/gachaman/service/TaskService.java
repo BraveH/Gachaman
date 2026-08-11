@@ -6,6 +6,7 @@ import com.gachaman.model.ActiveTask;
 import com.gachaman.model.AttackStyle;
 import com.gachaman.model.ContractRecord;
 import com.gachaman.model.GachaState;
+import com.gachaman.model.GearSlot;
 import com.gachaman.model.MonsterStats;
 import com.gachaman.model.PersonalBest;
 import com.gachaman.model.SideBet;
@@ -16,8 +17,14 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.IntConsumer;
+import java.util.function.Supplier;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -27,6 +34,9 @@ import net.runelite.api.Client;
 import net.runelite.api.Experience;
 import net.runelite.api.Skill;
 import net.runelite.api.WorldType;
+import net.runelite.api.coords.LocalPoint;
+import net.runelite.api.gameval.VarPlayerID;
+import net.runelite.api.gameval.VarbitID;
 
 /**
  * The kill-task engine: offer rolls, acceptance, per-kill crediting with
@@ -67,7 +77,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		int killsRequired;
 		/** The ironman assisted-kill penalty applied (half count, half GC). */
 		boolean assistedHalfCredit;
-		net.runelite.api.coords.LocalPoint deathLocation;
+		LocalPoint deathLocation;
 	}
 
 	/**
@@ -167,15 +177,15 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 
 	private final List<Listener> listeners = new ArrayList<>();
 	/** Optional hook the plugin wires for the party layer. */
-	private java.util.function.Consumer<TaskOffer> offerAcceptedHook;
+	private Consumer<TaskOffer> offerAcceptedHook;
 	/** Party layer: clicking a party-roll offer casts a VOTE instead of accepting. */
-	private java.util.function.IntConsumer partyVoteHook;
+	private IntConsumer partyVoteHook;
 	/**
 	 * Double Docket: supplies the live Slayer assignment name, or null. A hook
 	 * rather than an injected dependency so the whole payout path stays testable
 	 * without a Client — every unit test leaves it unwired and gets no bonus.
 	 */
-	private java.util.function.Supplier<String> slayerTargetHook;
+	private Supplier<String> slayerTargetHook;
 	/** Double Docket: fired once, the moment a contract latches on to the bonus. */
 	private Runnable slayerLatchHook;
 	/** Recent credited kill ticks for SPEED_KILLS side bets. */
@@ -235,17 +245,17 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		listeners.remove(listener);
 	}
 
-	public void setOfferAcceptedHook(java.util.function.Consumer<TaskOffer> hook)
+	public void setOfferAcceptedHook(Consumer<TaskOffer> hook)
 	{
 		this.offerAcceptedHook = hook;
 	}
 
-	public void setPartyVoteHook(java.util.function.IntConsumer hook)
+	public void setPartyVoteHook(IntConsumer hook)
 	{
 		this.partyVoteHook = hook;
 	}
 
-	public void setSlayerTargetHook(java.util.function.Supplier<String> hook)
+	public void setSlayerTargetHook(Supplier<String> hook)
 	{
 		this.slayerTargetHook = hook;
 	}
@@ -423,7 +433,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	public boolean localIsMembers()
 	{
 		return client != null && client.getWorldType().contains(WorldType.MEMBERS)
-			&& client.getVarpValue(net.runelite.api.gameval.VarPlayerID.ACCOUNT_CREDIT) > 0;
+			&& client.getVarpValue(VarPlayerID.ACCOUNT_CREDIT) > 0;
 	}
 
 	/**
@@ -1020,13 +1030,13 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			return;
 		}
 		// Locale.ROOT: persisted keys must not vary with the JVM locale
-		String key = monsterName.toLowerCase(java.util.Locale.ROOT);
+		String key = monsterName.toLowerCase(Locale.ROOT);
 		if (state.getSpeciesDiscovered().contains(key))
 		{
 			return;
 		}
 		GachaState next = stateService.mutate(s -> {
-			java.util.Set<String> discovered = new java.util.HashSet<>(s.getSpeciesDiscovered());
+			Set<String> discovered = new HashSet<>(s.getSpeciesDiscovered());
 			discovered.add(key);
 			return s.withSpeciesDiscovered(discovered);
 		});
@@ -1223,7 +1233,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		int claimed = state.getDeedMilestonesClaimed();
 		if (claimed < Tuning.DEED_TASK_MILESTONES.length
 			&& newTotal >= Tuning.DEED_TASK_MILESTONES[claimed]
-			&& state.getDeededSlots().size() < com.gachaman.model.GearSlot.values().length)
+			&& state.getDeededSlots().size() < GearSlot.values().length)
 		{
 			milestone = Tuning.DEED_TASK_MILESTONES[claimed];
 		}
@@ -1419,7 +1429,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	private boolean isIronman()
 	{
 		return client != null
-			&& client.getVarbitValue(net.runelite.api.gameval.VarbitID.IRONMAN) > 0;
+			&& client.getVarbitValue(VarbitID.IRONMAN) > 0;
 	}
 
 	public int playerCombatLevel()

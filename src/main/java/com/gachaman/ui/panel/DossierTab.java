@@ -17,6 +17,7 @@ import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JEditorPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -68,7 +69,7 @@ public class DossierTab extends JPanel
 		setLayout(new BorderLayout(0, 6));
 		setOpaque(false);
 
-		header.setLayout(new javax.swing.BoxLayout(header, javax.swing.BoxLayout.Y_AXIS));
+		header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
 		header.setOpaque(false);
 		add(header, BorderLayout.NORTH);
 

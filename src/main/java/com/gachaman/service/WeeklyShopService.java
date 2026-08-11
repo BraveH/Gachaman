@@ -12,8 +12,10 @@ import java.time.ZoneOffset;
 import java.time.temporal.IsoFields;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -131,7 +133,7 @@ public class WeeklyShopService
 		stateService.mutate(s -> {
 			List<OwnedCard> owned = new ArrayList<>(s.getOwnedCards());
 			owned.add(card);
-			java.util.Map<String, Set<Integer>> purchases = new java.util.HashMap<>(s.getWeeklyShopPurchases());
+			Map<String, Set<Integer>> purchases = new HashMap<>(s.getWeeklyShopPurchases());
 			Set<Integer> week = new HashSet<>(purchases.getOrDefault(weekKey, Collections.emptySet()));
 			week.add(slotIndex);
 			purchases.put(weekKey, week);

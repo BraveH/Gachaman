@@ -7,14 +7,24 @@ import com.gachaman.model.SideBet;
 import com.gachaman.model.TaskDifficulty;
 import com.gachaman.model.TaskOffer;
 import com.gachaman.service.GachaStateService;
+import com.gachaman.service.KillTracker;
+import com.gachaman.service.TaskService;
+import com.gachaman.service.TutorialGate;
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.Graphics2D;
+import java.awt.Point;
+import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.util.List;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import net.runelite.api.Client;
 import net.runelite.client.ui.overlay.OverlayPanel;
 import net.runelite.client.ui.overlay.OverlayPosition;
+import net.runelite.client.ui.overlay.components.LayoutableRenderableEntity;
 import net.runelite.client.ui.overlay.components.LineComponent;
 import net.runelite.client.ui.overlay.components.ProgressBarComponent;
 import net.runelite.client.ui.overlay.components.TitleComponent;
@@ -44,9 +54,9 @@ public class TaskProgressOverlay extends OverlayPanel
 	private static final String DOCKET_VALUE = "x" + Tuning.DOUBLE_DOCKET_MULT;
 
 	private final GachaStateService stateService;
-	private final net.runelite.api.Client client;
-	private final com.gachaman.service.TaskService taskService;
-	private final com.gachaman.service.KillTracker killTracker;
+	private final Client client;
+	private final TaskService taskService;
+	private final KillTracker killTracker;
 	private final ProgressBarComponent progressBar = new ProgressBarComponent();
 	private final ComboMeterComponent comboMeter = new ComboMeterComponent();
 
@@ -79,8 +89,8 @@ public class TaskProgressOverlay extends OverlayPanel
 	private TaskDifficulty barColorDifficulty;
 
 	@Inject
-	public TaskProgressOverlay(GachaStateService stateService, net.runelite.api.Client client,
-		com.gachaman.service.TaskService taskService, com.gachaman.service.KillTracker killTracker)
+	public TaskProgressOverlay(GachaStateService stateService, Client client,
+		TaskService taskService, KillTracker killTracker)
 	{
 		this.stateService = stateService;
 		this.client = client;
@@ -98,7 +108,7 @@ public class TaskProgressOverlay extends OverlayPanel
 	public Dimension render(Graphics2D graphics)
 	{
 		GachaState state = stateService.get();
-		if (state == null || com.gachaman.service.TutorialGate.onTutorial(client))
+		if (state == null || TutorialGate.onTutorial(client))
 		{
 			return null;
 		}
@@ -211,7 +221,7 @@ public class TaskProgressOverlay extends OverlayPanel
 				for (int i = 0; i < total; i++)
 				{
 					SideBet bet = sideBets.get(i);
-					sideBetLines[i] = com.gachaman.service.TaskService.describeSideBet(bet);
+					sideBetLines[i] = TaskService.describeSideBet(bet);
 					sideBetDoneFlags[i] = bet.isCompleted();
 					// "*" not a check mark: the RuneScape faces have no U+2713. It only
 					// looked right in testing because ComboMeterComponent leaves logical
@@ -248,12 +258,12 @@ public class TaskProgressOverlay extends OverlayPanel
 	 * dim to telegraph that the next kill maintains but does not build.
 	 */
 	private static final class ComboMeterComponent
-		implements net.runelite.client.ui.overlay.components.LayoutableRenderableEntity
+		implements LayoutableRenderableEntity
 	{
 		private static final int HEIGHT = 16;
 
-		private final java.awt.Rectangle bounds = new java.awt.Rectangle();
-		private java.awt.Point preferredLocation = new java.awt.Point();
+		private final Rectangle bounds = new Rectangle();
+		private Point preferredLocation = new Point();
 		private Dimension preferredSize = new Dimension(150, HEIGHT);
 
 		private int stacks;
@@ -286,13 +296,13 @@ public class TaskProgressOverlay extends OverlayPanel
 		@Override
 		public Dimension render(Graphics2D g)
 		{
-			g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
-				java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+				RenderingHints.VALUE_ANTIALIAS_ON);
 			int x = preferredLocation.x;
 			int y = preferredLocation.y;
 			boolean held = windowFraction <= 0;
 
-			g.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, 12));
+			g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
 			g.setColor(GOLD);
 			g.drawString(label, x, y + 12);
 			int textW = g.getFontMetrics().stringWidth(label);
@@ -311,13 +321,13 @@ public class TaskProgressOverlay extends OverlayPanel
 			// idle countdown: arc + seconds until the chain cancels; the last
 			// ~15s turn red as the combo is about to drop
 			double idleFraction = Math.max(0, Math.min(1.0,
-				idleTicksRemaining / (double) com.gachaman.Tuning.COMBO_IDLE_RESET_TICKS));
+				idleTicksRemaining / (double) Tuning.COMBO_IDLE_RESET_TICKS));
 			boolean urgent = idleFraction <= 0.25;
 			int ax = px + 10 * 7 + 6;
 			g.setColor(urgent ? new Color(230, 90, 70, 160) : new Color(255, 205, 70, 90));
-			g.setStroke(new java.awt.BasicStroke(2f));
+			g.setStroke(new BasicStroke(2f));
 			g.drawArc(ax, y + 2, 12, 12, 90, -(int) Math.round(360 * idleFraction));
-			g.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.PLAIN, 11));
+			g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
 			g.setColor(urgent ? new Color(230, 90, 70) : MUTED);
 			int sx = ax + 12 + 5;
 			g.drawString(secondsLabel, sx, y + 12);
@@ -329,13 +339,13 @@ public class TaskProgressOverlay extends OverlayPanel
 		}
 
 		@Override
-		public java.awt.Rectangle getBounds()
+		public Rectangle getBounds()
 		{
 			return bounds;
 		}
 
 		@Override
-		public void setPreferredLocation(java.awt.Point location)
+		public void setPreferredLocation(Point location)
 		{
 			this.preferredLocation = location;
 		}

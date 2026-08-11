@@ -3,7 +3,12 @@ package com.gachaman.overlay;
 import java.awt.Color;
 import java.awt.GradientPaint;
 import java.awt.Graphics2D;
+import java.awt.LinearGradientPaint;
+import java.awt.RadialGradientPaint;
 import java.awt.Rectangle;
+import java.awt.Shape;
+import java.awt.geom.Point2D;
+import java.awt.geom.RoundRectangle2D;
 
 /**
  * Draws the chrome of the unrolling contract scrolls used by the TASK_OFFERS
@@ -119,17 +124,17 @@ final class ScrollPainter
 		int bodyX = r.x + CAP_W - 2;
 		int bodyW = r.width - (CAP_W - 2) * 2;
 
-		java.awt.Shape clip = g.getClip();
-		java.awt.geom.RoundRectangle2D body = new java.awt.geom.RoundRectangle2D.Float(
+		Shape clip = g.getClip();
+		RoundRectangle2D body = new RoundRectangle2D.Float(
 			bodyX, y, bodyW, ROLLER_H, ROLLER_H, ROLLER_H);
 
 		Color rim = mix(lo, Color.BLACK, 0.35f);
 		Color spec = mix(hi, Color.WHITE, 0.55f);
 		Color core = mix(lo, Color.BLACK, 0.15f);
 		Color bounce = mix(lo, hi, 0.45f);
-		g.setPaint(new java.awt.LinearGradientPaint(
-			new java.awt.geom.Point2D.Float(0, y),
-			new java.awt.geom.Point2D.Float(0, y + ROLLER_H),
+		g.setPaint(new LinearGradientPaint(
+			new Point2D.Float(0, y),
+			new Point2D.Float(0, y + ROLLER_H),
 			new float[]{0f, 0.28f, 0.5f, 0.82f, 1f},
 			new Color[]{rim, spec, hi, core, bounce}));
 		g.fill(body);
@@ -158,8 +163,8 @@ final class ScrollPainter
 	private static void drawCap(Graphics2D g, int x, int y, Color hi, Color lo)
 	{
 		int h = ROLLER_H + 4;
-		g.setPaint(new java.awt.RadialGradientPaint(
-			new java.awt.geom.Point2D.Float(x + CAP_W * 0.35f, y + h * 0.32f),
+		g.setPaint(new RadialGradientPaint(
+			new Point2D.Float(x + CAP_W * 0.35f, y + h * 0.32f),
 			Math.max(1f, h * 0.75f),
 			new float[]{0f, 1f},
 			new Color[]{mix(hi, Color.WHITE, 0.35f), mix(lo, Color.BLACK, 0.25f)}));
@@ -182,9 +187,9 @@ final class ScrollPainter
 		// A sheet held between two rods is not flat: it bows. Two soft bands of
 		// shade a third of the way in, and a broad highlight up the middle, give
 		// the page a cylinder's cross-section instead of a poster's.
-		g.setPaint(new java.awt.LinearGradientPaint(
-			new java.awt.geom.Point2D.Float(x, 0),
-			new java.awt.geom.Point2D.Float(x + w, 0),
+		g.setPaint(new LinearGradientPaint(
+			new Point2D.Float(x, 0),
+			new Point2D.Float(x + w, 0),
 			new float[]{0f, 0.18f, 0.5f, 0.82f, 1f},
 			new Color[]{BOW_SHADE, BOW_MID, BOW_LIGHT, BOW_MID, BOW_SHADE}));
 		g.fillRect(x, y, w, h);

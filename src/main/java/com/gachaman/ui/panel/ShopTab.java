@@ -3,16 +3,22 @@ package com.gachaman.ui.panel;
 import com.gachaman.Tuning;
 import com.gachaman.data.CardDatabase;
 import com.gachaman.data.SetTable;
+import com.gachaman.model.ActiveTask;
 import com.gachaman.model.GachaState;
+import com.gachaman.model.GearSlot;
+import com.gachaman.model.Rarity;
 import com.gachaman.service.ChestService;
 import com.gachaman.service.CreditSink;
 import com.gachaman.service.GachaStateService;
 import com.gachaman.service.PrestigeService;
+import com.gachaman.service.TaskService;
+import com.gachaman.service.TimelineService;
 import com.gachaman.service.WeeklyShopService;
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Container;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -23,17 +29,24 @@ import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JTextArea;
+import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.util.QuantityFormatter;
@@ -64,16 +77,16 @@ public class ShopTab extends JPanel
 	private final CardDatabase cardDatabase;
 	private final SetTable setTable;
 
-	private final com.gachaman.service.TaskService taskService;
-	private final net.runelite.client.callback.ClientThread clientThread;
-	private final com.gachaman.service.TimelineService timelineService;
+	private final TaskService taskService;
+	private final ClientThread clientThread;
+	private final TimelineService timelineService;
 
 	@Inject
 	public ShopTab(GachaStateService stateService, ChestService chestService, CreditSink creditSink,
 		WeeklyShopService weeklyShopService, PrestigeService prestigeService,
-		CardDatabase cardDatabase, SetTable setTable, com.gachaman.service.TaskService taskService,
-		net.runelite.client.callback.ClientThread clientThread,
-		com.gachaman.service.TimelineService timelineService)
+		CardDatabase cardDatabase, SetTable setTable, TaskService taskService,
+		ClientThread clientThread,
+		TimelineService timelineService)
 	{
 		this.timelineService = timelineService;
 		this.stateService = stateService;
@@ -196,7 +209,7 @@ public class ShopTab extends JPanel
 	 */
 	private static JComponent wrappedText(String text, Color color)
 	{
-		javax.swing.JTextArea area = new javax.swing.JTextArea(text);
+		JTextArea area = new JTextArea(text);
 		area.setEditable(false);
 		area.setFocusable(false);
 		area.setOpaque(false);
@@ -278,7 +291,7 @@ public class ShopTab extends JPanel
 		clientThread.invokeLater(() -> {
 			if (chestService.openChest(tier) == null)
 			{
-				javax.swing.SwingUtilities.invokeLater(() ->
+				SwingUtilities.invokeLater(() ->
 					GachamanPanel.info(this, "The chest cannot be opened right now"
 						+ " (another reveal in progress, or not enough GC)."));
 			}
@@ -316,7 +329,7 @@ public class ShopTab extends JPanel
 	 * field rather than a local because rebuild() runs on every state change and
 	 * would otherwise slam a band shut again the moment a kill landed.
 	 */
-	private final java.util.EnumSet<Band> expandedBands = java.util.EnumSet.noneOf(Band.class);
+	private final EnumSet<Band> expandedBands = EnumSet.noneOf(Band.class);
 
 	/** EDT-only. Which chest the odds panel is describing. */
 	private Tuning.Chest oddsTier = Tuning.Chest.BATTERED;
@@ -341,8 +354,8 @@ public class ShopTab extends JPanel
 	private JPanel buildOddsSection(GachaState state)
 	{
 		JPanel section = GachamanPanel.section("Chest Odds");
-		javax.swing.JComboBox<Tuning.Chest> picker =
-			new javax.swing.JComboBox<>(Tuning.Chest.values());
+		JComboBox<Tuning.Chest> picker =
+			new JComboBox<>(Tuning.Chest.values());
 		picker.setSelectedItem(oddsTier);
 		picker.addActionListener(e -> {
 			Tuning.Chest picked = (Tuning.Chest) picker.getSelectedItem();
@@ -354,7 +367,7 @@ public class ShopTab extends JPanel
 			oddsSnapshot = null;
 			// deferred: rebuild() disposes this very combo, and doing that from inside
 			// its own action listener runs while the popup is still closing
-			javax.swing.SwingUtilities.invokeLater(this::rebuild);
+			SwingUtilities.invokeLater(this::rebuild);
 		});
 		// labelled through styleCombo, not by a renderer set beforehand: styleCombo
 		// installs the only renderer the box has, and would overwrite it
@@ -378,7 +391,7 @@ public class ShopTab extends JPanel
 			return section;
 		}
 
-		for (com.gachaman.model.Rarity rarity : com.gachaman.model.Rarity.values())
+		for (Rarity rarity : Rarity.values())
 		{
 			double fraction = odds.getRarityPercent()[rarity.ordinal()] / 100;
 			section.add(oddsRow(rarity.getDisplayName(), pct(fraction), rarity.getColor(),
@@ -416,12 +429,12 @@ public class ShopTab extends JPanel
 		}
 		// a ladder can sit in both bands at once, so each side is told the other's
 		// keys and can explain the overlap rather than look like it double-counted
-		java.util.Set<String> wieldableKeys = new java.util.HashSet<>();
+		Set<String> wieldableKeys = new HashSet<>();
 		for (ChestService.TierOdds row : wieldable)
 		{
 			wieldableKeys.add(row.getTierKey());
 		}
-		java.util.Set<String> headroomKeys = new java.util.HashSet<>();
+		Set<String> headroomKeys = new HashSet<>();
 		for (ChestService.TierOdds row : headroom)
 		{
 			headroomKeys.add(row.getTierKey());
@@ -486,7 +499,7 @@ public class ShopTab extends JPanel
 	 */
 	private void addBand(JPanel section, Band band, String title, String blurb,
 		List<ChestService.TierOdds> rows, double total, Color color,
-		java.util.Set<String> alsoInOtherBand)
+		Set<String> alsoInOtherBand)
 	{
 		if (rows.isEmpty())
 		{
@@ -572,7 +585,7 @@ public class ShopTab extends JPanel
 				tiers.setVisible(open);
 				// the section, not the row: BoxLayout skips an invisible child, so the
 				// height that has to be recomputed belongs to the container above
-				java.awt.Container parent = row.getParent();
+				Container parent = row.getParent();
 				if (parent != null)
 				{
 					parent.revalidate();
@@ -696,7 +709,7 @@ public class ShopTab extends JPanel
 		final int stamp = current == null ? -1 : current.getOpensSinceEpic();
 		clientThread.invokeLater(() -> {
 			final ChestService.OddsDisclosure snapshot = chestService.oddsFor(wanted);
-			javax.swing.SwingUtilities.invokeLater(() -> {
+			SwingUtilities.invokeLater(() -> {
 				oddsRequested = false;
 				if (wanted != oddsTier)
 				{
@@ -714,18 +727,18 @@ public class ShopTab extends JPanel
 
 	// --- Slot-targeted chests ---
 
-	private com.gachaman.model.GearSlot selectedSlotChest = com.gachaman.model.GearSlot.WEAPON;
+	private GearSlot selectedSlotChest = GearSlot.WEAPON;
 
 	private JPanel buildSlotChestSection(GachaState state)
 	{
 		JPanel section = GachamanPanel.section("Slot Chests");
 		long price = Tuning.CHEST_PRICE_GC.get(Tuning.Chest.GILDED);
-		javax.swing.JComboBox<com.gachaman.model.GearSlot> picker =
-			new javax.swing.JComboBox<>(com.gachaman.model.GearSlot.values());
+		JComboBox<GearSlot> picker =
+			new JComboBox<>(GearSlot.values());
 		picker.setSelectedItem(selectedSlotChest);
 		picker.addActionListener(e ->
-			selectedSlotChest = (com.gachaman.model.GearSlot) picker.getSelectedItem());
-		GachamanPanel.styleCombo(picker, com.gachaman.model.GearSlot::getDisplayName);
+			selectedSlotChest = (GearSlot) picker.getSelectedItem());
+		GachamanPanel.styleCombo(picker, GearSlot::getDisplayName);
 		picker.setAlignmentX(Component.LEFT_ALIGNMENT);
 		picker.setMaximumSize(new Dimension(SECTION_INNER_WIDTH, 24));
 		section.add(picker);
@@ -735,7 +748,7 @@ public class ShopTab extends JPanel
 		open.setToolTipText("One card, rolled only from the chosen slot's pool (Gilded odds).");
 		open.setEnabled(state.getGc() >= price && chestService.getPending() == null);
 		open.addActionListener(e -> {
-			com.gachaman.model.GearSlot slot = (com.gachaman.model.GearSlot) picker.getSelectedItem();
+			GearSlot slot = (GearSlot) picker.getSelectedItem();
 			String slotName = slot == null ? "" : slot.getDisplayName();
 			if (slot != null && GachamanPanel.confirm(this, "Slot chest",
 				"Open " + GachamanPanel.article(slotName) + " " + slotName + " chest for "
@@ -773,7 +786,7 @@ public class ShopTab extends JPanel
 				FontManager.getRunescapeSmallFont(), SECTION_INNER_WIDTH, banner));
 			section.add(Box.createVerticalStrut(3));
 		}
-		com.gachaman.model.ActiveTask task = state.getActiveTask();
+		ActiveTask task = state.getActiveTask();
 		if (task == null)
 		{
 			section.add(wrappedText(
@@ -841,7 +854,7 @@ public class ShopTab extends JPanel
 			}
 			else
 			{
-				javax.swing.SwingUtilities.invokeLater(() -> GachamanPanel.info(this,
+				SwingUtilities.invokeLater(() -> GachamanPanel.info(this,
 					"Purchase failed — you need an active contract, no charge applied yet,"
 						+ " and enough GC."));
 			}
@@ -859,7 +872,7 @@ public class ShopTab extends JPanel
 			open.addActionListener(e -> clientThread.invokeLater(() -> {
 				if (chestService.openThemedChest(tag) == null)
 				{
-					javax.swing.SwingUtilities.invokeLater(() ->
+					SwingUtilities.invokeLater(() ->
 						GachamanPanel.info(this, "The chest cannot be opened right now."));
 				}
 			}));

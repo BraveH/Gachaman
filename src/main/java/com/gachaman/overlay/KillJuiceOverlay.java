@@ -17,6 +17,7 @@ import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.Perspective;
+import net.runelite.api.Point;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayPosition;
@@ -92,7 +93,7 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener
 			return;
 		}
 		// capture the canvas point NOW, while the death location is fresh
-		net.runelite.api.Point canvas = null;
+		Point canvas = null;
 		if (feedback.getDeathLocation() != null)
 		{
 			try

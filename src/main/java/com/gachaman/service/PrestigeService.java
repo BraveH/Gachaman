@@ -8,7 +8,9 @@ import com.gachaman.model.OwnedCard;
 import com.gachaman.model.Rarity;
 import com.gachaman.model.Variant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.Value;
@@ -138,7 +140,7 @@ public class PrestigeService
 				}
 			}
 			// unassign burned cards from the loadout
-			java.util.Map<String, String> loadout = new java.util.HashMap<>(s.getLoadout());
+			Map<String, String> loadout = new HashMap<>(s.getLoadout());
 			loadout.values().removeIf(burnedUuids::contains);
 			return s
 				.withOwnedCards(kept)

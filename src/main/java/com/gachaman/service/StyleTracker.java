@@ -22,6 +22,7 @@ import net.runelite.api.StructComposition;
 import net.runelite.api.events.AnimationChanged;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
+import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.gameval.AnimationID;
@@ -348,7 +349,7 @@ public class StyleTracker
 	}
 
 	@Subscribe
-	public void onHitsplatApplied(net.runelite.api.events.HitsplatApplied event)
+	public void onHitsplatApplied(HitsplatApplied event)
 	{
 		if (event.getActor() == client.getLocalPlayer())
 		{

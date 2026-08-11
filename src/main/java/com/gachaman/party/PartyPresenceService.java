@@ -1,12 +1,15 @@
 package com.gachaman.party;
 
+import com.gachaman.GachamanConfig;
 import com.gachaman.Tuning;
 import com.gachaman.model.ActiveTask;
 import com.gachaman.model.AttackStyle;
 import com.gachaman.model.GachaState;
 import com.gachaman.service.AccountKey;
+import com.gachaman.service.AccountKeyService;
 import com.gachaman.service.GachaStateService;
 import com.gachaman.service.TaskService;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -27,6 +30,7 @@ import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.party.PartyMember;
 import net.runelite.client.party.PartyService;
 import net.runelite.client.party.events.UserPart;
+import net.runelite.client.party.messages.PartyMemberMessage;
 import net.runelite.client.party.messages.UserSync;
 
 /**
@@ -109,7 +113,7 @@ public class PartyPresenceService
 		 * MUST stay last: {@code @Value} generates a positional constructor.
 		 */
 		@Nullable
-		java.awt.image.BufferedImage avatar;
+		BufferedImage avatar;
 
 		/** Nothing signed and nothing pending: this member can join a roll. */
 		public boolean isEligibleToRoll()
@@ -169,8 +173,8 @@ public class PartyPresenceService
 	private final PartyService partyService;
 	private final TaskService taskService;
 	private final GachaStateService stateService;
-	private final com.gachaman.service.AccountKeyService accountKeyService;
-	private final com.gachaman.GachamanConfig config;
+	private final AccountKeyService accountKeyService;
+	private final GachamanConfig config;
 
 	// --- transient; every field below is touched ONLY on the client thread ---
 	private final Map<Long, Heard> presence = new HashMap<>();
@@ -189,8 +193,8 @@ public class PartyPresenceService
 	@Inject
 	public PartyPresenceService(Client client, ClientThread clientThread, PartyService partyService,
 		TaskService taskService, GachaStateService stateService,
-		com.gachaman.service.AccountKeyService accountKeyService,
-		com.gachaman.GachamanConfig config)
+		AccountKeyService accountKeyService,
+		GachamanConfig config)
 	{
 		this.client = client;
 		this.clientThread = clientThread;
@@ -643,7 +647,7 @@ public class PartyPresenceService
 		return local == null || memberId == local.getMemberId();
 	}
 
-	private boolean safeSend(net.runelite.client.party.messages.PartyMemberMessage msg)
+	private boolean safeSend(PartyMemberMessage msg)
 	{
 		try
 		{

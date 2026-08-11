@@ -1,5 +1,6 @@
 package com.gachaman.overlay;
 
+import com.gachaman.GachamanConfig;
 import com.gachaman.Tuning;
 import com.gachaman.model.ActiveTask;
 import com.gachaman.model.AttackStyle;
@@ -56,12 +57,12 @@ public class GachaInfoboxOverlay extends OverlayPanel
 	private final GachaStateService stateService;
 	private final ChestService chestService;
 	private final ComplianceService complianceService;
-	private final com.gachaman.GachamanConfig config;
+	private final GachamanConfig config;
 
 	@Inject
 	public GachaInfoboxOverlay(Client client, GachaStateService stateService,
 		ChestService chestService, ComplianceService complianceService,
-		com.gachaman.GachamanConfig config)
+		GachamanConfig config)
 	{
 		this.client = client;
 		this.stateService = stateService;

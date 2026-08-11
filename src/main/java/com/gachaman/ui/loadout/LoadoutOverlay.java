@@ -1,5 +1,6 @@
 package com.gachaman.ui.loadout;
 
+import com.gachaman.GachamanConfig;
 import com.gachaman.data.CardDatabase;
 import com.gachaman.data.CardDefinition;
 import com.gachaman.data.HologramDefinition;
@@ -35,6 +36,8 @@ import javax.inject.Singleton;
 import lombok.Getter;
 import net.runelite.api.Client;
 import net.runelite.api.SpriteID;
+import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.game.SpriteManager;
 import net.runelite.client.ui.FontManager;
@@ -102,7 +105,7 @@ public class LoadoutOverlay extends Overlay
 	private final CardImageService cardImageService;
 	private final ChatboxCardSearch cardSearch;
 	private final SpriteManager spriteManager;
-	private final com.gachaman.GachamanConfig config;
+	private final GachamanConfig config;
 
 	private final Map<GearSlot, Rectangle> socketRects = new EnumMap<>(GearSlot.class);
 
@@ -133,7 +136,7 @@ public class LoadoutOverlay extends Overlay
 	public LoadoutOverlay(Client client, ClientThread clientThread, GachaStateService stateService,
 		LoadoutService loadoutService, ChestService chestService, CardDatabase cardDatabase,
 		CardImageService cardImageService, ChatboxCardSearch cardSearch, SpriteManager spriteManager,
-		com.gachaman.GachamanConfig config)
+		GachamanConfig config)
 	{
 		this.config = config;
 		this.client = client;
@@ -199,8 +202,8 @@ public class LoadoutOverlay extends Overlay
 			return null;
 		}
 		// the board belongs to the equipment page: switching tabs closes it
-		net.runelite.api.widgets.Widget equipment =
-			client.getWidget(net.runelite.api.gameval.InterfaceID.Wornitems.UNIVERSE);
+		Widget equipment =
+			client.getWidget(InterfaceID.Wornitems.UNIVERSE);
 		if (equipment == null || equipment.isHidden())
 		{
 			open = false;

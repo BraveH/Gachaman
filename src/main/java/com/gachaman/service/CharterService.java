@@ -20,14 +20,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.Skill;
-import net.runelite.api.ChatMessageType;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.config.ConfigManager;
@@ -114,7 +115,7 @@ public class CharterService
 	@Nullable
 	private Runnable refreshHook;
 	@Nullable
-	private java.util.function.BooleanSupplier partyBusyHook;
+	private BooleanSupplier partyBusyHook;
 
 	@Inject
 	public CharterService(GachaStateService stateService, MonsterTable monsterTable,
@@ -139,7 +140,7 @@ public class CharterService
 	}
 
 	/** The party layer's "a roll is live" answer, wired by the plugin. */
-	public void setPartyBusyHook(@Nullable java.util.function.BooleanSupplier hook)
+	public void setPartyBusyHook(@Nullable BooleanSupplier hook)
 	{
 		this.partyBusyHook = hook;
 	}

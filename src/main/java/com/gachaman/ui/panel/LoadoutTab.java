@@ -13,6 +13,7 @@ import com.gachaman.service.LoadoutService;
 import com.gachaman.service.PermissionService;
 import com.gachaman.ui.CardImageService;
 import java.awt.BasicStroke;
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
@@ -32,16 +33,24 @@ import java.util.Map;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
-import javax.swing.BorderFactory;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.DefaultListModel;
 import javax.swing.ImageIcon;
 import javax.swing.JComponent;
+import javax.swing.JList;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.JScrollPane;
+import javax.swing.JTextField;
+import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 
@@ -255,28 +264,28 @@ public class LoadoutTab extends JPanel
 		OwnedCard current = loadoutService.assigned(slot);
 
 		JPopupMenu popup = new JPopupMenu();
-		popup.setBorder(javax.swing.BorderFactory.createLineBorder(ColorScheme.DARKER_GRAY_HOVER_COLOR));
-		JPanel content = new JPanel(new java.awt.BorderLayout(0, 4));
+		popup.setBorder(BorderFactory.createLineBorder(ColorScheme.DARKER_GRAY_HOVER_COLOR));
+		JPanel content = new JPanel(new BorderLayout(0, 4));
 		content.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		content.setBorder(new EmptyBorder(6, 6, 6, 6));
 
-		javax.swing.JTextField search = new javax.swing.JTextField();
+		JTextField search = new JTextField();
 		search.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		search.setForeground(Color.WHITE);
 		search.setCaretColor(Color.WHITE);
 		search.setBorder(new EmptyBorder(4, 6, 4, 6));
 		search.setToolTipText("Type to filter");
-		content.add(search, java.awt.BorderLayout.NORTH);
+		content.add(search, BorderLayout.NORTH);
 
-		javax.swing.DefaultListModel<Object> model = new javax.swing.DefaultListModel<>();
-		javax.swing.JList<Object> list = new javax.swing.JList<>(model);
+		DefaultListModel<Object> model = new DefaultListModel<>();
+		JList<Object> list = new JList<>(model);
 		list.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		list.setSelectionBackground(ColorScheme.DARKER_GRAY_HOVER_COLOR);
 		list.setSelectionForeground(Color.WHITE);
-		list.setCellRenderer(new javax.swing.DefaultListCellRenderer()
+		list.setCellRenderer(new DefaultListCellRenderer()
 		{
 			@Override
-			public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> jList,
+			public Component getListCellRendererComponent(JList<?> jList,
 				Object value, int index, boolean selected, boolean focused)
 			{
 				super.getListCellRendererComponent(jList, value, index, selected, focused);
@@ -336,22 +345,22 @@ public class LoadoutTab extends JPanel
 			}
 		};
 		refilter.run();
-		search.getDocument().addDocumentListener(new javax.swing.event.DocumentListener()
+		search.getDocument().addDocumentListener(new DocumentListener()
 		{
 			@Override
-			public void insertUpdate(javax.swing.event.DocumentEvent e)
+			public void insertUpdate(DocumentEvent e)
 			{
 				refilter.run();
 			}
 
 			@Override
-			public void removeUpdate(javax.swing.event.DocumentEvent e)
+			public void removeUpdate(DocumentEvent e)
 			{
 				refilter.run();
 			}
 
 			@Override
-			public void changedUpdate(javax.swing.event.DocumentEvent e)
+			public void changedUpdate(DocumentEvent e)
 			{
 				refilter.run();
 			}
@@ -400,14 +409,14 @@ public class LoadoutTab extends JPanel
 			}
 		});
 
-		javax.swing.JScrollPane scroll = new javax.swing.JScrollPane(list,
-			javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
-			javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+		JScrollPane scroll = new JScrollPane(list,
+			ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+			ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 		scroll.setBorder(null);
-		scroll.setPreferredSize(new java.awt.Dimension(190,
+		scroll.setPreferredSize(new Dimension(190,
 			Math.min(320, Math.max(60, model.size() * 40))));
 		GachamanPanel.styleScrollbar(scroll);
-		content.add(scroll, java.awt.BorderLayout.CENTER);
+		content.add(scroll, BorderLayout.CENTER);
 
 		popup.add(content);
 		popup.show(component, x, y);

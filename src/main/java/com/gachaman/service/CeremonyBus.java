@@ -4,6 +4,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.function.Consumer;
 import javax.annotation.Nullable;
 import javax.inject.Singleton;
 import lombok.Value;
@@ -66,10 +67,10 @@ public class CeremonyBus
 	private final Deque<Request> queue = new ArrayDeque<>();
 	private final List<Renderer> renderers = new ArrayList<>();
 	/** Passive observers notified of every submit (audit/timeline). */
-	private final List<java.util.function.Consumer<Request>> taps = new ArrayList<>();
+	private final List<Consumer<Request>> taps = new ArrayList<>();
 	private FallbackHandler fallback;
 
-	public synchronized void addTap(java.util.function.Consumer<Request> tap)
+	public synchronized void addTap(Consumer<Request> tap)
 	{
 		if (!taps.contains(tap))
 		{
@@ -77,7 +78,7 @@ public class CeremonyBus
 		}
 	}
 
-	public synchronized void removeTap(java.util.function.Consumer<Request> tap)
+	public synchronized void removeTap(Consumer<Request> tap)
 	{
 		taps.remove(tap);
 	}
@@ -108,12 +109,12 @@ public class CeremonyBus
 		// taps run OUTSIDE the bus monitor: they mutate game state, and holding
 		// this lock across a state mutation would nest monitors across threads
 		Request request = new Request(type, payload);
-		List<java.util.function.Consumer<Request>> tapsCopy;
+		List<Consumer<Request>> tapsCopy;
 		synchronized (this)
 		{
 			tapsCopy = taps.isEmpty() ? List.of() : new ArrayList<>(taps);
 		}
-		for (java.util.function.Consumer<Request> tap : tapsCopy)
+		for (Consumer<Request> tap : tapsCopy)
 		{
 			try
 			{

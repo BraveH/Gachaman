@@ -1,16 +1,23 @@
 package com.gachaman.ui.panel;
 
+import com.gachaman.Tuning;
+import com.gachaman.data.MonsterTable;
+import com.gachaman.model.FirstStamp;
 import com.gachaman.model.GachaState;
 import com.gachaman.model.MonsterStats;
 import com.gachaman.model.PersonalBest;
 import com.gachaman.model.TaskDifficulty;
+import com.gachaman.service.GachaStateService;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.Box;
@@ -20,9 +27,10 @@ import javax.swing.JPanel;
 import javax.swing.JTable;
 import javax.swing.RowSorter;
 import javax.swing.SortOrder;
+import javax.swing.SwingConstants;
 import javax.swing.border.EmptyBorder;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
-import com.gachaman.service.GachaStateService;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.util.QuantityFormatter;
@@ -35,10 +43,10 @@ import net.runelite.client.util.QuantityFormatter;
 public class JournalTab extends JPanel
 {
 	private final GachaStateService stateService;
-	private final com.gachaman.data.MonsterTable monsterTable;
+	private final MonsterTable monsterTable;
 
 	@Inject
-	public JournalTab(GachaStateService stateService, com.gachaman.data.MonsterTable monsterTable)
+	public JournalTab(GachaStateService stateService, MonsterTable monsterTable)
 	{
 		this.stateService = stateService;
 		this.monsterTable = monsterTable;
@@ -80,9 +88,9 @@ public class JournalTab extends JPanel
 			Color.WHITE, FontManager.getRunescapeBoldFont()));
 		section.add(Box.createVerticalStrut(4));
 		int nextIndex = -1;
-		for (int i = 0; i < com.gachaman.Tuning.BESTIARY_MILESTONES.length; i++)
+		for (int i = 0; i < Tuning.BESTIARY_MILESTONES.length; i++)
 		{
-			if (com.gachaman.Tuning.BESTIARY_MILESTONES[i] > discovered)
+			if (Tuning.BESTIARY_MILESTONES[i] > discovered)
 			{
 				nextIndex = i;
 				break;
@@ -90,13 +98,13 @@ public class JournalTab extends JPanel
 		}
 		if (nextIndex >= 0)
 		{
-			int next = com.gachaman.Tuning.BESTIARY_MILESTONES[nextIndex];
+			int next = Tuning.BESTIARY_MILESTONES[nextIndex];
 			section.add(new GachamanPanel.MeterBar((double) discovered / next,
 				ColorScheme.BRAND_ORANGE, discovered + " / " + next));
 			section.add(Box.createVerticalStrut(2));
 			section.add(GachamanPanel.smallLine("Next: " + next + " species — +"
 					+ QuantityFormatter.formatNumber(
-						com.gachaman.Tuning.BESTIARY_MILESTONE_GC[nextIndex]) + " GC",
+						Tuning.BESTIARY_MILESTONE_GC[nextIndex]) + " GC",
 				ColorScheme.LIGHT_GRAY_COLOR));
 		}
 		else
@@ -108,17 +116,17 @@ public class JournalTab extends JPanel
 		// "on-contract", not "on-task": this plugin has a real Slayer task concept
 		// sitting one tab away (Double Docket), so "on-task" reads as the wrong one
 		section.add(GachamanPanel.wrapped("First on-contract kill of a new species pays +"
-				+ QuantityFormatter.formatNumber(com.gachaman.Tuning.DISCOVERY_GC) + " GC.",
+				+ QuantityFormatter.formatNumber(Tuning.DISCOVERY_GC) + " GC.",
 			ColorScheme.MEDIUM_GRAY_COLOR));
 		if (discovered > 0)
 		{
 			section.add(Box.createVerticalStrut(5));
 			section.add(GachamanPanel.smallLine("Discovered:", ColorScheme.BRAND_ORANGE));
 			// persisted keys are lowercased — recover display names from the table
-			Map<String, String> displayNames = new java.util.HashMap<>();
-			for (com.gachaman.data.MonsterTable.Monster monster : monsterTable.getMonsters())
+			Map<String, String> displayNames = new HashMap<>();
+			for (MonsterTable.Monster monster : monsterTable.getMonsters())
 			{
-				displayNames.put(monster.getName().toLowerCase(java.util.Locale.ROOT),
+				displayNames.put(monster.getName().toLowerCase(Locale.ROOT),
 					monster.getName());
 			}
 			List<String> names = new ArrayList<>();
@@ -147,11 +155,11 @@ public class JournalTab extends JPanel
 	private JPanel buildFirstsSection(GachaState state)
 	{
 		JPanel section = GachamanPanel.section("Firsts");
-		java.util.Set<String> claimed = state.getFirstsClaimed() == null
-			? java.util.Collections.emptySet() : state.getFirstsClaimed();
-		com.gachaman.model.FirstStamp[] stamps = com.gachaman.model.FirstStamp.values();
+		Set<String> claimed = state.getFirstsClaimed() == null
+			? Collections.emptySet() : state.getFirstsClaimed();
+		FirstStamp[] stamps = FirstStamp.values();
 		int earned = 0;
-		for (com.gachaman.model.FirstStamp stamp : stamps)
+		for (FirstStamp stamp : stamps)
 		{
 			if (claimed.contains(stamp.name()))
 			{
@@ -161,10 +169,10 @@ public class JournalTab extends JPanel
 		section.add(new GachamanPanel.MeterBar((double) earned / stamps.length,
 			new Color(230, 190, 80), earned + " / " + stamps.length + " stamped"));
 		section.add(Box.createVerticalStrut(4));
-		for (com.gachaman.model.FirstStamp stamp : stamps)
+		for (FirstStamp stamp : stamps)
 		{
 			boolean got = claimed.contains(stamp.name());
-			Integer gc = com.gachaman.Tuning.FIRSTS_GC.get(stamp);
+			Integer gc = Tuning.FIRSTS_GC.get(stamp);
 			// markers limited to glyphs the RuneScape TTFs actually cover
 			String text = (got ? "* " : "- ") + stamp.getDisplayName()
 				+ (got ? "" : "  (+" + QuantityFormatter.formatNumber(gc == null ? 0 : gc) + " GC)");
@@ -318,11 +326,11 @@ public class JournalTab extends JPanel
 	}
 
 	/** Right-aligned, separator-formatted cell for the table's three Long columns. */
-	private static final class NumberCell extends javax.swing.table.DefaultTableCellRenderer
+	private static final class NumberCell extends DefaultTableCellRenderer
 	{
 		NumberCell()
 		{
-			setHorizontalAlignment(javax.swing.SwingConstants.RIGHT);
+			setHorizontalAlignment(SwingConstants.RIGHT);
 		}
 
 		@Override

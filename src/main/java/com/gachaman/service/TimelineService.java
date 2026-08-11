@@ -12,6 +12,7 @@ import com.gachaman.model.TimelineEvent;
 import com.gachaman.model.Variant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -338,6 +339,6 @@ public class TimelineService implements ChestService.ChestListener, ComplianceSe
 		{
 			return "?";
 		}
-		return constant.charAt(0) + constant.substring(1).toLowerCase(java.util.Locale.ROOT);
+		return constant.charAt(0) + constant.substring(1).toLowerCase(Locale.ROOT);
 	}
 }

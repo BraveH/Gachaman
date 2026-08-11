@@ -7,6 +7,7 @@ import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.MenuAction;
 import net.runelite.api.MenuEntry;
 import net.runelite.api.NPC;
 import net.runelite.api.events.MenuEntryAdded;
@@ -121,14 +122,14 @@ public class CombatBlockService
 	 * -> <target>" arrives as a WIDGET_TARGET_ON_* action — casting High
 	 * Alchemy on items is a different action type and stays untouched).
 	 */
-	static boolean isOffensiveEntry(String option, net.runelite.api.MenuAction action)
+	static boolean isOffensiveEntry(String option, MenuAction action)
 	{
 		if ("Attack".equals(option))
 		{
 			return true;
 		}
 		return option != null && option.startsWith("Cast")
-			&& (action == net.runelite.api.MenuAction.WIDGET_TARGET_ON_NPC
-			|| action == net.runelite.api.MenuAction.WIDGET_TARGET_ON_PLAYER);
+			&& (action == MenuAction.WIDGET_TARGET_ON_NPC
+			|| action == MenuAction.WIDGET_TARGET_ON_PLAYER);
 	}
 }

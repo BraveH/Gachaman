@@ -3,14 +3,17 @@ package com.gachaman.ui.panel;
 import com.gachaman.Tuning;
 import com.gachaman.model.GachaState;
 import com.gachaman.model.PatronRecord;
+import com.gachaman.service.AccountKey;
 import com.gachaman.service.GachaStateService;
 import com.gachaman.service.PatronMark;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.util.Collections;
 import java.util.List;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JEditorPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -36,7 +39,7 @@ import net.runelite.client.util.QuantityFormatter;
  *
  * <p>Every name here is SELF-REPORTED — it is the label that partner's own
  * client broadcast at the moment you finished together. The identity underneath
- * is their {@link com.gachaman.service.AccountKey}, which is why a partner who
+ * is their {@link AccountKey}, which is why a partner who
  * renames keeps one row instead of forking into two half-histories.
  */
 @Singleton
@@ -58,7 +61,7 @@ public class PatronsTab extends JPanel
 		setLayout(new BorderLayout(0, 6));
 		setOpaque(false);
 
-		header.setLayout(new javax.swing.BoxLayout(header, javax.swing.BoxLayout.Y_AXIS));
+		header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
 		header.setOpaque(false);
 		add(header, BorderLayout.NORTH);
 
@@ -83,7 +86,7 @@ public class PatronsTab extends JPanel
 		header.removeAll();
 		GachaState state = stateService.get();
 		List<PatronRecord> patrons = state == null
-			? java.util.Collections.emptyList() : PatronMark.ranked(state.getPatrons());
+			? Collections.emptyList() : PatronMark.ranked(state.getPatrons());
 
 		header.add(buildTotals(patrons));
 		// ONE clock reading for the whole page: sampling per row would let two

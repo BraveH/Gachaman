@@ -15,6 +15,10 @@ import java.awt.RenderingHints;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.image.BufferedImage;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.List;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -275,13 +279,13 @@ public class HelpTab extends JPanel
 		if (document == null)
 		{
 			Doc loaded = null;
-			try (java.io.InputStream in = HelpTab.class.getResourceAsStream(
+			try (InputStream in = HelpTab.class.getResourceAsStream(
 				"/com/gachaman/ui/help.json"))
 			{
 				if (in != null)
 				{
-					loaded = new com.google.gson.Gson().fromJson(new java.io.InputStreamReader(
-						in, java.nio.charset.StandardCharsets.UTF_8), Doc.class);
+					loaded = new com.google.gson.Gson().fromJson(new InputStreamReader(
+						in, StandardCharsets.UTF_8), Doc.class);
 				}
 			}
 			catch (Exception e)
@@ -291,7 +295,7 @@ public class HelpTab extends JPanel
 			if (loaded == null || loaded.sections == null)
 			{
 				loaded = new Doc();
-				loaded.sections = java.util.Collections.emptyList();
+				loaded.sections = Collections.emptyList();
 			}
 			document = loaded;
 		}

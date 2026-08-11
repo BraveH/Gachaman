@@ -1,5 +1,6 @@
 package com.gachaman.service;
 
+import com.gachaman.GachamanConfig;
 import com.gachaman.overlay.RevealOverlay;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -22,11 +23,11 @@ public class SafeModeService
 {
 	private final Client client;
 	private final RevealOverlay revealOverlay;
-	private final com.gachaman.GachamanConfig config;
+	private final GachamanConfig config;
 
 	@Inject
 	public SafeModeService(Client client, RevealOverlay revealOverlay,
-		com.gachaman.GachamanConfig config)
+		GachamanConfig config)
 	{
 		this.client = client;
 		this.revealOverlay = revealOverlay;

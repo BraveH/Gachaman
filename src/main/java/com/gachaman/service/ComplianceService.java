@@ -4,10 +4,17 @@ import com.gachaman.Tuning;
 import com.gachaman.model.ActiveTask;
 import com.gachaman.model.AttackStyle;
 import com.gachaman.model.GachaState;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.Actor;
+import net.runelite.api.Client;
+import net.runelite.api.NPC;
+import net.runelite.client.util.Text;
 
 /**
  * Style-rule enforcement. On a re-roll the player is only WARNED; a violation
@@ -69,7 +76,7 @@ public class ComplianceService implements StyleTracker.AttackListener
 
 	private final GachaStateService stateService;
 	private final CreditSink creditSink;
-	private final net.runelite.api.Client client;
+	private final Client client;
 	private final QuestExemptionService questExemptionService;
 
 	@Getter
@@ -80,17 +87,17 @@ public class ComplianceService implements StyleTracker.AttackListener
 	 * Recent forbidden attacks (kills are judged a few ticks after death, and
 	 * pardons arrive a few ticks after the attack).
 	 */
-	private final java.util.ArrayDeque<ForbiddenAttack> recentForbiddenAttacks = new java.util.ArrayDeque<>();
+	private final ArrayDeque<ForbiddenAttack> recentForbiddenAttacks = new ArrayDeque<>();
 	/** Tick of the most recent style re-roll (drives the "switch gear" warning chip). */
 	@Getter
 	private int styleChangedTick = -1;
 
-	private java.util.List<Listener> listeners = new java.util.ArrayList<>();
+	private List<Listener> listeners = new ArrayList<>();
 	private int currentTick;
 
 	@Inject
 	public ComplianceService(GachaStateService stateService, CreditSink creditSink,
-		net.runelite.api.Client client, QuestExemptionService questExemptionService)
+		Client client, QuestExemptionService questExemptionService)
 	{
 		this.stateService = stateService;
 		this.creditSink = creditSink;
@@ -174,11 +181,11 @@ public class ComplianceService implements StyleTracker.AttackListener
 		// style and a lock would soft-lock the quest
 		if (client != null)
 		{
-			net.runelite.api.Actor target = client.getLocalPlayer() == null
+			Actor target = client.getLocalPlayer() == null
 				? null : client.getLocalPlayer().getInteracting();
-			if (target instanceof net.runelite.api.NPC && target.getName() != null
+			if (target instanceof NPC && target.getName() != null
 				&& questExemptionService.isQuestTarget(
-					net.runelite.client.util.Text.removeTags(target.getName())))
+					Text.removeTags(target.getName())))
 			{
 				lastCompliantAttackTick = tick;
 				return;

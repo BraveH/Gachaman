@@ -6,17 +6,23 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.Hitsplat;
+import net.runelite.api.HitsplatID;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.Skill;
+import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.events.ActorDeath;
+import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.InteractingChanged;
@@ -71,7 +77,7 @@ public class KillTracker
 		int maxHitDealt;
 		/** Another player assisted this kill (final, loot-oracle-adjusted). */
 		boolean assistedByOther;
-		net.runelite.api.coords.LocalPoint deathLocation;
+		LocalPoint deathLocation;
 	}
 
 	public interface KillListener
@@ -195,15 +201,15 @@ public class KillTracker
 			// player), so isMine() covers regular incoming damage; DoT types
 			// (poison/venom/...) are neither mine nor others and count too.
 			// Drains/heals are not HP damage.
-			net.runelite.api.Hitsplat hitsplat = event.getHitsplat();
+			Hitsplat hitsplat = event.getHitsplat();
 			int type = hitsplat.getHitsplatType();
 			boolean hpDamage = hitsplat.isMine()
-				|| type == net.runelite.api.HitsplatID.POISON
-				|| type == net.runelite.api.HitsplatID.VENOM
-				|| type == net.runelite.api.HitsplatID.DISEASE
-				|| type == net.runelite.api.HitsplatID.BLEED
-				|| type == net.runelite.api.HitsplatID.BURN
-				|| type == net.runelite.api.HitsplatID.DOOM;
+				|| type == HitsplatID.POISON
+				|| type == HitsplatID.VENOM
+				|| type == HitsplatID.DISEASE
+				|| type == HitsplatID.BLEED
+				|| type == HitsplatID.BURN
+				|| type == HitsplatID.DOOM;
 			if (hpDamage && hitsplat.getAmount() > 0)
 			{
 				lastPlayerDamagedTick = tick;
@@ -232,16 +238,16 @@ public class KillTracker
 	}
 
 	@Subscribe
-	public void onChatMessage(net.runelite.api.events.ChatMessage event)
+	public void onChatMessage(ChatMessage event)
 	{
 		// only real game messages — a player could type the phrase in public chat
-		if (event.getType() != net.runelite.api.ChatMessageType.GAMEMESSAGE
-			&& event.getType() != net.runelite.api.ChatMessageType.SPAM
-			&& event.getType() != net.runelite.api.ChatMessageType.ENGINE)
+		if (event.getType() != ChatMessageType.GAMEMESSAGE
+			&& event.getType() != ChatMessageType.SPAM
+			&& event.getType() != ChatMessageType.ENGINE)
 		{
 			return;
 		}
-		String text = Text.removeTags(event.getMessage()).toLowerCase(java.util.Locale.ROOT);
+		String text = Text.removeTags(event.getMessage()).toLowerCase(Locale.ROOT);
 		if (!text.contains(KILL_CREDIT_WARNING))
 		{
 			return;
@@ -466,12 +472,12 @@ public class KillTracker
 			noGuaranteedDropByName = new HashMap<>();
 			for (MonsterTable.Monster monster : monsterTable.getMonsters())
 			{
-				noGuaranteedDropByName.put(monster.getName().toLowerCase(java.util.Locale.ROOT),
+				noGuaranteedDropByName.put(monster.getName().toLowerCase(Locale.ROOT),
 					monster.isNoGuaranteedDrop());
 			}
 		}
 		Boolean noDrop = noGuaranteedDropByName.get(npcName == null ? ""
-			: npcName.toLowerCase(java.util.Locale.ROOT));
+			: npcName.toLowerCase(Locale.ROOT));
 		// unknown monsters (off-table) default to NOT convicting on absence
 		return noDrop != null && !noDrop;
 	}

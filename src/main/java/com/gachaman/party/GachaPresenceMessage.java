@@ -1,5 +1,6 @@
 package com.gachaman.party;
 
+import com.gachaman.service.AccountKey;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -49,7 +50,7 @@ public class GachaPresenceMessage extends PartyMemberMessage
 	private int killsRequired;
 	private boolean tainted;
 	/**
-	 * The sender's {@link com.gachaman.service.AccountKey}: a stable identity
+	 * The sender's {@link AccountKey}: a stable identity
 	 * for the Patron's Mark, null from an older client or one not logged in.
 	 * Self-reported and unauthenticated, exactly like the display name — the
 	 * page draws it and the cosmetic ledger keys on it, and nothing else.

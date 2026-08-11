@@ -1,8 +1,10 @@
 package com.gachaman.service;
 
 import com.gachaman.Tuning;
+import com.gachaman.model.GachaState;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.UnaryOperator;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.Value;
@@ -79,7 +81,7 @@ public class CreditSink
 	{
 		long amount;
 		/** Post-mutate snapshot; null when state was not loaded. */
-		com.gachaman.model.GachaState state;
+		GachaState state;
 	}
 
 	/**
@@ -89,7 +91,7 @@ public class CreditSink
 	 * extraMutation actually changed the state.
 	 */
 	public synchronized AwardResult awardWith(long baseAmount, GcContext context,
-		java.util.function.UnaryOperator<com.gachaman.model.GachaState> extraMutation)
+		UnaryOperator<GachaState> extraMutation)
 	{
 		if (stateService.get() == null)
 		{
@@ -114,7 +116,7 @@ public class CreditSink
 		long amount = baseAmount <= 0 ? 0 : Math.max(0, Math.round(baseAmount * factor));
 		final boolean[] applied = {false};
 		var next = stateService.mutate(s -> {
-			com.gachaman.model.GachaState mutated = extraMutation.apply(s);
+			GachaState mutated = extraMutation.apply(s);
 			if (mutated == null || mutated == s)
 			{
 				return s; // marker did not land — no award either

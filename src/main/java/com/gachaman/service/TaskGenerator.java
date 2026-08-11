@@ -7,8 +7,11 @@ import com.gachaman.model.TaskDifficulty;
 import com.gachaman.model.TaskOffer;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
+import net.runelite.api.Quest;
 
 /**
  * Pure task-offer generation: 4 difficulty offers scaled to combat level
@@ -36,7 +39,7 @@ public final class TaskGenerator
 	}
 
 	/**
-	 * @param completedQuests {@link net.runelite.api.Quest} names the player has
+	 * @param completedQuests {@link Quest} names the player has
 	 *                        FINISHED. Null disables quest gating entirely — the
 	 *                        pre-quest-gate behaviour, which a mixed-version party
 	 *                        falls back to so every client still deals one board.
@@ -45,7 +48,7 @@ public final class TaskGenerator
 	 */
 	public static List<TaskOffer> generateOffers(List<MonsterTable.Monster> pool, int playerCb,
 		int playerSlayerLevel, boolean membersWorld,
-		@javax.annotation.Nullable java.util.Set<String> completedQuests, boolean tainted, GachaRng rng)
+		@javax.annotation.Nullable Set<String> completedQuests, boolean tainted, GachaRng rng)
 	{
 		// slayer-task-only monsters are unfulfillable contracts (a Gachaman
 		// task is not a slayer task); slayer-level-gated ones need the level;
@@ -57,7 +60,7 @@ public final class TaskGenerator
 			.collect(Collectors.toList());
 		List<TaskOffer> offers = new ArrayList<>(5);
 		// no monster may appear on more than one offer in the same roll
-		java.util.Set<String> usedMonsters = new java.util.HashSet<>();
+		Set<String> usedMonsters = new HashSet<>();
 		for (TaskDifficulty difficulty : TaskDifficulty.values())
 		{
 			TaskOffer offer = generate(pool, playerCb, membersWorld, difficulty, false, usedMonsters, rng);
@@ -82,7 +85,7 @@ public final class TaskGenerator
 	 * different orders must still agree monster for monster.
 	 */
 	static boolean questsSatisfied(MonsterTable.Monster monster,
-		@javax.annotation.Nullable java.util.Set<String> completedQuests)
+		@javax.annotation.Nullable Set<String> completedQuests)
 	{
 		List<String> required = monster.getQuests();
 		if (required == null || required.isEmpty())
@@ -95,7 +98,7 @@ public final class TaskGenerator
 
 	static TaskOffer generate(List<MonsterTable.Monster> pool, int playerCb, boolean membersWorld,
 		TaskDifficulty difficulty, boolean redemption,
-		java.util.Set<String> excludeMonsters, GachaRng rng)
+		Set<String> excludeMonsters, GachaRng rng)
 	{
 		List<MonsterTable.Monster> eligible = eligibleMonsters(pool, playerCb, membersWorld, difficulty);
 		List<MonsterTable.Monster> distinct = eligible.stream()
@@ -236,7 +239,7 @@ public final class TaskGenerator
 	 */
 	public static boolean charterEligible(MonsterTable.Monster monster, int playerCb,
 		int playerSlayerLevel, boolean membersWorld,
-		@javax.annotation.Nullable java.util.Set<String> completedQuests)
+		@javax.annotation.Nullable Set<String> completedQuests)
 	{
 		return monster != null
 			&& !monster.isSlayerTaskOnly()

@@ -1,5 +1,6 @@
 package com.gachaman.party;
 
+import com.gachaman.GachamanConfig;
 import com.gachaman.Tuning;
 import com.gachaman.data.MonsterTable;
 import com.gachaman.model.ActiveTask;
@@ -9,17 +10,23 @@ import com.gachaman.model.PatronRecord;
 import com.gachaman.model.SideBet;
 import com.gachaman.model.TaskOffer;
 import com.gachaman.service.AccountKey;
+import com.gachaman.service.AccountKeyService;
 import com.gachaman.service.GachaRng;
 import com.gachaman.service.GachaStateService;
 import com.gachaman.service.PatronMark;
+import com.gachaman.service.QuestUnlockService;
 import com.gachaman.service.TaskGenerator;
 import com.gachaman.service.TaskService;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
@@ -30,6 +37,7 @@ import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.Skill;
 import net.runelite.api.events.GameTick;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageManager;
@@ -37,6 +45,7 @@ import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.party.PartyMember;
 import net.runelite.client.party.PartyService;
+import net.runelite.client.party.messages.PartyMemberMessage;
 
 /**
  * The party contract layer.
@@ -214,9 +223,9 @@ public class PartyRollService implements TaskService.Listener
 	private final GachaStateService stateService;
 	private final ChatMessageManager chatMessageManager;
 	private final MonsterTable monsterTable;
-	private final com.gachaman.service.QuestUnlockService questUnlockService;
-	private final com.gachaman.service.AccountKeyService accountKeyService;
-	private final com.gachaman.GachamanConfig config;
+	private final QuestUnlockService questUnlockService;
+	private final AccountKeyService accountKeyService;
+	private final GachamanConfig config;
 
 	// --- proposal / vote / task state (transient; one proposal at a time) ---
 	private long proposalId;
@@ -372,9 +381,9 @@ public class PartyRollService implements TaskService.Listener
 	public PartyRollService(Client client, ClientThread clientThread, PartyService partyService,
 		TaskService taskService, GachaStateService stateService,
 		ChatMessageManager chatMessageManager, MonsterTable monsterTable,
-		com.gachaman.service.QuestUnlockService questUnlockService,
-		com.gachaman.service.AccountKeyService accountKeyService,
-		com.gachaman.GachamanConfig config)
+		QuestUnlockService questUnlockService,
+		AccountKeyService accountKeyService,
+		GachamanConfig config)
 	{
 		this.client = client;
 		this.clientThread = clientThread;
@@ -578,14 +587,14 @@ public class PartyRollService implements TaskService.Listener
 		{
 			PendingProposal mine = describeCommitted();
 			return mine == null
-				? java.util.Collections.emptyList()
-				: java.util.Collections.singletonList(mine);
+				? Collections.emptyList()
+				: Collections.singletonList(mine);
 		}
 		if (taskLive)
 		{
 			// the contract itself owns the section from here; the roster lives on
 			// the Party page, grouped by the shared contract
-			return java.util.Collections.emptyList();
+			return Collections.emptyList();
 		}
 		List<PendingProposal> out = new ArrayList<>(inbox.size());
 		for (Inbox entry : inbox.values())
@@ -947,7 +956,7 @@ public class PartyRollService implements TaskService.Listener
 			}
 			return;
 		}
-		java.util.Collections.sort(agreed);
+		Collections.sort(agreed);
 		safeSend(new PartyRollStartMessage(proposalId, agreed));
 		executeRoll(agreed);
 	}
@@ -1420,7 +1429,7 @@ public class PartyRollService implements TaskService.Listener
 		String name;
 		/** The party avatar, or null for a member who has none. */
 		@Nullable
-		java.awt.image.BufferedImage avatar;
+		BufferedImage avatar;
 		boolean self;
 	}
 
@@ -1434,13 +1443,13 @@ public class PartyRollService implements TaskService.Listener
 		/** Offer index this client voted for, or -1 if it has not voted yet. */
 		int myVote;
 		/** Member id -> offer index, for the panel's per-member column. */
-		java.util.Map<Long, Integer> byMember;
+		Map<Long, Integer> byMember;
 		/**
 		 * Member id -> the contract they backed, named. The panel shows this
 		 * rather than the index: "vote 2" means nothing beside a player's name
 		 * once the board is off screen.
 		 */
-		java.util.Map<Long, String> labelByMember;
+		Map<Long, String> labelByMember;
 		/**
 		 * Who voted for each offer, indexed by offer.
 		 *
@@ -1500,7 +1509,7 @@ public class PartyRollService implements TaskService.Listener
 
 	/** A member's party avatar, or null — absent member, no avatar, or no party. */
 	@Nullable
-	private java.awt.image.BufferedImage avatarOf(long memberId)
+	private BufferedImage avatarOf(long memberId)
 	{
 		try
 		{
@@ -1535,7 +1544,7 @@ public class PartyRollService implements TaskService.Listener
 	 * client, and a client too old to know the field sends false — every one of
 	 * those sinks the wager for everyone, and the contract proceeds regardless.
 	 */
-	static boolean anteUnanimous(java.util.Collection<Long> roster, Map<Long, Boolean> consent)
+	static boolean anteUnanimous(Collection<Long> roster, Map<Long, Boolean> consent)
 	{
 		if (roster == null || roster.isEmpty() || consent == null)
 		{
@@ -1639,7 +1648,7 @@ public class PartyRollService implements TaskService.Listener
 
 	private void broadcastResolve(int index, List<Long> memberIds, int mode)
 	{
-		java.util.Collections.sort(memberIds); // stable payload; ids are the identity
+		Collections.sort(memberIds); // stable payload; ids are the identity
 		// The Ante verdict is settled here, by the host, against the roster it
 		// just fixed — the same authority and the same instant as the contract,
 		// so no client can be staking against a roster that has since narrowed.
@@ -1897,7 +1906,7 @@ public class PartyRollService implements TaskService.Listener
 		boolean firstContact = resumedAtTick >= 0 && participants.isEmpty();
 		dropDepartedKills(partyKills, roster);
 		participants.add(memberId);
-		rememberNames(java.util.Collections.singletonList(memberId));
+		rememberNames(Collections.singletonList(memberId));
 		if (firstContact)
 		{
 			chat("Your party is back in sync — " + memberName(memberId)
@@ -2118,7 +2127,7 @@ public class PartyRollService implements TaskService.Listener
 		if (!inbox.isEmpty())
 		{
 			boolean dropped = false;
-			for (java.util.Iterator<Inbox> it = inbox.values().iterator(); it.hasNext(); )
+			for (Iterator<Inbox> it = inbox.values().iterator(); it.hasNext(); )
 			{
 				Inbox entry = it.next();
 				if (entry.expiresAtTick - now > PROPOSAL_TTL_TICKS + NON_HOST_GRACE_TICKS)
@@ -2740,7 +2749,7 @@ public class PartyRollService implements TaskService.Listener
 		GachaState state = stateService.get();
 		return new Stance(response, mySeedCandidate,
 			taskService.localIsMembers(), taskService.playerCombatLevel(),
-			client.getRealSkillLevel(net.runelite.api.Skill.SLAYER),
+			client.getRealSkillLevel(Skill.SLAYER),
 			state == null ? null : state.getAllowedStyle(), ROLL_PROTOCOL,
 			// only the gating quests, sorted — the full 195 would be most of a
 			// kilobyte of wire per member to say nothing the pool filter reads
@@ -2814,7 +2823,7 @@ public class PartyRollService implements TaskService.Listener
 		TaskOffer offer = partyOffers.get(index);
 		String tier = offer.isRedemption()
 			? "REDEMPTION"
-			: offer.getDifficulty().getDisplayName().toUpperCase(java.util.Locale.ROOT);
+			: offer.getDifficulty().getDisplayName().toUpperCase(Locale.ROOT);
 		return offer.getMonsterName() + " [" + tier + "]";
 	}
 
@@ -2878,7 +2887,7 @@ public class PartyRollService implements TaskService.Listener
 		return local == null || memberId == local.getMemberId();
 	}
 
-	private boolean safeSend(net.runelite.client.party.messages.PartyMemberMessage msg)
+	private boolean safeSend(PartyMemberMessage msg)
 	{
 		try
 		{

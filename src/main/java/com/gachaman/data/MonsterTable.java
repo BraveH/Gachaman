@@ -9,6 +9,7 @@ import java.util.Collections;
 import java.util.List;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.Quest;
 
 @Slf4j
 public class MonsterTable
@@ -31,7 +32,7 @@ public class MonsterTable
 		boolean noGuaranteedDrop;
 		/**
 		 * Quests that must ALL be FINISHED before this monster can be reached or
-		 * damaged — {@link net.runelite.api.Quest} constant names, never ordinals.
+		 * damaged — {@link Quest} constant names, never ordinals.
 		 * Empty (the common case) means anyone may fight it.
 		 *
 		 * Area locks count: every Morytania monster carries PRIEST_IN_PERIL even

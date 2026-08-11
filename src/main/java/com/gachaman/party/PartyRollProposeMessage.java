@@ -1,9 +1,12 @@
 package com.gachaman.party;
 
+import com.gachaman.service.AccountKey;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import net.runelite.api.Quest;
 import net.runelite.client.party.messages.PartyMemberMessage;
 
 /**
@@ -51,7 +54,7 @@ public class PartyRollProposeMessage extends PartyMemberMessage
 	 */
 	private String sizingMode;
 	/**
-	 * The {@link net.runelite.api.Quest} names this member has FINISHED, out of
+	 * The {@link Quest} names this member has FINISHED, out of
 	 * the ones that lock a monster in the table. Unlike {@link #sizingMode},
 	 * every member's answer counts: the roll intersects them, so the board only
 	 * offers monsters the WHOLE party can reach.
@@ -64,9 +67,9 @@ public class PartyRollProposeMessage extends PartyMemberMessage
 	 * an unrecognised or missing name simply fails the {@code containsAll} test,
 	 * so the party is offered LESS, never something it cannot fight.
 	 */
-	private java.util.List<String> completedQuests;
+	private List<String> completedQuests;
 	/**
-	 * The sender's {@link com.gachaman.service.AccountKey} — a stable identity
+	 * The sender's {@link AccountKey} — a stable identity
 	 * for the Patron's Mark, null from a client that predates it or from one
 	 * that is not logged in.
 	 *
