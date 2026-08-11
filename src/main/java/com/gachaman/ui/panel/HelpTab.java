@@ -15,6 +15,7 @@ import java.awt.RenderingHints;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.image.BufferedImage;
+import java.util.List;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.Box;
@@ -87,17 +88,7 @@ public class HelpTab extends JPanel
 		}
 		builtWidth = width;
 		removeAll();
-		addSection(buildGamemodeSection(width), width);
-		addSection(buildStyleSection(width), width);
-		addSection(buildContractsSection(width), width);
-		addSection(buildPartySection(width), width);
-		addSection(buildCardsSection(width), width);
-		addSection(buildSlotDeedsSection(width), width);
-		addSection(buildChestsSection(width), width);
-		addSection(buildEarlyGameSection(width), width);
-		addSection(buildLongGameSection(width), width);
-		addSection(buildQuestsSection(width), width);
-		addSection(buildCommandsSection(width), width);
+		buildSections(width);
 		revalidate();
 		repaint();
 	}
@@ -147,375 +138,166 @@ public class HelpTab extends JPanel
 
 	// --- Sections ---
 
-	private static JPanel buildGamemodeSection(int w)
+	/**
+	 * Builds every section from help.json.
+	 *
+	 * <p>The copy is data, not code: it is ~11,000 words of prose that changes
+	 * whenever the rules do, and prose wedged into string concatenations is
+	 * prose nobody wants to edit. The resource carries the text and the ORDER;
+	 * this method owns the rendering, and the illustrations stay in Java
+	 * because they are drawn, not written.
+	 */
+	private void buildSections(int width)
 	{
-		JPanel section = GachamanPanel.section("The Gamemode");
-		paragraph(section, w, "Gachaman is an RNG-governed challenge: fate rolls your combat style, "
-			+ "cards gate your equipment, kill contracts are your income, and chests are your "
-			+ "progression.");
-		paragraph(section, w, "Leaving Tutorial Island strips everything it gave you — none of it "
-			+ "is card-unlocked yet. Your starter cards are already in your album and assigned.");
-		paragraph(section, w, "Everything is client-side honor mode: disabling the plugin removes "
-			+ "all restrictions.");
-		return section;
-	}
-
-	private static JPanel buildStyleSection(int w)
-	{
-		JPanel section = GachamanPanel.section("Attack Style");
-		JPanel styles = flowRow(w);
-		styles.add(styleLabel("Melee", MELEE));
-		styles.add(styleLabel("Ranged", RANGED));
-		styles.add(styleLabel("Magic", MAGIC));
-		section.add(styles);
-		section.add(Box.createVerticalStrut(5));
-		paragraph(section, w, "A roulette wheel decides melee, ranged or magic — and it can re-roll "
-			+ "the same style. It re-rolls after 5 completed contracts. From the shop, a Style "
-			+ "Compactor (400 GC) makes the current contract count double toward those 5 AND makes "
-			+ "each kill count twice toward the contract itself — the skipped count pays no GC, "
-			+ "so you trade kill income for speed. An Extender (250 GC) makes the contract count "
-			+ "half toward the cycle. Every profile starts with one free Compactor voucher and "
-			+ "one free Extender voucher — the first use of each costs nothing.");
-		paragraph(section, w, "Attacking with a forbidden style costs GC per attack, and finishing "
-			+ "a kill while violating pays nothing and adds taint: all income is halved until "
-			+ "you work each taint off with a compliant kill, or clear it all with one "
-			+ "Redemption contract (offered whenever tainted). The judge is fair: cast "
-			+ "animations always count as magic whatever your stance, and if a delayed Magic "
-			+ "XP drop proves a melee verdict wrong, the penalty is refunded automatically.");
-		return section;
-	}
-
-	private static JPanel buildContractsSection(int w)
-	{
-		JPanel section = GachamanPanel.section("Contracts");
-		paragraph(section, w, "You roll 4 contracts (Easy/Medium/Hard/Insane) scaled to your combat "
-			+ "level. While tainted a 5th Redemption contract appears. Contracts cannot be "
-			+ "abandoned.");
-		paragraph(section, w, "Party rolls (RuneLite Party): any member with a clean slate (no "
-			+ "contract, no undecided rolls) proposes; others join with ::gachaparty (or sit "
-			+ "out with ::gachaparty no — busy members, members without the plugin, and "
-			+ "members with the Party contracts setting off sit out "
-			+ "automatically). The roll starts once everyone "
-			+ "answers, after ~60s with whoever agreed (minimum 2), or the moment the HOST "
-			+ "(the proposer) presses Start Roll Now. Participants then see "
-			+ "IDENTICAL offers — all clients roll with the seed of the lowest member id, "
-			+ "restricted to free-to-play monsters if any participant is free and sized to the "
-			+ "party's FIGHTING WEIGHT: the AVERAGE combat level of everyone taking part, each "
-			+ "level clamped to 3-126 and the mean rounded down. Slayer requirements still gate "
-			+ "on the party's LOWEST slayer level, so nobody is offered something a member "
-			+ "cannot legally kill. If any participant is on an older build the whole party "
-			+ "falls back to the old rule and sizes to the lowest combat level instead — it is "
-			+ "all-or-nothing, because two clients disagreeing about the target level would deal "
-			+ "two different boards. Clicking a contract VOTES, and a MAJORITY (2 of 2 or 3, 3 of "
-			+ "4 or 5) signs it for the whole party as a SHARED contract — everyone's kills fill "
-			+ "one pooled quota. If no contract has a majority once every vote is in, or when the "
-			+ "~2 minute clock runs out, the most-voted contract is taken instead — drawn at "
-			+ "random between them if the lead is tied — and it binds only the members who "
-			+ "actually voted; anyone who abstained keeps the rolled contracts as personal ones. "
-			+ "Completion pays the 1.6x co-op bonus, plus a flat 0.25x if the party covers more "
-			+ "than one attack style. Use \"View Rolled Contracts\" to change your vote.");
-		paragraph(section, w, "You may only attack your contract's monster — everything else is "
-			+ "blocked (quest targets excepted, see Tutorial & Quests).");
-		paragraph(section, w, "Per-kill GC scales three ways: the difficulty base (8/16/32/64), a "
-			+ "ratio multiplier for punching up (a monster twice your level pays big, capped at "
-			+ "5x, while monsters more than 5 levels below you decay to 0.1x), and an "
-			+ "early-game bonus (+150% at combat 3, tapering to nothing at combat 70).");
-		paragraph(section, w, "Side bets are optional bonus objectives paying extra GC. A wiki "
-			+ "button next to the contract opens the monster's wiki page, and a config toggle "
-			+ "highlights contract NPCs in-game.");
-		paragraph(section, w, "Double Docket: kill your real Slayer assignment while on contract "
-			+ "and completion pays x1.2. It is checked when you accept AND on every kill, so "
-			+ "picking the matching Slayer task up mid-contract still counts, and once it locks "
-			+ "in it stays even if you finish the Slayer task first. Contracts are NEVER rolled "
-			+ "to match your assignment — that would add RNG inside the seeded party roll and "
-			+ "desync the party — so this is a happy accident the game pays for. Grouped "
-			+ "assignments like Metal dragons name no single monster and cannot be detected. "
-			+ "Every contract shows its docket state, earned or not.");
-		paragraph(section, w, "The Charter Office (Overview tab): buy ONE contract a day instead "
-			+ "of waiting for the board to offer it. The target must be familiar — 25 banked "
-			+ "kills — and must pass every gate a normal roll applies, so a deed can never buy "
-			+ "past a rule. It costs 800-2,500 GC depending on how far you are punching up, and "
-			+ "the GC is HELD, not spent: the deed joins your board as an extra offer for 500 "
-			+ "ticks and the money returns in full if you never sign it. The daily lock lifts at "
-			+ "UTC midnight. The counter is closed while a party roll is live.");
-		paragraph(section, w, "The Ante (off by default — turn it on in the config): before you "
-			+ "accept an INSANE contract you may stake 10-50% of your purse, capped at 5,000 GC "
-			+ "and never offered under a 250 GC purse. Finish the contract and the stake returns "
-			+ "DOUBLED; die and it is gone. Arming takes two confirmations, disarming takes "
-			+ "none, and GC only leaves your purse when a contract is actually signed. In a "
-			+ "party it takes EVERY member: each stakes from their own purse and loses only "
-			+ "their own, and one refusal means no Ante for anyone — the contract goes ahead "
-			+ "either way. Contracts cannot be abandoned, so stake accordingly.");
-		paragraph(section, w, "Rhythm Combo: consecutive on-contract kills within ~25 seconds stack a "
-			+ "kill-GC bonus — up to +30% at low combat, fading to a permanent +10% floor by "
-			+ "combat 45. The chain cancels only after ~60 seconds with NO attacks at all "
-			+ "(fighting something tanky keeps it alive); a forbidden attack or tainted kill "
-			+ "breaks it instantly, and it resets between contracts.");
-		paragraph(section, w, "Ironman honor rule: a kill another player attacked counts HALF — "
-			+ "half a kill count (two assisted kills = one) and half the kill GC. With a "
-			+ "Compactor an assisted kill lands back on exactly 1 count. On a SHARED party "
-			+ "contract the rule stands down — teammates are supposed to pile on. Detection "
-			+ "combines three signals: other players' hitsplats (even 0-damage splashes — "
-			+ "those void ironman credit too), the game's \"might not receive kill-credit\" "
-			+ "warning (keep it enabled in Activities settings), and the loot itself — loot "
-			+ "received PROVES full credit and clears any suspicion, while no loot from a "
-			+ "monster with a guaranteed drop convicts even when the damage happened before "
-			+ "you arrived. Kill credit lands a moment after the death animation.");
-		return section;
-	}
-
-	private static JPanel buildPartySection(int w)
-	{
-		JPanel section = GachamanPanel.section("The Party Page");
-		paragraph(section, w, "A tab showing who is with you: each member's rolled style as a "
-			+ "colour swatch, their combat level, and badges for taint and for your Patron's "
-			+ "Mark with them. Turn the Party contracts setting off and the tab stays, but it "
-			+ "broadcasts nothing and shows nothing — it says so rather than looking empty.");
-		paragraph(section, w, "It is grouped by CONTRACT, not by person. Everyone working the "
-			+ "same shared contract is drawn as one block under one progress meter, because a "
-			+ "shared contract has one quota — repeating the same 12/20 under three names would "
-			+ "read as three separate jobs of twenty. Two shared contracts in one party are two "
-			+ "blocks, and anyone on their own gets their own.");
-		paragraph(section, w, "A member with no contract says why. 'No contract' is idle and free "
-			+ "to roll. 'Undecided board' means they hold dealt offers and have signed none, so "
-			+ "they cannot join a shared roll until they pick one or let the board clear. 'No "
-			+ "signal' means their client has said nothing for about a minute; it comes back on "
-			+ "their next heartbeat.");
-		paragraph(section, w, "It is DISPLAY ONLY — no roll, payout or gate reads a line of it. "
-			+ "Every value is self-reported by that member's own client and taken on trust; "
-			+ "anything arriving over the party relay is clamped to a sane range before it is "
-			+ "drawn.");
-		paragraph(section, w, "The Patron's Mark: a private tally of how many shared contracts "
-			+ "you have finished alongside each partner. Marks land at 10, 25 and 100 — Patron "
-			+ "I, II and III. It is kept by ACCOUNT rather than by name, so a partner who "
-			+ "renames keeps one history instead of splitting into two half-tallies. The "
-			+ "Patrons tab is its home and appears the day you earn your first mark; on this "
-			+ "page each member you have history with wears a coloured pip, and whoever you "
-			+ "have shared most with gets a brighter outline. Strictly cosmetic: it pays no GC "
-			+ "and multiplies nothing, because a mark worth something would make farming a "
-			+ "friend the correct play.");
-		return section;
-	}
-
-	private static JPanel buildCardsSection(int w)
-	{
-		JPanel section = GachamanPanel.section("Cards & Equipment");
-		paragraph(section, w, "Every combat-relevant piece of equipment in the game has a card "
-			+ "(cosmetic gear is exempt and always wearable). You may only equip an item when "
-			+ "you own its card and — with \"One card per slot\" on, the default — the card is "
-			+ "assigned in your loadout, via the tile button on the worn-equipment page or the "
-			+ "Loadout tab. With the setting off, owning the card is enough and the loadout UI "
-			+ "hides.");
-		section.add(iconRow(w, crossedCircleIcon(),
-			textBlock("Blocked equipment shows a crossed circle.", BODY, w - SECTION_PADDING - ICON_COLUMN)));
-		section.add(Box.createVerticalStrut(6));
-		section.add(GachamanPanel.smallLine("Rarity ladder:", MUTED));
-		section.add(Box.createVerticalStrut(2));
-		for (Rarity rarity : Rarity.values())
+		for (Section section : document().sections)
 		{
-			section.add(GachamanPanel.smallLine(rarity.getDisplayName(), rarity.getColor()));
-			section.add(Box.createVerticalStrut(1));
+			JPanel panel = GachamanPanel.section(section.title);
+			for (com.google.gson.JsonElement element : section.body)
+			{
+				if (element.isJsonPrimitive())
+				{
+					paragraph(panel, width, element.getAsString());
+					continue;
+				}
+				element(panel, width, element.getAsJsonObject());
+			}
+			addSection(panel, width);
 		}
-		section.add(Box.createVerticalStrut(5));
-		paragraph(section, w, "Shiny (1 in 64, only on gear with lower tiers) also unlocks every "
-			+ "lower tier of the same piece. Hologram (1 in 256, the rarest pull) is a TIER "
-			+ "card — assign it to one slot and that slot can wear ANY item of the tier.");
-		JPanel cards = flowRow(w);
-		cards.add(new JLabel(cardIcon(CardRenderer.CardView.builder()
-			.name("Rune scimitar")
-			.rarity(Rarity.RARE)
-			.variant(Variant.NORMAL)
-			.art(null)
-			.build())));
-		cards.add(new JLabel(cardIcon(CardRenderer.CardView.builder()
-			.name("Rune scimitar")
-			.rarity(Rarity.RARE)
-			.variant(Variant.SHINY)
-			.art(null)
-			.build())));
-		cards.add(new JLabel(cardIcon(CardRenderer.CardView.builder()
-			.name("Dragon Hologram")
-			.rarity(Rarity.EPIC)
-			.variant(Variant.HOLOGRAM)
-			.art(null)
-			.subtitle("Dragon tier")
-			.build())));
-		section.add(cards);
-		section.add(Box.createVerticalStrut(2));
-		section.add(GachamanPanel.smallLine("Normal · Shiny · Hologram", MUTED));
-		section.add(Box.createVerticalStrut(5));
-		paragraph(section, w, "Service Record: every card counts the kills it was PRESENT for — "
-			+ "assigned to a loadout slot when the kill landed — and the number is permanent. "
-			+ "It counts real kills, not contract credit: a Compactor's doubled progress buys "
-			+ "no extra service, and an ironman's half-credit kill still bought the card a "
-			+ "whole kill of wear. The Album shows it as \"present for N kills\".");
-		paragraph(section, w, "Past 100, 400 and 1,000 kills of service a card wears Hairline, "
-			+ "then Cracked, then Shattered, still holding — worn print at the rim, creases "
-			+ "across the face, scratches and patina, the way a played card ages. Every card "
-			+ "wears in its own places; every card at a stage wears the same amount. NOTHING "
-			+ "reads it. A worn card rolls, equips, completes sets, burns at prestige and "
-			+ "prices in the shop exactly like a pristine one. It is a veteran's stripe, not "
-			+ "a durability system.");
-		return section;
 	}
 
-	private static JPanel buildSlotDeedsSection(int w)
+	/**
+	 * One non-paragraph element. The trailing gap is carried by the DATA, not
+	 * assumed here: the original hand-written sections spaced these differently
+	 * on purpose (the blocked-equipment glyph gets 6px, the padlock 4px), and a
+	 * renderer that averaged them would quietly restyle the page.
+	 */
+	private void element(JPanel panel, int width, com.google.gson.JsonObject el)
 	{
-		JPanel section = GachamanPanel.section("Slot Deeds");
-		paragraph(section, w, "You start with only the weapon, body and ammo slots usable "
-			+ "(Training sword + arrows come pre-assigned). On an ironman account you also "
-			+ "get your OWN account type's armour cards — helm, platebody and platelegs — "
-			+ "with the platebody assigned to the body slot. Normal accounts get none of "
-			+ "them: the game would never let you wear another type's armour anyway.");
-		section.add(iconRow(w, padlockIcon(), textBlock(
-			"The other 8 slots each need a Slot Deed: a rare chest roll (1/25 Battered, "
-				+ "1/18 Gilded, 1/12 Ornate — you choose the slot; the Rusty starter chest "
-				+ "never rolls deeds) or guaranteed at 10/25/45/70/100/140/190/250/320 "
-				+ "lifetime contracts — nine milestones for eight slots, so there is a "
-				+ "spare.", BODY, w - SECTION_PADDING - ICON_COLUMN)));
-		section.add(Box.createVerticalStrut(4));
-		paragraph(section, w, "Once every slot is deeded the milestones stop, and a chest that "
-			+ "rolls a deed after that pays 2,000 GC instead.");
-		paragraph(section, w, "Deed Fragments: during your first 5 contracts, Medium/Hard/Insane "
-			+ "completions pay 1/2/3 fragments. Ten fragments forge ONE bonus deed, ever — "
-			+ "all-hard exactly forges it; anything easier misses. Difficulty is an "
-			+ "equipment decision.");
-		return section;
-	}
-
-	private static JPanel buildChestsSection(int w)
-	{
-		JPanel section = GachamanPanel.section("Chests & Luck");
-		paragraph(section, w, "Rusty 150 GC (1 card, Common only, only 3 EVER): a cheap first "
-			+ "pull. Cards come only from slots you have unlocked and gear you can already "
-			+ "wield — but shinies are 4x more likely (1 in 16). No jackpot, no deed rolls, "
-			+ "and it never moves the pity meter.");
-		paragraph(section, w, "First Colours: the very first style roll on an account is followed "
-			+ "by a FREE chest, steered toward a weapon your new style can actually swing. It "
-			+ "is a Rusty chest and it counts as one of the three, so two are left to buy. If "
-			+ "the client dies before it is dealt, it is still owed and arrives next login.");
-		paragraph(section, w, "Then Battered 500 GC (1 card), Gilded 800 (2), Ornate 1,000 (3): "
-			+ "better value AND better odds the higher you go. Slot Chests cost the Gilded "
-			+ "price for exactly 1 card, guaranteed from a gear slot you choose. In roughly "
-			+ "1 in 100 opens, the chest upgrades itself mid-animation to the next tier — the "
-			+ "lid keeps the face of the tier you PAID for right up to the deal, so an upgrade "
-			+ "is a reveal rather than a spoiler.");
-		paragraph(section, w, "Strain: the chest fights before it opens, and how hard it fights "
-			+ "is the tell. A shudder starts it, the shaking climbs toward the give, then "
-			+ "everything goes dead still for a beat and the lid loses. Groans scale with what "
-			+ "you paid — Rusty gets none at all, Battered two, Gilded three, Ornate four. It "
-			+ "reports only the tier you BOUGHT and can never leak what is inside, and the "
-			+ "intro is exactly as long as it always was.");
-		paragraph(section, w, "The House Lean, stated plainly: when a chest picks WHICH item of a "
-			+ "rarity you get, gear one tier above what you can wield today is weighted 0.35x "
-			+ "against gear you can already use — so a card you can equip now is about 2.86x "
-			+ "likelier than the equivalent tease. It touches item choice only. Rarity odds, "
-			+ "the jackpot upgrade, hologram replacement and the first-card pity guarantee are "
-			+ "all untouched, and Slot Chests roll Gilded odds. The Shop tab's Chest Odds panel "
-			+ "prints the real percentages for every tier from the same numbers the roller "
-			+ "uses, so you can check this rather than take it.");
-		paragraph(section, w, "The pity meter counts CARDS revealed without an Epic+: past 12 your "
-			+ "odds climb, and at 30 the next chest guarantees a Legendary (26 from prestige 2). "
-			+ "Rusty chests never move it.");
-		section.add(new GachamanPanel.MeterBar(12 / 30.0, ColorScheme.BRAND_ORANGE, "12 / 30"));
-		section.add(Box.createVerticalStrut(5));
-		paragraph(section, w, "Every 10 combat levels gained grants a reroll token — during any "
-			+ "reveal, re-flip one card. Duplicates auto-convert to GC (25/60/150/400/1,000 by "
-			+ "rarity); Shiny and Hologram dupes are kept.");
-		paragraph(section, w, "Stardust: a shiny roll that only just missed fizzles visibly and "
-			+ "banks 1 stardust (counter on the Album tab). At 8 the bank is consumed and your "
-			+ "next chest is stardust-blessed — every card rolls its shiny twice.");
-		return section;
-	}
-
-	private static JPanel buildEarlyGameSection(int w)
-	{
-		JPanel section = GachamanPanel.section("The Early Game");
-		paragraph(section, w, "Firsts Journal (Journal tab): 15 one-time stamps for your inevitable "
-			+ "firsts — first kill, first chest, first Rare, first taint cleared... Each pays a "
-			+ "small GC bounty once; the full page totals 495 GC, just shy of one Battered "
-			+ "chest.");
-		paragraph(section, w, "Species Codex (Journal tab): the first on-contract kill of each new "
-			+ "species pays +25 GC, and milestones at 50/100/150 species pay 100/150/200 GC. "
-			+ "Contracts always roll 4 distinct monsters — the unfamiliar one pays extra.");
-		paragraph(section, w, "Graduation: the first time a gear slot's WORN tier climbs a rank "
-			+ "(bronze to iron, iron to steel...) it celebrates with +25 GC — only through the "
-			+ "early tiers, and never for your starting gear.");
-		return section;
-	}
-
-	private static JPanel buildLongGameSection(int w)
-	{
-		JPanel section = GachamanPanel.section("The Long Game");
-		paragraph(section, w, "Boss killcount milestones award themed chests rolling only that "
-			+ "boss's cards — 62 bosses are tracked, from Obor to Sol Heredit — and completing "
-			+ "themed card sets grants permanent perks (see the Sets tab). Bosses that share a "
-			+ "card set, like the three Dagannoth Kings, each award their own milestones.");
-		paragraph(section, w, "A personal weekly shop offers 3 direct-buy cards, seeded per player "
-			+ "per week — always the same 3. The Journal tracks per-monster stats and personal "
-			+ "bests (records pay 250 GC).");
-		paragraph(section, w, "Prestige (250 contracts or 90% Common/Uncommon collection + 25,000 "
-			+ "GC) burns your Common/Uncommon cards for a permanent rank: +5% GC per rank and "
-			+ "better luck at rank 2-3.");
-		paragraph(section, w, "The Dossier tab is the ledger: every contract you have finished or "
-			+ "failed, newest first, with what it paid. It keeps the last 200 contracts, and "
-			+ "the totals pinned at the top — count, clean rate, shared — are a fold over "
-			+ "exactly that window, labelled \"(last 200 contracts)\" once it is full so they "
-			+ "never read as lifetime figures. \"Lifetime earned\" is the one true unbounded "
-			+ "number.");
-		paragraph(section, w, "The Timeline tab audits everything else in order — style rolls, "
-			+ "contract rolls and completions, chest opens with every card pulled, rerolls, "
-			+ "charges and violations. Pick a from/to window and scrub it. Last 500 events.");
-		return section;
-	}
-
-	private static JPanel buildQuestsSection(int w)
-	{
-		JPanel section = GachamanPanel.section("Tutorial & Quests");
-		paragraph(section, w, "Tutorial Island has NO restrictions; the moment you leave, your "
-			+ "first style roll and contracts fire.");
-		paragraph(section, w, "Quest combat is protected: NPCs required by any IN-PROGRESS quest "
-			+ "are attackable with any style, with no penalties. Whatever is currently unlocked "
-			+ "this way is listed at the bottom of the Overview tab.");
-		paragraph(section, w, "The list of quest monsters is curated by hand, so it can have gaps. "
-			+ "If a quest needs you to kill something and Gachaman blocks it, please open an issue "
-			+ "at github.com/BraveH/Gachaman naming the NPC and the quest it is needed for — that "
-			+ "is what gets it fixed for everyone.");
-		paragraph(section, w, "To keep going in the meantime, ::gachaunlock <npc name> unblocks "
-			+ "that one NPC until you close the client, and ::gacharelock puts it back. Overrides "
-			+ "show in the Overview list so you can see what you left open.");
-		return section;
-	}
-
-	private static JPanel buildCommandsSection(int w)
-	{
-		JPanel section = GachamanPanel.section("Commands");
-		paragraph(section, w, "::gachaparty proposes or agrees to a party roll;"
-			+ " ::gachaparty no declines it; ::gachaparty start / cancel are host-only.");
-		paragraph(section, w, "::gachaunlock <npc name> unblocks a quest monster the table missed, "
-			+ "for this session only; ::gacharelock <npc name> undoes it, and ::gacharelock with "
-			+ "no name clears the lot.");
-		section.add(textBlock("With Advanced > Debug commands enabled:", MUTED, w - SECTION_PADDING));
-		section.add(Box.createVerticalStrut(3));
-		String[] commands = {
-			"::gachagive <amount>",
-			"::gachachest <tier>",
-			"::gachatask",
-			"::gachastyle",
-			"::gachatoken",
-			"::gachacleartaint",
-			"::gachacleartask",
-			"::gachawear <stage|kills> [name]",
-			"::gachabutton (button diagnostics)",
-			"::gachacosmetics (card audit)",
-		};
-		for (String command : commands)
+		if (el.has("note"))
 		{
-			section.add(GachamanPanel.smallLine(command, BODY));
-			section.add(Box.createVerticalStrut(1));
+			panel.add(GachamanPanel.smallLine(el.get("note").getAsString(), MUTED));
 		}
-		return section;
+		else if (el.has("muted"))
+		{
+			panel.add(textBlock(el.get("muted").getAsString(), MUTED, width - SECTION_PADDING));
+		}
+		else if (el.has("icon"))
+		{
+			ImageIcon icon = "padlock".equals(el.get("icon").getAsString())
+				? padlockIcon() : crossedCircleIcon();
+			panel.add(iconRow(width, icon, textBlock(el.get("text").getAsString(),
+				BODY, width - SECTION_PADDING - ICON_COLUMN)));
+		}
+		else
+		{
+			widget(panel, width, el);
+		}
+		if (el.has("gap"))
+		{
+			panel.add(Box.createVerticalStrut(el.get("gap").getAsInt()));
+		}
 	}
+
+	private void widget(JPanel panel, int width, com.google.gson.JsonObject el)
+	{
+		switch (el.get("widget").getAsString())
+		{
+			case "styleRow":
+			{
+				JPanel styles = flowRow(width);
+				styles.add(styleLabel("Melee", MELEE));
+				styles.add(styleLabel("Ranged", RANGED));
+				styles.add(styleLabel("Magic", MAGIC));
+				panel.add(styles);
+				break;
+			}
+			case "rarityLadder":
+				for (Rarity rarity : Rarity.values())
+				{
+					panel.add(GachamanPanel.smallLine(rarity.getDisplayName(), rarity.getColor()));
+					panel.add(Box.createVerticalStrut(1));
+				}
+				break;
+			case "cardSamples":
+			{
+				JPanel cards = flowRow(width);
+				cards.add(new JLabel(cardIcon(sample("Rune scimitar", Rarity.RARE, Variant.NORMAL, null))));
+				cards.add(new JLabel(cardIcon(sample("Rune scimitar", Rarity.RARE, Variant.SHINY, null))));
+				cards.add(new JLabel(cardIcon(sample("Dragon Hologram", Rarity.EPIC, Variant.HOLOGRAM,
+					"Dragon tier"))));
+				panel.add(cards);
+				break;
+			}
+			case "pityMeter":
+				panel.add(new GachamanPanel.MeterBar(12 / 30.0, ColorScheme.BRAND_ORANGE, "12 / 30"));
+				break;
+			case "commandList":
+				for (com.google.gson.JsonElement command : el.getAsJsonArray("items"))
+				{
+					panel.add(GachamanPanel.smallLine(command.getAsString(), BODY));
+					panel.add(Box.createVerticalStrut(1));
+				}
+				break;
+			default:
+				break;
+		}
+	}
+
+	private static CardRenderer.CardView sample(String name, Rarity rarity, Variant variant,
+		String subtitle)
+	{
+		return CardRenderer.CardView.builder()
+			.name(name)
+			.rarity(rarity)
+			.variant(variant)
+			.art(null)
+			.subtitle(subtitle)
+			.build();
+	}
+
+	// --- the document ---
+
+	private static final class Doc
+	{
+		List<Section> sections;
+	}
+
+	private static final class Section
+	{
+		String title;
+		List<com.google.gson.JsonElement> body;
+	}
+
+	private static Doc document;
+
+	private static Doc document()
+	{
+		if (document == null)
+		{
+			Doc loaded = null;
+			try (java.io.InputStream in = HelpTab.class.getResourceAsStream(
+				"/com/gachaman/ui/help.json"))
+			{
+				if (in != null)
+				{
+					loaded = new com.google.gson.Gson().fromJson(new java.io.InputStreamReader(
+						in, java.nio.charset.StandardCharsets.UTF_8), Doc.class);
+				}
+			}
+			catch (Exception e)
+			{
+				loaded = null;
+			}
+			if (loaded == null || loaded.sections == null)
+			{
+				loaded = new Doc();
+				loaded.sections = java.util.Collections.emptyList();
+			}
+			document = loaded;
+		}
+		return document;
+	}
+
 
 	// --- Layout helpers ---
 
