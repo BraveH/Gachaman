@@ -1,5 +1,7 @@
 package com.gachaman.ui.panel;
 
+import static com.gachaman.ui.panel.GachamanPanel.measuredWidth;
+import static com.gachaman.ui.panel.GachamanPanel.textBlock;
 import com.gachaman.GachamanConfig;
 import com.gachaman.model.GachaState;
 import com.gachaman.model.PatronRecord;
@@ -32,13 +34,11 @@ import javax.swing.BoxLayout;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JTextArea;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
-import net.runelite.client.ui.PluginPanel;
 
 /**
  * The party page: one line per RuneLite Party member, showing the style they
@@ -52,13 +52,6 @@ import net.runelite.client.ui.PluginPanel;
  */
 @Singleton
 public class PartyTab extends JPanel {
-	/**
-	 * Pre-realization fallback only: the 242px non-wrapped PluginPanel minus
-	 * its 6px borders and a full stock 17px scrollbar — the NARROWEST the
-	 * viewport can plausibly be, so nothing clips even before measuring.
-	 */
-	private static final int FALLBACK_WIDTH = PluginPanel.PANEL_WIDTH + PluginPanel.SCROLLBAR_WIDTH
-		- 2 * PluginPanel.BORDER_OFFSET - PluginPanel.SCROLLBAR_WIDTH;
 
 	/** Horizontal padding a GachamanPanel.section() adds (8px borders each side). */
 	private static final int SECTION_PADDING = 16;
@@ -138,7 +131,7 @@ public class PartyTab extends JPanel {
 	 * which is also what stops a resize storm looping.
 	 */
 	void rebuild() {
-		int width = measuredWidth();
+		int width = measuredWidth(this);
 		builtWidth = width;
 		int inner = width - SECTION_PADDING;
 		removeAll();
@@ -429,19 +422,7 @@ public class PartyTab extends JPanel {
 
 	// --- Layout plumbing ---
 
-	/** The scroll viewport's ACTUAL extent width — the only trustworthy budget. */
-	private int measuredWidth() {
-		Container ancestor = SwingUtilities.getAncestorOfClass(JViewport.class, this);
-		if (ancestor instanceof JViewport) {
-			int width = ((JViewport) ancestor).getExtentSize().width;
-			if (width > 0) {
-				return width;
-			}
-		}
-		return FALLBACK_WIDTH;
-	}
-
-	@Override
+@Override
 	public void addNotify() {
 		super.addNotify();
 		Container ancestor = SwingUtilities.getAncestorOfClass(JViewport.class, this);
@@ -455,7 +436,7 @@ public class PartyTab extends JPanel {
 				@Override
 				public void componentResized(ComponentEvent e) {
 					SwingUtilities.invokeLater(() -> {
-						if (measuredWidth() != builtWidth) {
+						if (measuredWidth(PartyTab.this) != builtWidth) {
 							rebuild();
 						}
 					});
@@ -570,35 +551,7 @@ public class PartyTab extends JPanel {
 		}
 	}
 
-	/**
-	 * Wrap-to-width body text WITHOUT the HTML renderer: Swing's CSS width is a
-	 * preferred span, not a hard cap — stretched labels re-wrap wider than asked
-	 * and then clip under the scrollbar. A JTextArea wraps at exactly the width
-	 * it is given; sizing it up front makes its preferred height correct before
-	 * the BoxLayout ever asks.
-	 *
-	 * A private twin of HelpTab's; sharing one copy means promoting HelpTab's
-	 * out of private, which is a docs-owned file this round.
-	 */
-	private static JTextArea textBlock(String text, Color color, int width) {
-		JTextArea area = new JTextArea(text);
-		area.setEditable(false);
-		area.setFocusable(false);
-		area.setOpaque(false);
-		area.setLineWrap(true);
-		area.setWrapStyleWord(true);
-		area.setBorder(null);
-		area.setForeground(color);
-		area.setFont(FontManager.getRunescapeSmallFont());
-		area.setAlignmentX(Component.LEFT_ALIGNMENT);
-		area.setSize(width, Short.MAX_VALUE);
-		Dimension pref = area.getPreferredSize();
-		area.setPreferredSize(new Dimension(width, pref.height));
-		area.setMaximumSize(new Dimension(width, pref.height));
-		return area;
-	}
-
-	/**
+/**
 	 * Hard cap on a section's width: the sidebar is fixed-width and the scroll
 	 * pane never scrolls horizontally, so no child may push a section past the
 	 * measured viewport width. A private twin of HelpTab's, for the same reason

@@ -1,8 +1,5 @@
 package com.gachaman.overlay;
 
-import com.gachaman.model.ActiveTask;
-import com.gachaman.model.SideBet;
-import com.gachaman.model.TaskOffer;
 import com.gachaman.service.TaskService;
 import com.gachaman.ui.Paint;
 import java.awt.BasicStroke;
@@ -12,7 +9,6 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
-import java.util.List;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;

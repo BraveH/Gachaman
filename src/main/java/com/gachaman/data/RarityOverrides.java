@@ -1,11 +1,14 @@
 package com.gachaman.data;
 
 import com.gachaman.model.Rarity;
+import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javax.inject.Inject;
+import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -21,11 +24,13 @@ import lombok.extern.slf4j.Slf4j;
  * boss, set, tier and quest tables already use.
  */
 @Slf4j
+@Singleton
 public final class RarityOverrides {
-	private static final Map<String, Rarity> OVERRIDES = index();
+	private final Map<String, Rarity> overrides;
 
-	private static Map<String, Rarity> index() {
-		Map<String, List<String>> byRarity = DataJson.load("rarity-overrides",
+	@Inject
+	RarityOverrides(Gson gson) {
+		Map<String, List<String>> byRarity = DataJson.load(gson, "rarity-overrides",
 			new TypeToken<Map<String, List<String>>>() {
 			}.getType(), Collections.emptyMap());
 		Map<String, Rarity> index = new HashMap<>();
@@ -47,13 +52,10 @@ public final class RarityOverrides {
 				index.put(name, rarity);
 			}
 		}
-		return Collections.unmodifiableMap(index);
+		this.overrides = Collections.unmodifiableMap(index);
 	}
 
-	private RarityOverrides() {
-	}
-
-	public static Rarity lookup(String cleanName) {
-		return OVERRIDES.get(cleanName);
+	public Rarity lookup(String cleanName) {
+		return overrides.get(cleanName);
 	}
 }

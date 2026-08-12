@@ -1,5 +1,7 @@
 package com.gachaman.ui.panel;
 
+import static com.gachaman.ui.panel.GachamanPanel.measuredWidth;
+import static com.gachaman.ui.panel.GachamanPanel.textBlock;
 import com.gachaman.model.Rarity;
 import com.gachaman.model.Variant;
 import com.gachaman.ui.CardRenderer;
@@ -20,6 +22,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
+import com.google.gson.Gson;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.Box;
@@ -28,14 +31,12 @@ import javax.swing.ImageIcon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JTextArea;
 import javax.swing.JViewport;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
-import net.runelite.client.ui.PluginPanel;
 
 /**
  * How-to-play reference for the gamemode. Content is entirely static text and
@@ -47,13 +48,6 @@ import net.runelite.client.ui.PluginPanel;
  */
 @Singleton
 public class HelpTab extends JPanel {
-	/**
-	 * Pre-realization fallback only: the 242px non-wrapped PluginPanel minus
-	 * its 6px borders and a full stock 17px scrollbar — the NARROWEST the
-	 * viewport can plausibly be, so nothing clips even before measuring.
-	 */
-	private static final int FALLBACK_WIDTH = PluginPanel.PANEL_WIDTH + PluginPanel.SCROLLBAR_WIDTH
-		- 2 * PluginPanel.BORDER_OFFSET - PluginPanel.SCROLLBAR_WIDTH;
 
 	/** Horizontal padding a GachamanPanel.section() adds (8px borders each side). */
 	private static final int SECTION_PADDING = 16;
@@ -73,8 +67,11 @@ public class HelpTab extends JPanel {
 	private int builtWidth = -1;
 	private boolean viewportHooked;
 
+	private final Gson gson;
+
 	@Inject
-	public HelpTab() {
+	public HelpTab(Gson gson) {
+		this.gson = gson;
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		setOpaque(false);
 		setBorder(new EmptyBorder(0, 0, 6, 0));
@@ -82,7 +79,7 @@ public class HelpTab extends JPanel {
 
 	/** Rebuilds only when the measured viewport width changed; no-op otherwise. */
 	void rebuild() {
-		int width = measuredWidth();
+		int width = measuredWidth(this);
 		if (width == builtWidth) {
 			return;
 		}
@@ -93,19 +90,7 @@ public class HelpTab extends JPanel {
 		repaint();
 	}
 
-	/** The scroll viewport's ACTUAL extent width — the only trustworthy budget. */
-	private int measuredWidth() {
-		Container ancestor = SwingUtilities.getAncestorOfClass(JViewport.class, this);
-		if (ancestor instanceof JViewport) {
-			int width = ((JViewport) ancestor).getExtentSize().width;
-			if (width > 0) {
-				return width;
-			}
-		}
-		return FALLBACK_WIDTH;
-	}
-
-	@Override
+@Override
 	public void addNotify() {
 		super.addNotify();
 		Container ancestor = SwingUtilities.getAncestorOfClass(JViewport.class, this);
@@ -241,15 +226,15 @@ public class HelpTab extends JPanel {
 		List<com.google.gson.JsonElement> body;
 	}
 
-	private static Doc document;
+	private Doc document;
 
-	private static Doc document() {
+	private Doc document() {
 		if (document == null) {
 			Doc loaded = null;
 			try (InputStream in = HelpTab.class.getResourceAsStream(
 				"/com/gachaman/ui/help.json")) {
 				if (in != null) {
-					loaded = new com.google.gson.Gson().fromJson(new InputStreamReader(
+					loaded = gson.fromJson(new InputStreamReader(
 						in, StandardCharsets.UTF_8), Doc.class);
 				}
 			}
@@ -273,32 +258,7 @@ public class HelpTab extends JPanel {
 		section.add(Box.createVerticalStrut(4));
 	}
 
-	/**
-	 * Wrap-to-width body text WITHOUT the HTML renderer: Swing's CSS width is
-	 * a preferred span, not a hard cap — stretched labels re-wrap wider than
-	 * asked and then clip under the scrollbar. A JTextArea wraps at exactly
-	 * the width it is given; sizing it up front makes its preferred height
-	 * correct before the BoxLayout ever asks.
-	 */
-	private static JTextArea textBlock(String text, Color color, int width) {
-		JTextArea area = new JTextArea(text);
-		area.setEditable(false);
-		area.setFocusable(false);
-		area.setOpaque(false);
-		area.setLineWrap(true);
-		area.setWrapStyleWord(true);
-		area.setBorder(null);
-		area.setForeground(color);
-		area.setFont(FontManager.getRunescapeSmallFont());
-		area.setAlignmentX(Component.LEFT_ALIGNMENT);
-		area.setSize(width, Short.MAX_VALUE);
-		Dimension pref = area.getPreferredSize();
-		area.setPreferredSize(new Dimension(width, pref.height));
-		area.setMaximumSize(new Dimension(width, pref.height));
-		return area;
-	}
-
-	/**
+/**
 	 * A left-aligned flow row whose height never stretches in the BoxLayout.
 	 *
 	 * <p>Takes the SECTION-OUTER width, like {@link #paragraph}, and takes the

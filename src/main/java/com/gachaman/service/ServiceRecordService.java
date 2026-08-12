@@ -1,10 +1,7 @@
 package com.gachaman.service;
 
-import com.gachaman.model.ActiveTask;
 import com.gachaman.model.GachaState;
 import com.gachaman.model.OwnedCard;
-import com.gachaman.model.SideBet;
-import com.gachaman.model.TaskOffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;

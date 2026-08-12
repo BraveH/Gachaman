@@ -132,6 +132,7 @@ public class ChestService {
 	private final CeremonyBus ceremonyBus;
 	private final GachaRng rng;
 	private final com.google.gson.Gson gson;
+	private final RangedMetal.Lookup rangedMetal;
 	@Nullable
 	private final Client client;
 	@Nullable
@@ -639,7 +640,7 @@ public class ChestService {
 		}
 		switch (ladder) {
 			case "metal":
-				RangedMetal ranged = RangedMetal.of(card.getName());
+				RangedMetal ranged = rangedMetal.of(card.getName());
 				if (ranged != null) {
 					// Arrows, bolts, javelins, crossbows, darts, knives and thrownaxes wear a
 					// metal prefix but are Ranged gear, and mostly not on the ladder's numbers
@@ -648,7 +649,7 @@ public class ChestService {
 					return Tuning.withinReach(
 						client.getRealSkillLevel(Skill.RANGED),
 						client.getRealSkillLevel(Skill.DEFENCE),
-						ranged.reqRangedLevel(card.getTierKey(),
+						rangedMetal.reqRangedLevel(ranged, card.getTierKey(),
 							tierTable.reqLevelOf(card.getTierKey())),
 						1,
 						allowHeadroom ? Tuning.ROLL_LEVEL_HEADROOM : 0);

@@ -11,12 +11,13 @@ import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Container;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
-import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Graphics;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
@@ -55,6 +56,8 @@ import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JSlider;
 import javax.swing.JSpinner;
+import javax.swing.JTextArea;
+import javax.swing.JViewport;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
@@ -962,5 +965,58 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		public void paintFocus(Graphics g) {
 			// no focus ring
 		}
+	}
+
+	/**
+	 * Pre-realization fallback only: the 242px non-wrapped PluginPanel minus
+	 * its 6px borders and a full stock 17px scrollbar — the NARROWEST the
+	 * viewport can plausibly be, so nothing clips even before measuring.
+	 */
+	static final int FALLBACK_WIDTH = PluginPanel.PANEL_WIDTH + PluginPanel.SCROLLBAR_WIDTH
+		- 2 * PluginPanel.BORDER_OFFSET - PluginPanel.SCROLLBAR_WIDTH;
+
+	static String htmlWrap(String body) {
+		return "<html><body>" + body + "</body></html>";
+	}
+
+	static String hex(Color color) {
+		return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
+	}
+
+	/**
+	 * Wrap-to-width body text WITHOUT the HTML renderer: Swing's CSS width is
+	 * a preferred span, not a hard cap — stretched labels re-wrap wider than
+	 * asked and then clip under the scrollbar. A JTextArea wraps at exactly
+	 * the width it is given; sizing it up front makes its preferred height
+	 * correct before the BoxLayout ever asks.
+	 */
+	static JTextArea textBlock(String text, Color color, int width) {
+		JTextArea area = new JTextArea(text);
+		area.setEditable(false);
+		area.setFocusable(false);
+		area.setOpaque(false);
+		area.setLineWrap(true);
+		area.setWrapStyleWord(true);
+		area.setBorder(null);
+		area.setForeground(color);
+		area.setFont(FontManager.getRunescapeSmallFont());
+		area.setAlignmentX(Component.LEFT_ALIGNMENT);
+		area.setSize(width, Short.MAX_VALUE);
+		Dimension pref = area.getPreferredSize();
+		area.setPreferredSize(new Dimension(width, pref.height));
+		area.setMaximumSize(new Dimension(width, pref.height));
+		return area;
+	}
+
+	/** The scroll viewport's ACTUAL extent width — the only trustworthy budget. */
+	static int measuredWidth(JComponent panel) {
+		Container ancestor = SwingUtilities.getAncestorOfClass(JViewport.class, panel);
+		if (ancestor instanceof JViewport) {
+			int width = ((JViewport) ancestor).getExtentSize().width;
+			if (width > 0) {
+				return width;
+			}
+		}
+		return FALLBACK_WIDTH;
 	}
 }

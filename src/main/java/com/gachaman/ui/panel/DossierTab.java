@@ -1,5 +1,7 @@
 package com.gachaman.ui.panel;
 
+import static com.gachaman.ui.panel.GachamanPanel.hex;
+import static com.gachaman.ui.panel.GachamanPanel.htmlWrap;
 import com.gachaman.Tuning;
 import com.gachaman.model.AttackStyle;
 import com.gachaman.model.ContractRecord;
@@ -253,15 +255,7 @@ public class DossierTab extends JPanel {
 		}
 	}
 
-	private static String htmlWrap(String body) {
-		return "<html><body>" + body + "</body></html>";
-	}
-
-	private static String hex(Color color) {
-		return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
-	}
-
-	static String formatDuration(long ms) {
+static String formatDuration(long ms) {
 		long totalSeconds = Math.max(0, ms) / 1000;
 		long minutes = totalSeconds / 60;
 		long seconds = totalSeconds % 60;

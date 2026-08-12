@@ -21,19 +21,22 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public final class DataJson {
-	private static final Gson GSON = new Gson();
-
 	private DataJson() {
 	}
 
-	public static <T> T load(String name, Type type, T fallback) {
+	/**
+	 * @param gson the CLIENT's Gson, injected. Never build a fresh one — the
+	 *             Plugin Hub forbids it, and the client's instance carries the
+	 *             type adapters RuneLite's own serialization relies on.
+	 */
+	public static <T> T load(Gson gson, String name, Type type, T fallback) {
 		try (InputStream in = DataJson.class.getResourceAsStream(
 			"/com/gachaman/data/" + name + ".json")) {
 			if (in == null) {
 				log.warn("{}.json missing — falling back", name);
 				return fallback;
 			}
-			T value = GSON.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), type);
+			T value = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), type);
 			return value == null ? fallback : value;
 		}
 		catch (Exception e) {

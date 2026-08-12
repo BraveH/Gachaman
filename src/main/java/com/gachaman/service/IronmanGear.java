@@ -1,10 +1,13 @@
 package com.gachaman.service;
 
 import com.gachaman.data.DataJson;
+import com.google.gson.Gson;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import javax.inject.Inject;
+import javax.inject.Singleton;
 import net.runelite.api.Client;
 import net.runelite.api.gameval.VarbitID;
 
@@ -18,6 +21,7 @@ import net.runelite.api.gameval.VarbitID;
  * {@code client.getAccountType()} because unranked group ironman (value 6)
  * postdates RuneLite's AccountType enum, which stops at 5.
  */
+@Singleton
 public final class IronmanGear {
 	/** Account type varbit value for a non-ironman account. */
 	public static final int NORMAL = 0;
@@ -31,13 +35,14 @@ public final class IronmanGear {
 		List<List<String>> sets = Collections.emptyList();
 	}
 
-	private static final List<List<String>> SETS =
-		DataJson.load("ironman-gear", Table.class, new Table()).sets;
+	private final List<List<String>> sets;
+
+	@Inject
+	IronmanGear(Gson gson) {
+		this.sets = DataJson.load(gson, "ironman-gear", Table.class, new Table()).sets;
+	}
 
 	private static final int BODY = 1;
-
-	private IronmanGear() {
-	}
 
 	/** The account type varbit, or {@link #NORMAL} if it cannot be read. */
 	public static int accountType(Client client) {
@@ -57,15 +62,15 @@ public final class IronmanGear {
 	 * normal account, and empty for any future account type this build has
 	 * never heard of (granting nothing beats granting the wrong set).
 	 */
-	public static List<String> cardNames(int accountType) {
-		if (accountType <= NORMAL || accountType >= SETS.size()) {
+	public List<String> cardNames(int accountType) {
+		if (accountType <= NORMAL || accountType >= sets.size()) {
 			return Collections.emptyList();
 		}
-		return Collections.unmodifiableList(SETS.get(accountType));
+		return Collections.unmodifiableList(sets.get(accountType));
 	}
 
 	/** The platebody of this account's set, or null if there is none to assign. */
-	public static String bodyCardName(int accountType) {
+	public String bodyCardName(int accountType) {
 		List<String> set = cardNames(accountType);
 		return set.isEmpty() ? null : set.get(BODY);
 	}
@@ -75,9 +80,9 @@ public final class IronmanGear {
 	 * uses this to identify starter cards an account should never have been
 	 * given, so it must stay exhaustive.
 	 */
-	public static Set<String> allCardNames() {
+	public Set<String> allCardNames() {
 		Set<String> all = new LinkedHashSet<>();
-		for (List<String> set : SETS) {
+		for (List<String> set : sets) {
 			all.addAll(set);
 		}
 		return Collections.unmodifiableSet(all);

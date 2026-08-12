@@ -2,6 +2,7 @@ package com.gachaman.service;
 
 import com.gachaman.data.DataJson;
 import com.gachaman.model.AttackStyle;
+import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -105,17 +106,20 @@ public class StyleTracker {
 	 * neverJudge subset that pays Magic XP, whose drop must never grant a
 	 * pardon.
 	 */
-	private static final Map<String, Set<Integer>> ANIMS = DataJson.load("attack-anims",
-		new TypeToken<Map<String, Set<Integer>>>() {
-		}.getType(), Collections.emptyMap());
+	private Map<String, Set<Integer>> animGroups;
 
-	private static Set<Integer> anims(String group) {
-		return ANIMS.getOrDefault(group, Collections.emptySet());
+	/**
+	 * Loaded on first judgement rather than at class-init: the Gson is
+	 * injected, so it does not exist until Guice has built this service.
+	 */
+	private Set<Integer> anims(String group) {
+		if (animGroups == null) {
+			animGroups = DataJson.load(gson, "attack-anims",
+				new TypeToken<Map<String, Set<Integer>>>() {
+				}.getType(), Collections.emptyMap());
+		}
+		return animGroups.getOrDefault(group, Collections.emptySet());
 	}
-
-	private static final Set<Integer> OFFENSIVE_MAGIC_ANIMS = anims("offensiveMagic");
-	private static final Set<Integer> NEVER_JUDGE_ANIMS = anims("neverJudge");
-	private static final Set<Integer> MAGIC_UTILITY_ANIMS = anims("magicUtility");
 
 	public interface AttackListener {
 		/** One offensive action, judged at its own tick. */
@@ -130,6 +134,7 @@ public class StyleTracker {
 	}
 
 	private final Client client;
+	private final Gson gson;
 	private final List<AttackListener> listeners = new ArrayList<>();
 
 	private int tick;
@@ -297,16 +302,16 @@ public class StyleTracker {
 		if (animation == -1 || interacting == null) {
 			return;
 		}
-		if (NEVER_JUDGE_ANIMS.contains(animation)) {
+		if (anims("neverJudge").contains(animation)) {
 			// utility cast / consumable / block pose — not an attack, and the
 			// pending Cast mark (if any) survives untouched
-			if (MAGIC_UTILITY_ANIMS.contains(animation)) {
+			if (anims("magicUtility").contains(animation)) {
 				lastUtilityMagicTick = tick;
 			}
 			return;
 		}
 		boolean markMatch = castMarkActiveOn(interacting);
-		if (OFFENSIVE_MAGIC_ANIMS.contains(animation)) {
+		if (anims("offensiveMagic").contains(animation)) {
 			// unambiguous spell cast: magic no matter the stance, and provably
 			// not a block animation — so it is judged even inside the damage
 			// window below

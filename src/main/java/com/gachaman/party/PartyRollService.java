@@ -7,7 +7,6 @@ import com.gachaman.model.ActiveTask;
 import com.gachaman.model.AttackStyle;
 import com.gachaman.model.GachaState;
 import com.gachaman.model.PatronRecord;
-import com.gachaman.model.SideBet;
 import com.gachaman.model.TaskOffer;
 import com.gachaman.service.AccountKey;
 import com.gachaman.service.AccountKeyService;

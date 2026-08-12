@@ -11,7 +11,7 @@ public class RollMathTest
 	private ChestService serviceWithSeed(long seed)
 	{
 		// only rollRarity is exercised; collaborators may be null
-		return new ChestService(null, null, null, null, new GachaRng(seed), new com.google.gson.Gson(), null, null);
+		return new ChestService(null, null, null, null, new GachaRng(seed), new com.google.gson.Gson(), null, null, null);
 	}
 
 	@Test

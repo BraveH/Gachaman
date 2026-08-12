@@ -9,6 +9,9 @@ import javax.imageio.ImageIO;
 
 /** Procedural ceremony vs the pre-rendered player, at exact frame times. */
 public final class CeremonyCmp {
+	/** Injected in the plugin; a comparison harness has no injector. */
+	private static final CeremonyPlayer PLAYER = new CeremonyPlayer(new com.google.gson.Gson());
+
 	public static void main(String[] a) throws Exception {
 		File dir = new File(a[0]);
 		dir.mkdirs();
@@ -18,7 +21,7 @@ public final class CeremonyCmp {
 		int CH = 800;
 		int n = 0;
 		for (Tuning.Chest tier : Tuning.Chest.values()) {
-			int frames = CeremonyPlayer.frames(tier);
+			int frames = PLAYER.frames(tier);
 			for (int f : new int[]{0, frames / 4, frames / 2, frames * 3 / 4, frames - 1}) {
 				long el = f * 1000L / 20L;
 				BufferedImage proc = new BufferedImage(CW, CH, BufferedImage.TYPE_INT_ARGB);
@@ -37,7 +40,7 @@ public final class CeremonyCmp {
 
 				BufferedImage spr = new BufferedImage(CW, CH, BufferedImage.TYPE_INT_ARGB);
 				g = spr.createGraphics();
-				CeremonyPlayer.draw(g, CW / 2, CH / 2, W, H, tier, f, 1f);
+				PLAYER.draw(g, CW / 2, CH / 2, W, H, tier, f, 1f);
 				g.dispose();
 				ImageIO.write(spr, "png", new File(dir, tier.name() + "_" + f + "_spr.png"));
 				n++;

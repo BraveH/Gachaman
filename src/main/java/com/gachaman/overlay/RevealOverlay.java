@@ -210,6 +210,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 	private final CardDatabase cardDatabase;
 	private final CardImageService cardImageService;
 	private final ChatMessageManager chatMessageManager;
+	private final CeremonyPlayer ceremonyPlayer;
 
 	/**
 	 * Guards all ceremony state. LOCK ORDER: CeremonyBus (and other services)
@@ -287,8 +288,10 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 	@Inject
 	public RevealOverlay(Client client, CeremonyBus ceremonyBus, ChestService chestService,
 		TaskService taskService, GachaStateService stateService, CardDatabase cardDatabase,
-		CardImageService cardImageService, ChatMessageManager chatMessageManager) {
+		CardImageService cardImageService, ChatMessageManager chatMessageManager,
+		CeremonyPlayer ceremonyPlayer) {
 		this.client = client;
+		this.ceremonyPlayer = ceremonyPlayer;
 		this.ceremonyBus = ceremonyBus;
 		this.chestService = chestService;
 		this.taskService = taskService;
@@ -1243,8 +1246,8 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 		// one pre-rendered frame carries the whole beat - body, lid, chains,
 		// padlock, strain, seam leak, glow and motes. The shakes stay here as
 		// translations, which is exactly why the ceremony bakes at all.
-		CeremonyPlayer.draw(gc, dx, dy, chestW, chestH, tier,
-			CeremonyPlayer.frameAt(tier, el), 1f);
+		ceremonyPlayer.draw(gc, dx, dy, chestW, chestH, tier,
+			ceremonyPlayer.frameAt(tier, el), 1f);
 		gc.dispose();
 
 		if (flash > 0.02f) {
@@ -1273,9 +1276,9 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 		// the jackpot reveal crossfades the two tiers' closed frames, which is a
 		// truer upgrade than crossfading the trim colour alone ever was
 		float mix = (float) clamp01((el - 700) / 500.0);
-		CeremonyPlayer.draw(g, dx, dy, chestW, chestH, chestResult.getPurchasedTier(), 0, 1f);
+		ceremonyPlayer.draw(g, dx, dy, chestW, chestH, chestResult.getPurchasedTier(), 0, 1f);
 		if (mix > 0.01f) {
-			CeremonyPlayer.draw(g, dx, dy, chestW, chestH, chestResult.getEffectiveTier(), 0, mix);
+			ceremonyPlayer.draw(g, dx, dy, chestW, chestH, chestResult.getEffectiveTier(), 0, mix);
 		}
 
 		if (el >= 750 && el < 1250) {
@@ -1307,8 +1310,8 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 			// openT must be exactly 1.0 here: values above 1 add blast lift,
 			// which detaches the lid from the hinge while the chest slides
 			// (the lid angle is clamped at 1.0 either way)
-			CeremonyPlayer.draw(g, cx, chestCy, chestW, chestH, chestResult.getEffectiveTier(),
-				CeremonyPlayer.lastFrame(chestResult.getEffectiveTier()), 1f);
+			ceremonyPlayer.draw(g, cx, chestCy, chestW, chestH, chestResult.getEffectiveTier(),
+				ceremonyPlayer.lastFrame(chestResult.getEffectiveTier()), 1f);
 			g.setComposite(old);
 		}
 

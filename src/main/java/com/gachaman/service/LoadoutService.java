@@ -37,6 +37,7 @@ public class LoadoutService {
 	private final GachaStateService stateService;
 	private final CardDatabase cardDatabase;
 	private final TierTable tierTable;
+	private final RangedMetal.Lookup rangedMetal;
 
 	/** Optional hook fired after a successful assignment (Firsts + Timeline). */
 	@Nullable
@@ -199,7 +200,7 @@ public class LoadoutService {
 				// Rune arrows and adamant darts sit on the metal ladder but are Ranged gear.
 				// Calling them melee sorted them into the non-matching half of a ranger's own
 				// loadout picker. Holograms carry no item name, so they keep the melee default.
-				return RangedMetal.of(name) != null
+				return rangedMetal.of(name) != null
 					? AttackStyle.RANGED
 					: AttackStyle.MELEE;
 			case "dhide":

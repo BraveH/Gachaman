@@ -7,14 +7,11 @@ import com.gachaman.data.MonsterTable;
 import com.gachaman.data.QuestMonsterTable;
 import com.gachaman.data.SetTable;
 import com.gachaman.data.TierTable;
-import com.gachaman.model.ActiveTask;
 import com.gachaman.model.AttackStyle;
 import com.gachaman.model.CardWear;
 import com.gachaman.model.GachaState;
 import com.gachaman.model.GearSlot;
 import com.gachaman.model.OwnedCard;
-import com.gachaman.model.SideBet;
-import com.gachaman.model.TaskOffer;
 import com.gachaman.model.Variant;
 import com.gachaman.overlay.ForbiddenItemOverlay;
 import com.gachaman.overlay.KillJuiceOverlay;
@@ -207,6 +204,8 @@ public class GachamanPlugin extends Plugin {
 	private ServiceRecordService serviceRecordService;
 	@Inject
 	private SlayerAlignment slayerAlignment;
+	@Inject
+	private IronmanGear ironmanGear;
 
 	// overlays & UI
 	@Inject
@@ -717,7 +716,7 @@ public class GachamanPlugin extends Plugin {
 		// missing; names absent from the card DB are skipped with a log line)
 		List<String> starters = new ArrayList<>(Arrays.asList(
 			"Training sword", "Training shield", "Training bow", "Training arrows"));
-		starters.addAll(IronmanGear.cardNames(accountType));
+		starters.addAll(ironmanGear.cardNames(accountType));
 		Set<Integer> ownedIds = new HashSet<>();
 		for (OwnedCard owned : state.getOwnedCards()) {
 			if (!owned.isHologram()) {
@@ -751,7 +750,7 @@ public class GachamanPlugin extends Plugin {
 		// an ironman's own platebody fills the starter body slot; a normal
 		// account has no identity armour, so its body slot simply starts empty
 		autoAssignStarter(GearSlot.BODY,
-			IronmanGear.bodyCardName(accountType));
+			ironmanGear.bodyCardName(accountType));
 		autoAssignStarter(GearSlot.AMMO, "Training arrows");
 
 		// one-shot voucher grant (fresh and pre-existing saves alike): a free
@@ -779,9 +778,9 @@ public class GachamanPlugin extends Plugin {
 			return;
 		}
 		Set<String> mine =
-			new HashSet<>(IronmanGear.cardNames(accountType));
+			new HashSet<>(ironmanGear.cardNames(accountType));
 		Set<Integer> foreignIds = new HashSet<>();
-		for (String name : IronmanGear.allCardNames()) {
+		for (String name : ironmanGear.allCardNames()) {
 			if (mine.contains(name)) {
 				continue;
 			}

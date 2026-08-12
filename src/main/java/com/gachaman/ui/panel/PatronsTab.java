@@ -1,5 +1,7 @@
 package com.gachaman.ui.panel;
 
+import static com.gachaman.ui.panel.GachamanPanel.hex;
+import static com.gachaman.ui.panel.GachamanPanel.htmlWrap;
 import com.gachaman.Tuning;
 import com.gachaman.model.GachaState;
 import com.gachaman.model.PatronRecord;
@@ -200,11 +202,4 @@ public class PatronsTab extends JPanel {
 		return (days / 365) + "y ago";
 	}
 
-	private static String htmlWrap(String body) {
-		return "<html><body>" + body + "</body></html>";
-	}
-
-	private static String hex(Color color) {
-		return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
-	}
 }

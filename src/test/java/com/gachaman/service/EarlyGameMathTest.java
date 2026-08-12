@@ -89,7 +89,7 @@ public class EarlyGameMathTest
 		Assert.assertEquals(0, odds[Rarity.LEGENDARY.ordinal()], 1e-9);
 		// structural guarantee: rollRarity can only ever land COMMON
 		ChestService service = new ChestService(null, null, null, null,
-			new GachaRng(42L), new com.google.gson.Gson(), null, null);
+			new GachaRng(42L), new com.google.gson.Gson(), null, null, null);
 		for (int i = 0; i < 50_000; i++)
 		{
 			Assert.assertEquals(Rarity.COMMON, service.rollRarity(odds, 0));
@@ -104,7 +104,7 @@ public class EarlyGameMathTest
 	public void shinyNearMissBandsBehave()
 	{
 		ChestService service = new ChestService(null, null, null, null,
-			new GachaRng(1234L), new com.google.gson.Gson(), null, null);
+			new GachaRng(1234L), new com.google.gson.Gson(), null, null, null);
 		List<CardDefinition> pool = new ArrayList<>();
 		pool.add(new CardDefinition(1, "Bronze scimitar", GearSlot.WEAPON, "bronze", 1,
 			"scimitar", Rarity.COMMON, Set.of(1), true));
@@ -143,7 +143,7 @@ public class EarlyGameMathTest
 		int n = 150_000;
 
 		ChestService single = new ChestService(null, null, null, null,
-			new GachaRng(9L), new com.google.gson.Gson(), null, null);
+			new GachaRng(9L), new com.google.gson.Gson(), null, null, null);
 		int shinySingle = 0;
 		for (int i = 0; i < n; i++)
 		{
@@ -154,7 +154,7 @@ public class EarlyGameMathTest
 			}
 		}
 		ChestService blessed = new ChestService(null, null, null, null,
-			new GachaRng(9L), new com.google.gson.Gson(), null, null);
+			new GachaRng(9L), new com.google.gson.Gson(), null, null, null);
 		int shinyBlessed = 0;
 		for (int i = 0; i < n; i++)
 		{
@@ -172,7 +172,7 @@ public class EarlyGameMathTest
 	public void unshinyEligibleCardsNeverSparkle()
 	{
 		ChestService service = new ChestService(null, null, null, null,
-			new GachaRng(5L), new com.google.gson.Gson(), null, null);
+			new GachaRng(5L), new com.google.gson.Gson(), null, null, null);
 		List<CardDefinition> pool = new ArrayList<>();
 		pool.add(new CardDefinition(2, "Training sword", GearSlot.WEAPON, null, 0,
 			null, Rarity.COMMON, Set.of(2), false));

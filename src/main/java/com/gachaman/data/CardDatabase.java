@@ -58,6 +58,7 @@ public class CardDatabase {
 	private final ItemManager itemManager;
 	private final ClientThread clientThread;
 	private final Gson gson;
+	private final RarityOverrides rarityOverrides;
 
 	@Getter
 	private volatile boolean ready;
@@ -272,7 +273,7 @@ public class CardDatabase {
 			TreeSet<Integer> ids = (TreeSet<Integer>) p[5];
 			int power = (Integer) p[6];
 
-			Rarity rarity = RarityOverrides.lookup(clean);
+			Rarity rarity = rarityOverrides.lookup(clean);
 			if (rarity == null) {
 				rarity = tierKey != null ? rarityForRank(rank) : rarityForPower(power);
 			}

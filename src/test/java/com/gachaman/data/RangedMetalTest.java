@@ -17,6 +17,12 @@ import org.junit.Test;
  */
 public class RangedMetalTest
 {
+	/**
+	 * The table is injected in the plugin (the Plugin Hub forbids a fresh Gson
+	 * in shipped code); a test builds its own because there is no injector here.
+	 */
+	private static final RangedMetal.Lookup METAL = new RangedMetal.Lookup(new Gson());
+
 	private TierTable table()
 	{
 		return TierTable.load(new Gson());
@@ -26,26 +32,26 @@ public class RangedMetalTest
 	@Test
 	public void metalPrefixedRangedGearIsRecognised()
 	{
-		Assert.assertEquals(RangedMetal.ARROW, RangedMetal.of("Rune arrow"));
-		Assert.assertEquals(RangedMetal.DART, RangedMetal.of("Adamant dart"));
-		Assert.assertEquals(RangedMetal.KNIFE, RangedMetal.of("Mithril knife"));
-		Assert.assertEquals(RangedMetal.BOLTS, RangedMetal.of("Bronze bolts"));
-		Assert.assertEquals(RangedMetal.CROSSBOW, RangedMetal.of("Rune crossbow"));
-		Assert.assertEquals(RangedMetal.JAVELIN, RangedMetal.of("Adamant javelin"));
-		Assert.assertEquals(RangedMetal.THROWNAXE, RangedMetal.of("Iron thrownaxe"));
+		Assert.assertEquals(RangedMetal.ARROW, METAL.of("Rune arrow"));
+		Assert.assertEquals(RangedMetal.DART, METAL.of("Adamant dart"));
+		Assert.assertEquals(RangedMetal.KNIFE, METAL.of("Mithril knife"));
+		Assert.assertEquals(RangedMetal.BOLTS, METAL.of("Bronze bolts"));
+		Assert.assertEquals(RangedMetal.CROSSBOW, METAL.of("Rune crossbow"));
+		Assert.assertEquals(RangedMetal.JAVELIN, METAL.of("Adamant javelin"));
+		Assert.assertEquals(RangedMetal.THROWNAXE, METAL.of("Iron thrownaxe"));
 	}
 
 	/** Both spellings ship in-game — "Rune arrow" is singular, "Bronze bolts" is plural. */
 	@Test
 	public void bothSingularAndPluralHeadNounsMatch()
 	{
-		Assert.assertEquals(RangedMetal.ARROW, RangedMetal.of("Rune arrows"));
-		Assert.assertEquals(RangedMetal.BOLTS, RangedMetal.of("Runite bolt"));
-		Assert.assertEquals(RangedMetal.KNIFE, RangedMetal.of("Rune knives"));
-		Assert.assertEquals(RangedMetal.DART, RangedMetal.of("Rune darts"));
-		Assert.assertEquals(RangedMetal.JAVELIN, RangedMetal.of("Rune javelins"));
-		Assert.assertEquals(RangedMetal.THROWNAXE, RangedMetal.of("Rune thrownaxes"));
-		Assert.assertEquals(RangedMetal.CROSSBOW, RangedMetal.of("Rune crossbows"));
+		Assert.assertEquals(RangedMetal.ARROW, METAL.of("Rune arrows"));
+		Assert.assertEquals(RangedMetal.BOLTS, METAL.of("Runite bolt"));
+		Assert.assertEquals(RangedMetal.KNIFE, METAL.of("Rune knives"));
+		Assert.assertEquals(RangedMetal.DART, METAL.of("Rune darts"));
+		Assert.assertEquals(RangedMetal.JAVELIN, METAL.of("Rune javelins"));
+		Assert.assertEquals(RangedMetal.THROWNAXE, METAL.of("Rune thrownaxes"));
+		Assert.assertEquals(RangedMetal.CROSSBOW, METAL.of("Rune crossbows"));
 	}
 
 	/**
@@ -60,7 +66,7 @@ public class RangedMetalTest
 			"Steel battleaxe", "Granite maul", "Iron boots", "White platelegs"};
 		for (String name : melee)
 		{
-			Assert.assertNull(name + " must not read as ranged gear", RangedMetal.of(name));
+			Assert.assertNull(name + " must not read as ranged gear", METAL.of(name));
 		}
 	}
 
@@ -68,10 +74,10 @@ public class RangedMetalTest
 	@Test
 	public void degenerateNamesAreSafe()
 	{
-		Assert.assertNull(RangedMetal.of(null));
-		Assert.assertNull(RangedMetal.of(""));
-		Assert.assertNull(RangedMetal.of("Arrow"));   // no prefix at all
-		Assert.assertNull(RangedMetal.of("Seercull"));
+		Assert.assertNull(METAL.of(null));
+		Assert.assertNull(METAL.of(""));
+		Assert.assertNull(METAL.of("Arrow"));   // no prefix at all
+		Assert.assertNull(METAL.of("Seercull"));
 	}
 
 	/**
@@ -81,9 +87,9 @@ public class RangedMetalTest
 	@Test
 	public void poisonedAndEnchantedVariantsAreAlreadyCleaned()
 	{
-		Assert.assertEquals(RangedMetal.DART, RangedMetal.of(CardDatabase.cleanName("Rune dart(p++)")));
-		Assert.assertEquals(RangedMetal.KNIFE, RangedMetal.of(CardDatabase.cleanName("Adamant knife(p+)")));
-		Assert.assertEquals(RangedMetal.BOLTS, RangedMetal.of(CardDatabase.cleanName("Runite bolts (e)")));
+		Assert.assertEquals(RangedMetal.DART, METAL.of(CardDatabase.cleanName("Rune dart(p++)")));
+		Assert.assertEquals(RangedMetal.KNIFE, METAL.of(CardDatabase.cleanName("Adamant knife(p+)")));
+		Assert.assertEquals(RangedMetal.BOLTS, METAL.of(CardDatabase.cleanName("Runite bolts (e)")));
 	}
 
 	// --- the numbers, pinned against the wiki ---
@@ -97,9 +103,9 @@ public class RangedMetalTest
 		for (String tier : tiers)
 		{
 			Assert.assertEquals(tier + " dart", t.reqLevelOf(tier),
-				RangedMetal.DART.reqRangedLevel(tier, 99));
+				METAL.reqRangedLevel(RangedMetal.DART, tier, 99));
 			Assert.assertEquals(tier + " knife", t.reqLevelOf(tier),
-				RangedMetal.KNIFE.reqRangedLevel(tier, 99));
+				METAL.reqRangedLevel(RangedMetal.KNIFE, tier, 99));
 		}
 	}
 
@@ -110,19 +116,19 @@ public class RangedMetalTest
 	@Test
 	public void crossbowsAndBoltsDivergeFromTheLadder()
 	{
-		Assert.assertEquals(1, RangedMetal.CROSSBOW.reqRangedLevel("bronze", 99));
-		Assert.assertEquals(26, RangedMetal.CROSSBOW.reqRangedLevel("iron", 99));
-		Assert.assertEquals(31, RangedMetal.CROSSBOW.reqRangedLevel("steel", 99));
-		Assert.assertEquals(36, RangedMetal.CROSSBOW.reqRangedLevel("mithril", 99));
-		Assert.assertEquals(46, RangedMetal.CROSSBOW.reqRangedLevel("adamant", 99));
-		Assert.assertEquals(61, RangedMetal.CROSSBOW.reqRangedLevel("rune", 99));
-		Assert.assertEquals(64, RangedMetal.CROSSBOW.reqRangedLevel("dragon", 99));
+		Assert.assertEquals(1, METAL.reqRangedLevel(RangedMetal.CROSSBOW, "bronze", 99));
+		Assert.assertEquals(26, METAL.reqRangedLevel(RangedMetal.CROSSBOW, "iron", 99));
+		Assert.assertEquals(31, METAL.reqRangedLevel(RangedMetal.CROSSBOW, "steel", 99));
+		Assert.assertEquals(36, METAL.reqRangedLevel(RangedMetal.CROSSBOW, "mithril", 99));
+		Assert.assertEquals(46, METAL.reqRangedLevel(RangedMetal.CROSSBOW, "adamant", 99));
+		Assert.assertEquals(61, METAL.reqRangedLevel(RangedMetal.CROSSBOW, "rune", 99));
+		Assert.assertEquals(64, METAL.reqRangedLevel(RangedMetal.CROSSBOW, "dragon", 99));
 		// bolts are gated by their launcher, so the two families read identically
 		for (String tier : new String[]{"bronze", "iron", "steel", "mithril", "adamant", "rune", "dragon"})
 		{
 			Assert.assertEquals(tier + " bolts track the crossbow",
-				RangedMetal.CROSSBOW.reqRangedLevel(tier, 99),
-				RangedMetal.BOLTS.reqRangedLevel(tier, 99));
+				METAL.reqRangedLevel(RangedMetal.CROSSBOW, tier, 99),
+				METAL.reqRangedLevel(RangedMetal.BOLTS, tier, 99));
 		}
 	}
 
@@ -132,7 +138,7 @@ public class RangedMetalTest
 	{
 		for (String tier : new String[]{"bronze", "iron", "steel", "mithril", "adamant", "rune", "dragon"})
 		{
-			Assert.assertEquals(tier + " javelin", 65, RangedMetal.JAVELIN.reqRangedLevel(tier, 99));
+			Assert.assertEquals(tier + " javelin", 65, METAL.reqRangedLevel(RangedMetal.JAVELIN, tier, 99));
 		}
 	}
 
@@ -140,8 +146,8 @@ public class RangedMetalTest
 	@Test
 	public void dragonThrownaxeIsSixtyOne()
 	{
-		Assert.assertEquals(61, RangedMetal.THROWNAXE.reqRangedLevel("dragon", 99));
-		Assert.assertEquals(60, RangedMetal.DART.reqRangedLevel("dragon", 99));
+		Assert.assertEquals(61, METAL.reqRangedLevel(RangedMetal.THROWNAXE, "dragon", 99));
+		Assert.assertEquals(60, METAL.reqRangedLevel(RangedMetal.DART, "dragon", 99));
 	}
 
 	/**
@@ -152,16 +158,16 @@ public class RangedMetalTest
 	@Test
 	public void absentMetalsFallBackInsteadOfOpeningUp()
 	{
-		Assert.assertEquals(10, RangedMetal.DART.reqRangedLevel("black", 99));
-		Assert.assertEquals(10, RangedMetal.KNIFE.reqRangedLevel("black", 99));
-		Assert.assertEquals(99, RangedMetal.ARROW.reqRangedLevel("black", 99));
-		Assert.assertEquals(99, RangedMetal.BOLTS.reqRangedLevel("black", 99));
-		Assert.assertEquals(99, RangedMetal.THROWNAXE.reqRangedLevel("black", 99));
+		Assert.assertEquals(10, METAL.reqRangedLevel(RangedMetal.DART, "black", 99));
+		Assert.assertEquals(10, METAL.reqRangedLevel(RangedMetal.KNIFE, "black", 99));
+		Assert.assertEquals(99, METAL.reqRangedLevel(RangedMetal.ARROW, "black", 99));
+		Assert.assertEquals(99, METAL.reqRangedLevel(RangedMetal.BOLTS, "black", 99));
+		Assert.assertEquals(99, METAL.reqRangedLevel(RangedMetal.THROWNAXE, "black", 99));
 		// white and granite are melee-only tiers, and an unknown/null tier must not open either
-		Assert.assertEquals(99, RangedMetal.ARROW.reqRangedLevel("white", 99));
-		Assert.assertEquals(99, RangedMetal.ARROW.reqRangedLevel("granite", 99));
-		Assert.assertEquals(99, RangedMetal.ARROW.reqRangedLevel("no-such-tier", 99));
-		Assert.assertEquals(99, RangedMetal.ARROW.reqRangedLevel(null, 99));
+		Assert.assertEquals(99, METAL.reqRangedLevel(RangedMetal.ARROW, "white", 99));
+		Assert.assertEquals(99, METAL.reqRangedLevel(RangedMetal.ARROW, "granite", 99));
+		Assert.assertEquals(99, METAL.reqRangedLevel(RangedMetal.ARROW, "no-such-tier", 99));
+		Assert.assertEquals(99, METAL.reqRangedLevel(RangedMetal.ARROW, null, 99));
 	}
 
 	/** No ranged item may read as harder than the hardest thing in the game. */
@@ -173,7 +179,7 @@ public class RangedMetalTest
 			for (String tier : new String[]{"bronze", "iron", "steel", "black", "mithril",
 				"adamant", "rune", "dragon"})
 			{
-				int req = family.reqRangedLevel(tier, 1);
+				int req = METAL.reqRangedLevel(family, tier, 1);
 				Assert.assertTrue(family + "/" + tier + " = " + req, req >= 1 && req <= 99);
 			}
 		}
@@ -189,7 +195,7 @@ public class RangedMetalTest
 			for (int i = 1; i < ladder.length; i++)
 			{
 				Assert.assertTrue(family + ": " + ladder[i] + " must not be cheaper than " + ladder[i - 1],
-					family.reqRangedLevel(ladder[i], 1) >= family.reqRangedLevel(ladder[i - 1], 1));
+					METAL.reqRangedLevel(family, ladder[i], 1) >= METAL.reqRangedLevel(family, ladder[i - 1], 1));
 			}
 		}
 	}
@@ -206,11 +212,11 @@ public class RangedMetalTest
 	{
 		int h = Tuning.ROLL_LEVEL_HEADROOM;
 		Assert.assertTrue("adamant arrows at 40 Ranged", Tuning.withinReach(40, 1,
-			RangedMetal.ARROW.reqRangedLevel("adamant", 99), 1, h));
+			METAL.reqRangedLevel(RangedMetal.ARROW, "adamant", 99), 1, h));
 		Assert.assertTrue("rune arrows at 40 Ranged", Tuning.withinReach(40, 1,
-			RangedMetal.ARROW.reqRangedLevel("rune", 99), 1, h));
+			METAL.reqRangedLevel(RangedMetal.ARROW, "rune", 99), 1, h));
 		Assert.assertTrue("mithril knives at 40 Ranged", Tuning.withinReach(40, 1,
-			RangedMetal.KNIFE.reqRangedLevel("mithril", 99), 1, h));
+			METAL.reqRangedLevel(RangedMetal.KNIFE, "mithril", 99), 1, h));
 	}
 
 	/** And the mirror: a 40 Attack meleer must stop rolling ammunition it owns no bow for. */
@@ -219,9 +225,9 @@ public class RangedMetalTest
 	{
 		int h = Tuning.ROLL_LEVEL_HEADROOM;
 		Assert.assertFalse("rune arrows at Ranged 1", Tuning.withinReach(1, 40,
-			RangedMetal.ARROW.reqRangedLevel("rune", 99), 1, h));
+			METAL.reqRangedLevel(RangedMetal.ARROW, "rune", 99), 1, h));
 		Assert.assertFalse("rune crossbow at Ranged 1", Tuning.withinReach(1, 99,
-			RangedMetal.CROSSBOW.reqRangedLevel("rune", 99), 1, h));
+			METAL.reqRangedLevel(RangedMetal.CROSSBOW, "rune", 99), 1, h));
 	}
 
 	/**
@@ -232,9 +238,9 @@ public class RangedMetalTest
 	public void rangedGearNeverGatesOnDefence()
 	{
 		Assert.assertTrue("dragon crossbow at 64 Ranged / 1 Defence",
-			Tuning.withinReach(64, 1, RangedMetal.CROSSBOW.reqRangedLevel("dragon", 99), 1, 0));
+			Tuning.withinReach(64, 1, METAL.reqRangedLevel(RangedMetal.CROSSBOW, "dragon", 99), 1, 0));
 		Assert.assertTrue("rune javelin at 65 Ranged / 1 Defence",
-			Tuning.withinReach(65, 1, RangedMetal.JAVELIN.reqRangedLevel("rune", 99), 1, 0));
+			Tuning.withinReach(65, 1, METAL.reqRangedLevel(RangedMetal.JAVELIN, "rune", 99), 1, 0));
 	}
 
 	/**
@@ -248,7 +254,7 @@ public class RangedMetalTest
 		Assert.assertTrue("the ladder says rune is 40", Tuning.withinReach(45, 1,
 			t.reqLevelOf("rune"), 1, 0));
 		Assert.assertFalse("but a rune crossbow is 61", Tuning.withinReach(45, 1,
-			RangedMetal.CROSSBOW.reqRangedLevel("rune", 99), 1, 0));
+			METAL.reqRangedLevel(RangedMetal.CROSSBOW, "rune", 99), 1, 0));
 	}
 
 	/**
@@ -263,7 +269,7 @@ public class RangedMetalTest
 		Assert.assertNotNull("Runite bolts must not be untiered", match);
 		Assert.assertEquals("rune", match.getTierKey());
 		Assert.assertEquals("bolts", match.getFamilyKey());
-		Assert.assertEquals(61, RangedMetal.BOLTS.reqRangedLevel(match.getTierKey(), 99));
+		Assert.assertEquals(61, METAL.reqRangedLevel(RangedMetal.BOLTS, match.getTierKey(), 99));
 	}
 
 	// --- the colour-prefixed impostors ---
@@ -276,16 +282,16 @@ public class RangedMetalTest
 	@Test
 	public void colourPrefixedImpostorsAreRecognisedAsRanged()
 	{
-		Assert.assertEquals(RangedMetal.CHINCHOMPA, RangedMetal.of("Black chinchompa"));
-		Assert.assertEquals(RangedMetal.SALAMANDER, RangedMetal.of("Black salamander"));
+		Assert.assertEquals(RangedMetal.CHINCHOMPA, METAL.of("Black chinchompa"));
+		Assert.assertEquals(RangedMetal.SALAMANDER, METAL.of("Black salamander"));
 	}
 
 	/** The real wiki numbers: a chinchompa is 65 Ranged, a salamander 70. */
 	@Test
 	public void theImpostorsCarryTheirRealRequirement()
 	{
-		Assert.assertEquals(65, RangedMetal.CHINCHOMPA.reqRangedLevel("black", 99));
-		Assert.assertEquals(70, RangedMetal.SALAMANDER.reqRangedLevel("black", 99));
+		Assert.assertEquals(65, METAL.reqRangedLevel(RangedMetal.CHINCHOMPA, "black", 99));
+		Assert.assertEquals(70, METAL.reqRangedLevel(RangedMetal.SALAMANDER, "black", 99));
 	}
 
 	/**
@@ -299,11 +305,11 @@ public class RangedMetalTest
 			"rune", "dragon", "white", "granite", "no-such-tier"})
 		{
 			Assert.assertEquals(tier + " chinchompa does not exist", 99,
-				RangedMetal.CHINCHOMPA.reqRangedLevel(tier, 99));
+				METAL.reqRangedLevel(RangedMetal.CHINCHOMPA, tier, 99));
 			Assert.assertEquals(tier + " salamander does not exist", 99,
-				RangedMetal.SALAMANDER.reqRangedLevel(tier, 99));
+				METAL.reqRangedLevel(RangedMetal.SALAMANDER, tier, 99));
 		}
-		Assert.assertEquals(99, RangedMetal.CHINCHOMPA.reqRangedLevel(null, 99));
+		Assert.assertEquals(99, METAL.reqRangedLevel(RangedMetal.CHINCHOMPA, null, 99));
 	}
 
 	/**
@@ -325,7 +331,7 @@ public class RangedMetalTest
 			match.getRank() <= Tuning.maxRankForLevel(10));
 
 		int h = Tuning.ROLL_LEVEL_HEADROOM;
-		int chin = RangedMetal.CHINCHOMPA.reqRangedLevel(match.getTierKey(), 99);
+		int chin = METAL.reqRangedLevel(RangedMetal.CHINCHOMPA, match.getTierKey(), 99);
 		Assert.assertFalse("1 Ranged must not reach a 65 Ranged weapon",
 			Tuning.withinReach(1, 1, chin, 1, h));
 		Assert.assertFalse("nor 99 Attack with no Ranged to speak of",
@@ -341,7 +347,7 @@ public class RangedMetalTest
 	public void aFreshAccountNoLongerReachesABlackSalamander()
 	{
 		int h = Tuning.ROLL_LEVEL_HEADROOM;
-		int sala = RangedMetal.SALAMANDER.reqRangedLevel(
+		int sala = METAL.reqRangedLevel(RangedMetal.SALAMANDER, 
 			table().match("Black salamander").getTierKey(), 99);
 		Assert.assertEquals(70, sala);
 		Assert.assertFalse(Tuning.withinReach(1, 1, sala, 1, h));
@@ -386,12 +392,12 @@ public class RangedMetalTest
 	@Test
 	public void blackMetalGearIsUndisturbed()
 	{
-		Assert.assertNull(RangedMetal.of("Black platebody"));
-		Assert.assertNull(RangedMetal.of("Black scimitar"));
-		Assert.assertNull(RangedMetal.of("Black full helm"));
-		Assert.assertEquals(RangedMetal.DART, RangedMetal.of("Black dart"));
-		Assert.assertEquals(RangedMetal.KNIFE, RangedMetal.of("Black knife"));
-		Assert.assertEquals(10, RangedMetal.DART.reqRangedLevel("black", 99));
+		Assert.assertNull(METAL.of("Black platebody"));
+		Assert.assertNull(METAL.of("Black scimitar"));
+		Assert.assertNull(METAL.of("Black full helm"));
+		Assert.assertEquals(RangedMetal.DART, METAL.of("Black dart"));
+		Assert.assertEquals(RangedMetal.KNIFE, METAL.of("Black knife"));
+		Assert.assertEquals(10, METAL.reqRangedLevel(RangedMetal.DART, "black", 99));
 	}
 
 	/** Adding that prefix must not disturb anything the short spelling already claimed. */

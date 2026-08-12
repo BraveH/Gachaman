@@ -1,5 +1,7 @@
 package com.gachaman.ui.panel;
 
+import static com.gachaman.ui.panel.GachamanPanel.hex;
+import static com.gachaman.ui.panel.GachamanPanel.htmlWrap;
 import com.gachaman.model.AttackStyle;
 import com.gachaman.model.GachaState;
 import com.gachaman.model.Rarity;
@@ -288,11 +290,7 @@ public class TimelineTab extends JPanel {
 			+ "  (" + shown + (shown == 1 ? " event)" : " events)");
 	}
 
-	private static String htmlWrap(String body) {
-		return "<html><body>" + body + "</body></html>";
-	}
-
-	private static Color colorFor(TimelineEvent event) {
+private static Color colorFor(TimelineEvent event) {
 		try {
 			switch (event.getKind()) {
 				case TimelineEvent.KIND_STYLE:
@@ -328,7 +326,4 @@ public class TimelineTab extends JPanel {
 		}
 	}
 
-	private static String hex(Color color) {
-		return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
-	}
 }

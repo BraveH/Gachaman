@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import javax.imageio.ImageIO;
+import javax.inject.Inject;
+import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -29,12 +31,19 @@ import lombok.extern.slf4j.Slf4j;
  * procedural source.
  */
 @Slf4j
-final class CeremonyPlayer {
+@Singleton
+class CeremonyPlayer {
 	/** Frames are authored against a 300x225 chest and scaled from there. */
 	private static final int ART_W = 300;
 	private static final int ART_H = 225;
 
-	private static Index index;
+	private final Gson gson;
+	private Index index;
+
+	@Inject
+	CeremonyPlayer(Gson gson) {
+		this.gson = gson;
+	}
 
 	/**
 	 * Bounded frame cache.
@@ -47,7 +56,7 @@ final class CeremonyPlayer {
 	 * MB. A miss costs one small PNG decode inside a 50ms frame budget.
 	 */
 	private static final int CACHE = 8;
-	private static final Map<String, Image> FRAMES =
+	private final Map<String, Image> frames =
 		new LinkedHashMap<String, Image>(16, 0.75f, true) {
 			@Override
 			protected boolean removeEldestEntry(Map.Entry<String, Image> eldest) {
@@ -60,13 +69,13 @@ final class CeremonyPlayer {
 		Map<String, List<List<Integer>>> tiers;
 	}
 
-	private static Index index() {
+	private Index index() {
 		if (index == null) {
 			Index loaded = null;
 			try (InputStream in = CeremonyPlayer.class.getResourceAsStream(
 				"/com/gachaman/art/ceremony/chest-ceremony.json")) {
 				if (in != null) {
-					loaded = new Gson().fromJson(
+					loaded = gson.fromJson(
 						new InputStreamReader(in, StandardCharsets.UTF_8), Index.class);
 				}
 			}
@@ -84,13 +93,13 @@ final class CeremonyPlayer {
 	}
 
 	/** Frame count for a tier, or 0 when the art is unavailable. */
-	static int frames(Tuning.Chest tier) {
+	int frames(Tuning.Chest tier) {
 		List<List<Integer>> f = index().tiers.get(tier.name().toLowerCase(Locale.ROOT));
 		return f == null ? 0 : f.size();
 	}
 
 	/** The frame index this many ms into the ceremony, clamped to the last one. */
-	static int frameAt(Tuning.Chest tier, long el) {
+	int frameAt(Tuning.Chest tier, long el) {
 		int n = frames(tier);
 		if (n == 0) {
 			return -1;
@@ -99,7 +108,7 @@ final class CeremonyPlayer {
 		return Math.max(0, Math.min(n - 1, i));
 	}
 
-	static int lastFrame(Tuning.Chest tier) {
+	int lastFrame(Tuning.Chest tier) {
 		return Math.max(0, frames(tier) - 1);
 	}
 
@@ -109,14 +118,14 @@ final class CeremonyPlayer {
 	 * @return false when the art could not be loaded, so the caller can fall
 	 *         back rather than draw nothing
 	 */
-	static boolean draw(Graphics2D g, int cx, int cy, int w, int h, Tuning.Chest tier, int frame,
+	boolean draw(Graphics2D g, int cx, int cy, int w, int h, Tuning.Chest tier, int frame,
 		float alpha) {
 		List<List<Integer>> offsets = index().tiers.get(tier.name().toLowerCase(Locale.ROOT));
 		if (offsets == null || frame < 0 || frame >= offsets.size()) {
 			return false;
 		}
 		String key = tier.name() + frame;
-		Image art = FRAMES.computeIfAbsent(key, k -> {
+		Image art = frames.computeIfAbsent(key, k -> {
 			try (InputStream in = CeremonyPlayer.class.getResourceAsStream(
 				String.format("/com/gachaman/art/ceremony/chest-%s-%03d.png",
 					tier.name().toLowerCase(Locale.ROOT), frame))) {
@@ -146,8 +155,5 @@ final class CeremonyPlayer {
 			g.setComposite(old);
 		}
 		return true;
-	}
-
-	private CeremonyPlayer() {
 	}
 }

@@ -1,9 +1,12 @@
 package com.gachaman.data;
 
+import com.google.gson.Gson;
 import java.util.Collections;
 import java.util.Locale;
 import java.util.Map;
 import javax.annotation.Nullable;
+import javax.inject.Inject;
+import javax.inject.Singleton;
 
 /**
  * Ranged gear that wears a metal prefix, which the metal ladder gets wrong twice over.
@@ -74,47 +77,63 @@ public enum RangedMetal {
 		Map<String, Map<String, Integer>> families = Collections.emptyMap();
 	}
 
-	private static final Table TABLE = DataJson.load("ranged-metal", Table.class, new Table());
-
 	/**
-	 * Which ranged family is this card, or null when it is ordinary melee metal gear.
-	 *
-	 * <p>Matches the last word only. Names reaching here are already run through
-	 * CardDatabase.cleanName, which strips every trailing parenthetical — so the
-	 * poisoned "Rune dart(p++)" arrives as "Rune dart" and needs no special case.
+	 * The table, as an injectable lookup. It lives beside the enum rather than
+	 * inside it because it needs the CLIENT's Gson, which only exists once
+	 * Guice has built something — an enum's static initializer runs far too
+	 * early for that, and the Plugin Hub forbids brewing a fresh Gson to dodge
+	 * the ordering problem.
 	 */
-	@Nullable
-	public static RangedMetal of(@Nullable String cardName) {
-		if (cardName == null) {
-			return null;
-		}
-		int lastSpace = cardName.lastIndexOf(' ');
-		if (lastSpace < 0) {
-			return null; // no prefix at all, so not metal-prefixed gear
-		}
-		String family = TABLE.nouns.get(cardName.substring(lastSpace + 1).toLowerCase(Locale.ROOT));
-		if (family == null) {
-			return null;
-		}
-		try {
-			return valueOf(family);
-		}
-		catch (IllegalArgumentException e) {
-			// a noun pointing at a family this enum does not declare: bad data, not
-			// a bad card. Withhold rather than guess.
-			return null;
-		}
-	}
+	@Singleton
+	public static final class Lookup {
+		private final Table table;
 
-	/**
-	 * Ranged level this item really needs. A metal with no item in this family (there is
-	 * no black arrow) returns {@code fallback} — pass tiers.json's own number, so an
-	 * unrecognised combination is gated exactly as it was before this class existed
-	 * rather than silently opening at level 1.
-	 */
-	public int reqRangedLevel(@Nullable String tierKey, int fallback) {
-		Map<String, Integer> reqs = TABLE.families.get(name());
-		Integer req = tierKey == null || reqs == null ? null : reqs.get(tierKey);
-		return req == null ? fallback : req;
+		@Inject
+		Lookup(Gson gson) {
+			this.table = DataJson.load(gson, "ranged-metal", Table.class, new Table());
+		}
+
+		/**
+		 * Which ranged family is this card, or null when it is ordinary melee metal gear.
+		 *
+		 * <p>Matches the last word only. Names reaching here are already run through
+		 * CardDatabase.cleanName, which strips every trailing parenthetical — so the
+		 * poisoned "Rune dart(p++)" arrives as "Rune dart" and needs no special case.
+		 */
+		@Nullable
+		public RangedMetal of(@Nullable String cardName) {
+			if (cardName == null) {
+				return null;
+			}
+			int lastSpace = cardName.lastIndexOf(' ');
+			if (lastSpace < 0) {
+				return null; // no prefix at all, so not metal-prefixed gear
+			}
+			String family = table.nouns.get(
+				cardName.substring(lastSpace + 1).toLowerCase(Locale.ROOT));
+			if (family == null) {
+				return null;
+			}
+			try {
+				return valueOf(family);
+			}
+			catch (IllegalArgumentException e) {
+				// a noun pointing at a family this enum does not declare: bad data,
+				// not a bad card. Withhold rather than guess.
+				return null;
+			}
+		}
+
+		/**
+		 * Ranged level this item really needs. A metal with no item in this family
+		 * (there is no black arrow) returns {@code fallback} — pass tiers.json's own
+		 * number, so an unrecognised combination is gated exactly as it was before
+		 * this class existed rather than silently opening at level 1.
+		 */
+		public int reqRangedLevel(RangedMetal metal, @Nullable String tierKey, int fallback) {
+			Map<String, Integer> reqs = table.families.get(metal.name());
+			Integer req = tierKey == null || reqs == null ? null : reqs.get(tierKey);
+			return req == null ? fallback : req;
+		}
 	}
 }

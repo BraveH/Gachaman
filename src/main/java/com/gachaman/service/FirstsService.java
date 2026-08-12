@@ -1,7 +1,6 @@
 package com.gachaman.service;
 
 import com.gachaman.Tuning;
-import com.gachaman.model.ActiveTask;
 import com.gachaman.model.AttackStyle;
 import com.gachaman.model.FirstStamp;
 import com.gachaman.model.GachaState;
@@ -9,7 +8,6 @@ import com.gachaman.model.GearSlot;
 import com.gachaman.model.OwnedCard;
 import com.gachaman.model.Rarity;
 import com.gachaman.model.SideBet;
-import com.gachaman.model.TaskOffer;
 import com.gachaman.model.Variant;
 import java.util.ArrayList;
 import java.util.HashSet;

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Set;
 import org.junit.Assert;
 import org.junit.Test;
+import com.google.gson.Gson;
 
 /**
  * The starter grant used to hand every profile all six ironman sets and park a
@@ -12,22 +13,28 @@ import org.junit.Test;
  */
 public class IronmanGearTest
 {
+	/**
+	 * Injected in the plugin — the Plugin Hub forbids a fresh Gson in shipped
+	 * code — but a test has no injector, so it builds its own.
+	 */
+	private static final IronmanGear GEAR = new IronmanGear(new Gson());
+
 	@Test
 	public void normalAccountsGetNoIdentityArmour()
 	{
-		Assert.assertTrue(IronmanGear.cardNames(IronmanGear.NORMAL).isEmpty());
-		Assert.assertNull(IronmanGear.bodyCardName(IronmanGear.NORMAL));
+		Assert.assertTrue(GEAR.cardNames(IronmanGear.NORMAL).isEmpty());
+		Assert.assertNull(GEAR.bodyCardName(IronmanGear.NORMAL));
 	}
 
 	@Test
 	public void eachAccountTypeMapsToItsOwnSet()
 	{
-		Assert.assertEquals("Ironman platebody", IronmanGear.bodyCardName(1));
-		Assert.assertEquals("Ultimate ironman platebody", IronmanGear.bodyCardName(2));
-		Assert.assertEquals("Hardcore ironman platebody", IronmanGear.bodyCardName(3));
-		Assert.assertEquals("Group ironman platebody", IronmanGear.bodyCardName(4));
-		Assert.assertEquals("Hardcore group ironman platebody", IronmanGear.bodyCardName(5));
-		Assert.assertEquals("Unranked group ironman platebody", IronmanGear.bodyCardName(6));
+		Assert.assertEquals("Ironman platebody", GEAR.bodyCardName(1));
+		Assert.assertEquals("Ultimate ironman platebody", GEAR.bodyCardName(2));
+		Assert.assertEquals("Hardcore ironman platebody", GEAR.bodyCardName(3));
+		Assert.assertEquals("Group ironman platebody", GEAR.bodyCardName(4));
+		Assert.assertEquals("Hardcore group ironman platebody", GEAR.bodyCardName(5));
+		Assert.assertEquals("Unranked group ironman platebody", GEAR.bodyCardName(6));
 	}
 
 	@Test
@@ -36,7 +43,7 @@ public class IronmanGearTest
 		int total = 0;
 		for (int type = 1; type <= 6; type++)
 		{
-			List<String> set = IronmanGear.cardNames(type);
+			List<String> set = GEAR.cardNames(type);
 			Assert.assertEquals("account type " + type, 3, set.size());
 			Assert.assertTrue(set.get(0).endsWith(" helm"));
 			Assert.assertTrue(set.get(1).endsWith(" platebody"));
@@ -45,25 +52,25 @@ public class IronmanGearTest
 		}
 		// allCardNames is the revoke denylist — a name shared between two sets
 		// would silently exempt itself, so the union must lose nothing
-		Assert.assertEquals(total, IronmanGear.allCardNames().size());
+		Assert.assertEquals(total, GEAR.allCardNames().size());
 	}
 
 	@Test
 	public void anUnknownAccountTypeGrantsNothingRatherThanTheWrongSet()
 	{
-		Assert.assertTrue(IronmanGear.cardNames(7).isEmpty());
-		Assert.assertTrue(IronmanGear.cardNames(-1).isEmpty());
-		Assert.assertNull(IronmanGear.bodyCardName(99));
+		Assert.assertTrue(GEAR.cardNames(7).isEmpty());
+		Assert.assertTrue(GEAR.cardNames(-1).isEmpty());
+		Assert.assertNull(GEAR.bodyCardName(99));
 	}
 
 	@Test
 	public void theDenylistCoversEverySetSoForeignCopiesCanBeRevoked()
 	{
-		Set<String> all = IronmanGear.allCardNames();
+		Set<String> all = GEAR.allCardNames();
 		for (int type = 1; type <= 6; type++)
 		{
 			Assert.assertTrue("set " + type + " missing from the denylist",
-				all.containsAll(IronmanGear.cardNames(type)));
+				all.containsAll(GEAR.cardNames(type)));
 		}
 	}
 
