@@ -1,8 +1,7 @@
 package com.gachaman.data;
 
-import com.gachaman.model.AttackStyle;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.model.*;
+import org.junit.*;
 
 /**
  * Which style a weapon actually swings with, read off its offensive bonuses.

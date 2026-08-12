@@ -1,12 +1,8 @@
 package com.gachaman.party;
 
-import com.gachaman.model.AttackStyle;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.model.*;
+import java.util.*;
+import org.junit.*;
 
 /**
  * How the party page decides what is one block and what is several.

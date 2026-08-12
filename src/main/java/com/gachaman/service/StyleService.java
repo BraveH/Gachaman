@@ -1,13 +1,10 @@
 package com.gachaman.service;
 
-import com.gachaman.Tuning;
-import com.gachaman.model.AttackStyle;
-import com.gachaman.model.GachaState;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.Value;
-import lombok.extern.slf4j.Slf4j;
+import com.gachaman.*;
+import com.gachaman.model.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
 
 /**
  * The style lock. Rolls are uniform 1/3 and may legitimately re-pick the

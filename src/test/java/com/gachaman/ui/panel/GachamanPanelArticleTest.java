@@ -1,10 +1,8 @@
 package com.gachaman.ui.panel;
 
-import com.gachaman.model.GearSlot;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.model.*;
+import java.util.*;
+import org.junit.*;
 
 /**
  * The indefinite article the Shop's confirm dialogs put in front of a noun.

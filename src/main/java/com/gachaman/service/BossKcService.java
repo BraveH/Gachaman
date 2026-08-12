@@ -1,19 +1,15 @@
 package com.gachaman.service;
 
-import com.gachaman.data.BossTable;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.ChatMessageType;
-import net.runelite.api.events.ChatMessage;
-import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.util.Text;
+import com.gachaman.data.*;
+import java.util.*;
+import java.util.regex.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import net.runelite.api.*;
+import net.runelite.api.events.*;
+import net.runelite.client.eventbus.*;
+import net.runelite.client.util.*;
 
 /**
  * Parses boss kill-count chat lines and queues a themed chest when a

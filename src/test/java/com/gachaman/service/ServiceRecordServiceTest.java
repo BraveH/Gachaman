@@ -1,17 +1,8 @@
 package com.gachaman.service;
 
-import com.gachaman.model.OwnedCard;
-import com.gachaman.model.Variant;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.model.*;
+import java.util.*;
+import org.junit.*;
 
 /**
  * The Service Record's pure rules. "Present for" means the owned card's uuid

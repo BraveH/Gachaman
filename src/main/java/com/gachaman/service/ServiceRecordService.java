@@ -1,18 +1,11 @@
 package com.gachaman.service;
 
-import com.gachaman.model.GachaState;
-import com.gachaman.model.OwnedCard;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import com.gachaman.model.*;
+import java.util.*;
+import javax.annotation.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
 
 /**
  * The Service Record: every card counts the kills it was present for, and the

@@ -1,34 +1,17 @@
 package com.gachaman.overlay;
 
-import com.gachaman.Tuning;
-import com.gachaman.model.ActiveTask;
-import com.gachaman.model.GachaState;
-import com.gachaman.model.SideBet;
-import com.gachaman.model.TaskDifficulty;
-import com.gachaman.model.TaskOffer;
-import com.gachaman.service.GachaStateService;
-import com.gachaman.service.KillTracker;
-import com.gachaman.service.TaskService;
-import com.gachaman.service.TutorialGate;
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Font;
-import java.awt.Graphics2D;
-import java.awt.Point;
-import java.awt.Rectangle;
-import java.awt.RenderingHints;
 import java.util.List;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import net.runelite.api.Client;
-import net.runelite.client.ui.overlay.OverlayPanel;
-import net.runelite.client.ui.overlay.OverlayPosition;
-import net.runelite.client.ui.overlay.components.LayoutableRenderableEntity;
-import net.runelite.client.ui.overlay.components.LineComponent;
-import net.runelite.client.ui.overlay.components.ProgressBarComponent;
-import net.runelite.client.ui.overlay.components.TitleComponent;
-import lombok.Getter;
+import java.awt.Point;
+import com.gachaman.*;
+import com.gachaman.model.*;
+import com.gachaman.service.*;
+import java.awt.*;
+import java.util.*;
+import javax.inject.*;
+import lombok.*;
+import net.runelite.api.*;
+import net.runelite.client.ui.overlay.*;
+import net.runelite.client.ui.overlay.components.*;
 
 /**
  * Movable/dockable task progress panel: standard RuneLite OverlayPanel the
@@ -248,6 +231,7 @@ public class TaskProgressOverlay extends OverlayPanel {
 
 		@Getter
 		private final Rectangle bounds = new Rectangle();
+		@Setter
 		private Point preferredLocation = new Point();
 		private Dimension preferredSize = new Dimension(150, HEIGHT);
 
@@ -318,11 +302,6 @@ public class TaskProgressOverlay extends OverlayPanel {
 			return new Dimension(width, HEIGHT);
 		}
 
-
-		@Override
-		public void setPreferredLocation(Point location) {
-			this.preferredLocation = location;
-		}
 
 		@Override
 		public void setPreferredSize(Dimension size) {

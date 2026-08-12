@@ -1,15 +1,12 @@
 package com.gachaman.service;
 
-import com.gachaman.tools.AttackAnims;
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
-import java.util.Set;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.tools.*;
+import com.google.gson.*;
+import com.google.gson.reflect.*;
+import java.io.*;
+import java.nio.charset.*;
+import java.util.*;
+import org.junit.*;
 
 /**
  * The shipped attack-anims.json must still be exactly what {@link AttackAnims}

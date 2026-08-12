@@ -1,20 +1,10 @@
 package com.gachaman.service;
 
-import com.gachaman.data.MonsterTable;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Client;
-import net.runelite.api.GameState;
-import net.runelite.api.Quest;
-import net.runelite.api.QuestState;
+import com.gachaman.data.*;
+import java.util.*;
+import javax.inject.*;
+import lombok.extern.slf4j.*;
+import net.runelite.api.*;
 
 /**
  * Which quest-locked monsters this account may actually be sent after.

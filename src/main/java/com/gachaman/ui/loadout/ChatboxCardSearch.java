@@ -1,33 +1,17 @@
 package com.gachaman.ui.loadout;
 
-import com.gachaman.data.CardDatabase;
-import com.gachaman.data.CardDefinition;
-import com.gachaman.data.HologramDefinition;
-import com.gachaman.model.GearSlot;
-import com.gachaman.model.OwnedCard;
-import com.gachaman.model.Rarity;
-import com.gachaman.model.Variant;
-import com.gachaman.service.LoadoutService;
-import java.awt.event.KeyEvent;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.widgets.ItemQuantityMode;
-import net.runelite.api.widgets.JavaScriptCallback;
-import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetTextAlignment;
-import net.runelite.api.widgets.WidgetType;
-import net.runelite.client.callback.ClientThread;
-import net.runelite.client.game.chatbox.ChatboxPanelManager;
-import net.runelite.client.game.chatbox.ChatboxTextInput;
+import com.gachaman.data.*;
+import com.gachaman.model.*;
+import com.gachaman.service.*;
+import java.awt.event.*;
+import java.util.*;
+import javax.annotation.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import net.runelite.api.widgets.*;
+import net.runelite.client.callback.*;
+import net.runelite.client.game.chatbox.*;
 
 /**
  * Chatbox picker for assigning an owned card to a loadout slot. Mirrors

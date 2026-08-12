@@ -1,11 +1,9 @@
 package com.gachaman.ui.panel;
 
-import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.io.InputStream;
-import javax.imageio.ImageIO;
-import org.junit.Assert;
-import org.junit.Test;
+import java.awt.image.*;
+import java.io.*;
+import javax.imageio.*;
+import org.junit.*;
 
 /**
  * The header's Ko-fi and GitHub icons ship as PNGs authored by

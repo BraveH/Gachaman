@@ -1,9 +1,8 @@
 package com.gachaman.model;
 
-import java.util.ArrayList;
-import java.util.List;
-import javax.annotation.Nullable;
-import lombok.Value;
+import java.util.*;
+import javax.annotation.*;
+import lombok.*;
 
 /**
  * One filed contract in the Dossier: what was hunted, what it paid, and whether

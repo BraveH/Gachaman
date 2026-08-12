@@ -1,22 +1,13 @@
 package com.gachaman.service;
 
-import com.gachaman.GachamanConfig;
-import com.gachaman.data.CardDatabase;
-import com.gachaman.data.CardDefinition;
-import com.gachaman.model.GachaState;
-import com.gachaman.model.GearSlot;
-import com.gachaman.model.OwnedCard;
-import com.gachaman.model.Variant;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Client;
+import com.gachaman.*;
+import com.gachaman.data.*;
+import com.gachaman.model.*;
+import java.util.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import net.runelite.api.*;
 
 /**
  * Computes the allowed item-id set from the loadout:

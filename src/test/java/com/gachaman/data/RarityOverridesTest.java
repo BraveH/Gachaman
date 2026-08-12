@@ -1,9 +1,8 @@
 package com.gachaman.data;
 
-import com.gachaman.model.Rarity;
-import com.google.gson.Gson;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.model.*;
+import com.google.gson.*;
+import org.junit.*;
 
 /** Landmarks from the 2026-08 full-database rarity audit + curated originals. */
 public class RarityOverridesTest

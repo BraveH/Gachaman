@@ -1,33 +1,20 @@
 package com.gachaman.ui.panel;
 
+import java.util.List;
 import static com.gachaman.ui.panel.GachamanPanel.hex;
 import static com.gachaman.ui.panel.GachamanPanel.htmlWrap;
-import com.gachaman.Tuning;
-import com.gachaman.model.AttackStyle;
-import com.gachaman.model.ContractRecord;
-import com.gachaman.model.DossierSummary;
-import com.gachaman.model.GachaState;
-import com.gachaman.model.TaskDifficulty;
-import com.gachaman.service.GachaStateService;
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.List;
-import java.util.Locale;
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.JEditorPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.ScrollPaneConstants;
-import javax.swing.border.EmptyBorder;
-import net.runelite.client.ui.ColorScheme;
-import net.runelite.client.ui.FontManager;
-import net.runelite.client.util.QuantityFormatter;
+import com.gachaman.*;
+import com.gachaman.model.*;
+import com.gachaman.service.*;
+import java.awt.*;
+import java.text.*;
+import java.util.*;
+import javax.annotation.*;
+import javax.inject.*;
+import javax.swing.*;
+import javax.swing.border.*;
+import net.runelite.client.ui.*;
+import net.runelite.client.util.*;
 
 /**
  * The Contract Dossier: every contract you have filed, newest first, under a

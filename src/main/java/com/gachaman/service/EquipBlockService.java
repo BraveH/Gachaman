@@ -1,18 +1,13 @@
 package com.gachaman.service;
 
-import java.util.Set;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.ChatMessageType;
-import net.runelite.api.Client;
-import net.runelite.api.MenuEntry;
-import net.runelite.api.events.MenuEntryAdded;
-import net.runelite.api.events.MenuOptionClicked;
-import net.runelite.client.chat.ChatMessageManager;
-import net.runelite.client.chat.QueuedMessage;
-import net.runelite.client.eventbus.Subscribe;
+import java.util.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import net.runelite.api.*;
+import net.runelite.api.events.*;
+import net.runelite.client.chat.*;
+import net.runelite.client.eventbus.*;
 
 /**
  * The hard click-block for forbidden equipment. Menu entries are removed on

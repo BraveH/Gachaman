@@ -1,10 +1,7 @@
 package com.gachaman.party;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
-import net.runelite.client.party.messages.PartyMemberMessage;
+import lombok.*;
+import net.runelite.client.party.messages.*;
 
 /**
  * Host-only: aborts the party roll for every client that joined it — during

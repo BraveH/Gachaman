@@ -1,23 +1,11 @@
 package com.gachaman.overlay;
 
-import com.gachaman.Tuning;
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.GradientPaint;
-import java.awt.Graphics2D;
-import java.awt.Image;
-import java.awt.RenderingHints;
-import java.awt.Shape;
-import java.awt.geom.AffineTransform;
-import java.awt.geom.Arc2D;
-import java.awt.geom.Ellipse2D;
-import java.awt.geom.Line2D;
-import java.awt.geom.Path2D;
-import java.io.InputStream;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
-import javax.imageio.ImageIO;
+import com.gachaman.*;
+import java.awt.*;
+import java.awt.geom.*;
+import java.io.*;
+import java.util.*;
+import javax.imageio.*;
 
 /**
  * Procedural pseudo-3D treasure chest for the reveal ceremony. The chest is

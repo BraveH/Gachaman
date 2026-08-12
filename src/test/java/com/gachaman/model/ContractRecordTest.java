@@ -1,12 +1,8 @@
 package com.gachaman.model;
 
-import com.gachaman.Tuning;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.*;
+import java.util.*;
+import org.junit.*;
 
 /**
  * The Dossier's capped-append rule and its clean verdict. Pure — no client, no

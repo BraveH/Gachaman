@@ -1,40 +1,16 @@
 package com.gachaman.service;
 
-import com.gachaman.Tuning;
-import com.gachaman.data.CardDatabase;
-import com.gachaman.data.CardDefinition;
-import com.gachaman.data.HologramDefinition;
-import com.gachaman.data.RangedMetal;
-import com.gachaman.data.TierTable;
-import com.gachaman.model.GachaState;
-import com.gachaman.model.GearSlot;
-import com.gachaman.model.OwnedCard;
-import com.gachaman.model.Rarity;
-import com.gachaman.model.Variant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
-import java.util.UUID;
-import java.util.function.Predicate;
-import java.util.stream.Collectors;
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.Value;
-import lombok.With;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Client;
-import net.runelite.api.Skill;
+import com.gachaman.*;
+import com.gachaman.data.*;
+import com.gachaman.model.*;
+import java.util.*;
+import java.util.function.*;
+import java.util.stream.*;
+import javax.annotation.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import net.runelite.api.*;
 
 /**
  * Chest purchasing and roll math: rarity odds with pity, jackpot upgrades,

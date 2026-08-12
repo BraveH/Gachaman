@@ -1,8 +1,7 @@
 package com.gachaman.data;
 
-import com.gachaman.model.Rarity;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.model.*;
+import org.junit.*;
 
 public class CardNameRulesTest
 {

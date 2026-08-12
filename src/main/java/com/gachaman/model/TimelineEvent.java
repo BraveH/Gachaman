@@ -1,7 +1,7 @@
 package com.gachaman.model;
 
-import javax.annotation.Nullable;
-import lombok.Value;
+import javax.annotation.*;
+import lombok.*;
 
 /**
  * One entry in the fortune timeline: an audit line for a roll, pull, equip or

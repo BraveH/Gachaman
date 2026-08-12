@@ -1,7 +1,6 @@
 package com.gachaman.model;
 
-import lombok.Value;
-import lombok.With;
+import lombok.*;
 
 @Value
 @With

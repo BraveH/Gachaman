@@ -1,38 +1,16 @@
 package com.gachaman.service;
 
-import com.gachaman.data.MonsterTable;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.Value;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.ChatMessageType;
-import net.runelite.api.Client;
-import net.runelite.api.Hitsplat;
-import net.runelite.api.HitsplatID;
-import net.runelite.api.NPC;
-import net.runelite.api.Player;
-import net.runelite.api.Skill;
-import net.runelite.api.coords.LocalPoint;
-import net.runelite.api.events.ActorDeath;
-import net.runelite.api.events.ChatMessage;
-import net.runelite.api.events.GameTick;
-import net.runelite.api.events.HitsplatApplied;
-import net.runelite.api.events.InteractingChanged;
-import net.runelite.api.events.NpcDespawned;
-import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.events.NpcLootReceived;
-import net.runelite.client.events.ServerNpcLoot;
-import net.runelite.client.util.Text;
+import com.gachaman.data.*;
+import java.util.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import net.runelite.api.*;
+import net.runelite.api.coords.*;
+import net.runelite.api.events.*;
+import net.runelite.client.eventbus.*;
+import net.runelite.client.events.*;
+import net.runelite.client.util.*;
 
 /**
  * Attributes NPC kills to the local player via engagement windows:

@@ -1,15 +1,12 @@
 package com.gachaman.service;
 
-import com.gachaman.Tuning;
-import com.gachaman.model.GachaState;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.UnaryOperator;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.Value;
-import lombok.extern.slf4j.Slf4j;
+import com.gachaman.*;
+import com.gachaman.model.*;
+import java.util.*;
+import java.util.function.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
 
 /**
  * The single funnel every GC award flows through. Modifiers (set perks, party

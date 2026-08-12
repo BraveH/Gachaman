@@ -1,7 +1,6 @@
 package com.gachaman.party;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.*;
 
 /**
  * The vote shot clock's deadline test, in isolation. Statics only —

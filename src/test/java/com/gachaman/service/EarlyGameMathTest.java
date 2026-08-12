@@ -1,16 +1,10 @@
 package com.gachaman.service;
 
-import com.gachaman.Tuning;
-import com.gachaman.data.CardDefinition;
-import com.gachaman.model.GearSlot;
-import com.gachaman.model.Rarity;
-import com.gachaman.model.TaskDifficulty;
-import com.gachaman.model.Variant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.*;
+import com.gachaman.data.*;
+import com.gachaman.model.*;
+import java.util.*;
+import org.junit.*;
 
 /** Pure math for the early-game round: combo, fragments, bestiary, stardust bands. */
 public class EarlyGameMathTest

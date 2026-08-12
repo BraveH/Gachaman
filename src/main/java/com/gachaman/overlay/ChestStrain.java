@@ -1,6 +1,6 @@
 package com.gachaman.overlay;
 
-import com.gachaman.Tuning;
+import com.gachaman.*;
 
 /**
  * The chest fights before it opens, and how hard it fights is the tell. This is

@@ -1,52 +1,23 @@
 package com.gachaman.party;
 
-import com.gachaman.GachamanConfig;
-import com.gachaman.Tuning;
-import com.gachaman.data.MonsterTable;
-import com.gachaman.model.ActiveTask;
-import com.gachaman.model.AttackStyle;
-import com.gachaman.model.GachaState;
-import com.gachaman.model.PatronRecord;
-import com.gachaman.model.TaskOffer;
-import com.gachaman.service.AccountKey;
-import com.gachaman.service.AccountKeyService;
-import com.gachaman.service.GachaRng;
-import com.gachaman.service.GachaStateService;
-import com.gachaman.service.PatronMark;
-import com.gachaman.service.QuestUnlockService;
-import com.gachaman.service.TaskGenerator;
-import com.gachaman.service.TaskService;
-import java.awt.image.BufferedImage;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ThreadLocalRandom;
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.Value;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.ChatMessageType;
-import net.runelite.api.Client;
-import net.runelite.api.Skill;
-import net.runelite.api.events.GameTick;
-import net.runelite.client.callback.ClientThread;
-import net.runelite.client.chat.ChatMessageManager;
-import net.runelite.client.chat.QueuedMessage;
-import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.party.PartyMember;
-import net.runelite.client.party.PartyService;
-import net.runelite.client.party.messages.PartyMemberMessage;
+import com.gachaman.*;
+import com.gachaman.data.*;
+import com.gachaman.model.*;
+import com.gachaman.service.*;
+import java.awt.image.*;
+import java.util.*;
+import java.util.concurrent.*;
+import javax.annotation.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import net.runelite.api.*;
+import net.runelite.api.events.*;
+import net.runelite.client.callback.*;
+import net.runelite.client.chat.*;
+import net.runelite.client.eventbus.*;
+import net.runelite.client.party.*;
+import net.runelite.client.party.messages.*;
 
 /**
  * The party contract layer.
@@ -329,11 +300,9 @@ public class PartyRollService implements TaskService.Listener {
 
 	/** Plugin-wired: pokes the sidebar so host/status widgets track proposals. */
 	@Nullable
+	@Setter
 	private Runnable refreshHook;
 
-	public void setRefreshHook(@Nullable Runnable hook) {
-		this.refreshHook = hook;
-	}
 
 	private void refreshPanel() {
 		if (refreshHook != null) {
@@ -348,11 +317,9 @@ public class PartyRollService implements TaskService.Listener {
 
 	/** Plugin-wired: force-closes a modal ceremony whose meaning just changed. */
 	@Nullable
+	@Setter
 	private Runnable ceremonyAbortHook;
 
-	public void setCeremonyAbortHook(@Nullable Runnable hook) {
-		this.ceremonyAbortHook = hook;
-	}
 
 	private void abortCeremony() {
 		if (ceremonyAbortHook != null) {

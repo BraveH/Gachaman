@@ -1,23 +1,14 @@
 package com.gachaman.overlay;
 
-import com.gachaman.service.TaskService;
-import com.gachaman.ui.Paint;
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Font;
-import java.awt.FontMetrics;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Client;
-import net.runelite.api.Perspective;
 import net.runelite.api.Point;
-import net.runelite.client.ui.overlay.Overlay;
-import net.runelite.client.ui.overlay.OverlayLayer;
-import net.runelite.client.ui.overlay.OverlayPosition;
+import com.gachaman.ui.Paint;
+import com.gachaman.service.*;
+import com.gachaman.ui.*;
+import java.awt.*;
+import javax.inject.*;
+import lombok.extern.slf4j.*;
+import net.runelite.api.*;
+import net.runelite.client.ui.overlay.*;
 
 /**
  * Lightweight non-modal kill feedback: floating "+N GC" texts rising from the

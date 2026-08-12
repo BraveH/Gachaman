@@ -1,19 +1,12 @@
 package com.gachaman.service;
 
-import com.gachaman.data.CardDatabase;
-import com.gachaman.data.CardDefinition;
-import com.gachaman.data.SetTable;
-import com.gachaman.model.GachaState;
-import com.gachaman.model.OwnedCard;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import com.gachaman.data.*;
+import com.gachaman.model.*;
+import java.util.*;
+import java.util.stream.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
 
 /**
  * Detects set completion on collection changes and applies permanent perks as

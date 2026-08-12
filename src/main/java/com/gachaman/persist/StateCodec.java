@@ -1,24 +1,15 @@
 package com.gachaman.persist;
 
-import com.gachaman.model.GachaState;
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.Base64;
-import java.util.zip.GZIPInputStream;
-import java.util.zip.GZIPOutputStream;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import com.gachaman.model.*;
+import com.google.gson.*;
+import java.io.*;
+import java.nio.charset.*;
+import java.security.*;
+import java.util.*;
+import java.util.zip.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
 
 /**
  * Serializes GachaState to a versioned, hash-stamped, gzip+base64 envelope

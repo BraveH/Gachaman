@@ -1,7 +1,6 @@
 package com.gachaman.model;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import lombok.*;
 
 /**
  * The Firsts Journal: one-time stamps for the early game's inevitable

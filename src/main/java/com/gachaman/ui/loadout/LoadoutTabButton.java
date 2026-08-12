@@ -1,20 +1,17 @@
 package com.gachaman.ui.loadout;
 
-import com.gachaman.GachamanConfig;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Client;
 import net.runelite.api.SpriteID;
-import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
-import net.runelite.api.widgets.ItemQuantityMode;
-import net.runelite.api.widgets.JavaScriptCallback;
-import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetType;
-import net.runelite.client.callback.ClientThread;
-import net.runelite.client.eventbus.Subscribe;
+import com.gachaman.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import net.runelite.api.*;
+import net.runelite.api.events.*;
+import net.runelite.api.gameval.*;
+import net.runelite.api.widgets.*;
+import net.runelite.client.callback.*;
+import net.runelite.client.eventbus.*;
 
 /**
  * The loadout toggle as a REAL game widget: a child created on the worn-

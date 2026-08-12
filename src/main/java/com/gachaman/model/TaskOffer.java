@@ -1,7 +1,7 @@
 package com.gachaman.model;
 
-import java.util.List;
-import lombok.Value;
+import java.util.*;
+import lombok.*;
 
 @Value
 public class TaskOffer {

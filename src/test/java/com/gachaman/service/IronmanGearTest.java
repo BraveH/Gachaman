@@ -1,10 +1,8 @@
 package com.gachaman.service;
 
-import java.util.List;
-import java.util.Set;
-import org.junit.Assert;
-import org.junit.Test;
-import com.google.gson.Gson;
+import com.google.gson.*;
+import java.util.*;
+import org.junit.*;
 
 /**
  * The starter grant used to hand every profile all six ironman sets and park a

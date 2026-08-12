@@ -1,14 +1,7 @@
 package com.gachaman.model;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import lombok.Builder;
-import lombok.Value;
-import lombok.With;
+import java.util.*;
+import lombok.*;
 
 /**
  * The whole persisted Gachaman state for one RS profile. Immutable — every

@@ -1,9 +1,8 @@
 package com.gachaman.service;
 
-import java.security.SecureRandom;
-import java.util.List;
-import java.util.Random;
-import javax.inject.Singleton;
+import java.security.*;
+import java.util.*;
+import javax.inject.*;
 
 /** Central RNG. Tests construct with a fixed seed; production uses SecureRandom seeding. */
 @Singleton

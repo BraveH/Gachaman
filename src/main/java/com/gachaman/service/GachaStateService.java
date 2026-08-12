@@ -1,16 +1,13 @@
 package com.gachaman.service;
 
-import com.gachaman.model.GachaState;
-import com.gachaman.persist.StateStore;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.UnaryOperator;
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import com.gachaman.model.*;
+import com.gachaman.persist.*;
+import java.util.*;
+import java.util.function.*;
+import javax.annotation.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
 
 /**
  * Owner of the volatile state snapshot. Every mutation is a synchronized

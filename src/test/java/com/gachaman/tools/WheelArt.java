@@ -1,15 +1,10 @@
 package com.gachaman.tools;
 
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.GradientPaint;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.geom.Ellipse2D;
-import java.awt.geom.Path2D;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.geom.*;
+import java.awt.image.*;
+import java.io.*;
+import javax.imageio.*;
 
 /**
  * Authors the static chrome of the style roulette. Test scope: never shipped,

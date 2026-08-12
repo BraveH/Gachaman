@@ -1,16 +1,9 @@
 package com.gachaman.service;
 
-import com.gachaman.Tuning;
-import com.gachaman.model.PatronRecord;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import javax.annotation.Nullable;
+import com.gachaman.*;
+import com.gachaman.model.*;
+import java.util.*;
+import javax.annotation.*;
 
 /**
  * The Patron's Mark: a private, cosmetic tally of how many shared party

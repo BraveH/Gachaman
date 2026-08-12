@@ -1,30 +1,14 @@
 package com.gachaman.ui;
 
-import com.gachaman.Tuning;
-import com.gachaman.model.CardWear;
-import com.gachaman.model.Rarity;
-import com.gachaman.model.Variant;
-import java.awt.AlphaComposite;
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Composite;
-import java.awt.Font;
-import java.awt.FontMetrics;
-import java.awt.GradientPaint;
-import java.awt.Graphics2D;
-import java.awt.RadialGradientPaint;
-import java.awt.Rectangle;
-import java.awt.RenderingHints;
-import java.awt.Shape;
-import java.awt.geom.Line2D;
-import java.awt.geom.Point2D;
-import java.awt.geom.RoundRectangle2D;
-import java.awt.image.BufferedImage;
-import java.util.ArrayList;
 import java.util.List;
-import javax.annotation.Nullable;
-import lombok.Builder;
-import lombok.Value;
+import com.gachaman.*;
+import com.gachaman.model.*;
+import java.awt.*;
+import java.awt.geom.*;
+import java.awt.image.*;
+import java.util.*;
+import javax.annotation.*;
+import lombok.*;
 
 /**
  * Procedural card face rendering: rarity frames, foil sheen, shiny prismatic

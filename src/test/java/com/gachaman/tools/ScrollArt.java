@@ -1,13 +1,10 @@
 package com.gachaman.tools;
 
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.LinearGradientPaint;
-import java.awt.RenderingHints;
-import java.awt.geom.Point2D;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.geom.*;
+import java.awt.image.*;
+import java.io.*;
+import javax.imageio.*;
 
 /**
  * Authors the tier-INDEPENDENT parchment texture: the cylinder bow across the

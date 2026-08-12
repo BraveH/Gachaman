@@ -1,18 +1,10 @@
 package com.gachaman.service;
 
-import com.gachaman.Tuning;
-import com.gachaman.model.ActiveTask;
-import com.gachaman.model.GachaState;
-import com.gachaman.model.SideBet;
-import com.gachaman.model.TaskDifficulty;
-import com.gachaman.model.TaskOffer;
-import com.gachaman.persist.StateStore;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import com.gachaman.*;
+import com.gachaman.model.*;
+import com.gachaman.persist.*;
+import java.util.*;
+import org.junit.*;
 
 /**
  * The Ante end to end: escrow at accept, doubled return at completion, total

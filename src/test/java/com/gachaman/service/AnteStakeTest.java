@@ -1,10 +1,8 @@
 package com.gachaman.service;
 
-import com.gachaman.Tuning;
-import com.gachaman.model.TaskDifficulty;
-import com.gachaman.model.TaskOffer;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.*;
+import com.gachaman.model.*;
+import org.junit.*;
 
 /**
  * The Ante's two pure rules: what a stake is worth, and which contracts may

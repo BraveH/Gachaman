@@ -1,11 +1,9 @@
 package com.gachaman.party;
 
-import com.gachaman.Tuning;
-import com.google.gson.Gson;
-import java.util.Arrays;
-import java.util.Collections;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.*;
+import com.google.gson.*;
+import java.util.*;
+import org.junit.*;
 
 /**
  * The host picks the party's sizing rule — Fighting Weight (average) or

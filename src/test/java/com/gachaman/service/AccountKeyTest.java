@@ -1,9 +1,7 @@
 package com.gachaman.service;
 
-import java.util.HashSet;
-import java.util.Set;
-import org.junit.Assert;
-import org.junit.Test;
+import java.util.*;
+import org.junit.*;
 
 /**
  * The party layer's identity, and the trust boundary around it.

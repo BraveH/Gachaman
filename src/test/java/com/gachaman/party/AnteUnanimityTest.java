@@ -1,11 +1,7 @@
 package com.gachaman.party;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import org.junit.Assert;
-import org.junit.Test;
+import java.util.*;
+import org.junit.*;
 
 /**
  * The Ante's party rule, in isolation: UNANIMOUS consent of the FINAL roster.

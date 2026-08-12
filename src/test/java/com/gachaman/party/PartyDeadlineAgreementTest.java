@@ -1,7 +1,6 @@
 package com.gachaman.party;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.*;
 
 /**
  * Host and member must count down the SAME deadline.

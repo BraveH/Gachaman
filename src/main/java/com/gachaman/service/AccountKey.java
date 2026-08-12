@@ -1,10 +1,9 @@
 package com.gachaman.service;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.Locale;
-import javax.annotation.Nullable;
+import java.nio.charset.*;
+import java.security.*;
+import java.util.*;
+import javax.annotation.*;
 
 /**
  * A stable, per-account identifier for the party layer.

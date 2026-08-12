@@ -1,14 +1,8 @@
 package com.gachaman.party;
 
-import com.gachaman.Tuning;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.Map;
-import java.util.Set;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.*;
+import java.util.*;
+import org.junit.*;
 
 /**
  * The rules that let a shared contract survive a client restart.

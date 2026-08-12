@@ -1,18 +1,11 @@
 package com.gachaman.tools;
 
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.geom.Area;
-import java.awt.geom.Ellipse2D;
-import java.awt.geom.Path2D;
-import java.awt.geom.QuadCurve2D;
-import java.awt.geom.RoundRectangle2D;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import javax.imageio.ImageIO;
-import net.runelite.client.ui.ColorScheme;
+import java.awt.*;
+import java.awt.geom.*;
+import java.awt.image.*;
+import java.io.*;
+import javax.imageio.*;
+import net.runelite.client.ui.*;
 
 /**
  * Authors the plugin's flat icons as PNGs: the sidebar mark, the Plugin Hub

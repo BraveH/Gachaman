@@ -1,9 +1,8 @@
 package com.gachaman.data;
 
-import com.gachaman.Tuning;
-import com.google.gson.Gson;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.*;
+import com.google.gson.*;
+import org.junit.*;
 
 /**
  * Metal-prefixed ranged gear: classified onto the metal ladder by name prefix, but

@@ -1,8 +1,7 @@
 package com.gachaman.overlay;
 
-import java.awt.Shape;
-import org.junit.Assert;
-import org.junit.Test;
+import java.awt.*;
+import org.junit.*;
 
 /**
  * The ornate chest's chains are clipped to the chest's own silhouette - that

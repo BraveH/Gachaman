@@ -1,6 +1,6 @@
 package com.gachaman.service;
 
-import net.runelite.api.Client;
+import net.runelite.api.*;
 
 /**
  * Tutorial Island exclusion: none of Gachaman's locks apply until the

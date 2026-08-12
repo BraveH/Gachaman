@@ -1,16 +1,10 @@
 package com.gachaman.overlay;
 
-import java.awt.Color;
-import java.awt.GradientPaint;
-import java.awt.Graphics2D;
-import java.awt.Image;
-import java.util.HashMap;
-import java.util.Map;
-import java.awt.Rectangle;
-import java.awt.Shape;
-import java.awt.geom.RoundRectangle2D;
-import java.io.InputStream;
-import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.geom.*;
+import java.io.*;
+import java.util.*;
+import javax.imageio.*;
 
 /**
  * Draws the chrome of the unrolling contract scrolls used by the TASK_OFFERS

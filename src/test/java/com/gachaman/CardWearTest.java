@@ -1,8 +1,7 @@
 package com.gachaman;
 
-import com.gachaman.model.CardWear;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.model.*;
+import org.junit.*;
 
 /**
  * The wear stage is a pure function of one number and of nothing else. That is

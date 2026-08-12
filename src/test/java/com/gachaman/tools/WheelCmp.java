@@ -1,13 +1,9 @@
 package com.gachaman.tools;
 
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.Image;
-import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.InputStream;
-import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.image.*;
+import java.io.*;
+import javax.imageio.*;
 
 /** Renders the wheel chrome procedurally and from sprites, to prove the anchors. */
 public final class WheelCmp {

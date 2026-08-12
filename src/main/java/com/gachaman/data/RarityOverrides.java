@@ -1,15 +1,11 @@
 package com.gachaman.data;
 
-import com.gachaman.model.Rarity;
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.extern.slf4j.Slf4j;
+import com.gachaman.model.*;
+import com.google.gson.*;
+import com.google.gson.reflect.*;
+import java.util.*;
+import javax.inject.*;
+import lombok.extern.slf4j.*;
 
 /**
  * Curated rarity overrides for iconic gear the stat heuristic misjudges: it

@@ -1,10 +1,8 @@
 package com.gachaman.model;
 
-import com.google.gson.annotations.SerializedName;
-import java.util.List;
-import lombok.Builder;
-import lombok.Value;
-import lombok.With;
+import com.google.gson.annotations.*;
+import java.util.*;
+import lombok.*;
 
 @Value
 @With

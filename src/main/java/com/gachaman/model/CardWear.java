@@ -1,9 +1,8 @@
 package com.gachaman.model;
 
-import java.util.Locale;
-import javax.annotation.Nullable;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import java.util.*;
+import javax.annotation.*;
+import lombok.*;
 
 /**
  * Cosmetic wear on a card face, derived from the Service Record

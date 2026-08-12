@@ -1,17 +1,13 @@
 package com.gachaman.service;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Client;
-import net.runelite.api.Item;
-import net.runelite.api.ItemContainer;
-import net.runelite.api.MenuAction;
-import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
-import net.runelite.api.widgets.Widget;
+import net.runelite.api.gameval.InterfaceID;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import net.runelite.api.*;
+import net.runelite.api.gameval.*;
+import net.runelite.api.widgets.*;
 
 /**
  * The clean-slate strip: everything Tutorial Island hands you is gear no card

@@ -1,49 +1,26 @@
 package com.gachaman.ui.loadout;
 
-import com.gachaman.GachamanConfig;
-import com.gachaman.data.CardDatabase;
-import com.gachaman.data.CardDefinition;
-import com.gachaman.data.HologramDefinition;
-import com.gachaman.model.GachaState;
-import com.gachaman.model.GearSlot;
-import com.gachaman.model.OwnedCard;
-import com.gachaman.model.Rarity;
-import com.gachaman.model.Variant;
-import com.gachaman.service.ChestService;
-import com.gachaman.service.GachaStateService;
-import com.gachaman.service.LoadoutService;
-import com.gachaman.ui.CardImageService;
-import com.gachaman.ui.CardRenderer;
-import java.awt.AlphaComposite;
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Composite;
-import java.awt.Dimension;
-import java.awt.Font;
-import java.awt.FontMetrics;
-import java.awt.GradientPaint;
-import java.awt.Graphics2D;
-import java.awt.Point;
-import java.awt.Rectangle;
-import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
-import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.Map;
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.Getter;
-import net.runelite.api.Client;
 import net.runelite.api.SpriteID;
 import net.runelite.api.gameval.InterfaceID;
-import net.runelite.api.widgets.Widget;
-import net.runelite.client.callback.ClientThread;
-import net.runelite.client.game.SpriteManager;
-import net.runelite.client.ui.FontManager;
-import net.runelite.client.ui.overlay.Overlay;
-import net.runelite.client.ui.overlay.OverlayLayer;
-import net.runelite.client.ui.overlay.OverlayPosition;
+import java.awt.Point;
+import com.gachaman.*;
+import com.gachaman.data.*;
+import com.gachaman.model.*;
+import com.gachaman.service.*;
+import com.gachaman.ui.*;
+import java.awt.*;
+import java.awt.image.*;
+import java.util.*;
+import javax.annotation.*;
+import javax.inject.*;
+import lombok.*;
+import net.runelite.api.*;
+import net.runelite.api.gameval.*;
+import net.runelite.api.widgets.*;
+import net.runelite.client.callback.*;
+import net.runelite.client.game.*;
+import net.runelite.client.ui.*;
+import net.runelite.client.ui.overlay.*;
 
 /**
  * The loadout board: an equipment-panel-shaped grid of the eleven GearSlot
@@ -127,8 +104,10 @@ public class LoadoutOverlay extends Overlay {
 	private final Font ribbonFont = FontManager.getRunescapeSmallFont();
 
 	@Getter
+	@Setter
 	private volatile boolean open;
 	@Nullable
+	@Setter
 	private volatile Point hoverCanvasPoint;
 
 	@Inject
@@ -177,14 +156,6 @@ public class LoadoutOverlay extends Overlay {
 		open = !open;
 	}
 
-	public void setOpen(boolean open) {
-		this.open = open;
-	}
-
-	/** Canvas-space hover position fed by the input listener (never consumed). */
-	public void setHoverCanvasPoint(@Nullable Point point) {
-		hoverCanvasPoint = point;
-	}
 
 	@Override
 	public Dimension render(Graphics2D graphics) {

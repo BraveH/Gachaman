@@ -1,10 +1,9 @@
 package com.gachaman.service;
 
-import com.gachaman.data.BossTable;
-import com.google.gson.Gson;
-import java.util.regex.Matcher;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.data.*;
+import com.google.gson.*;
+import java.util.regex.*;
+import org.junit.*;
 
 /**
  * The KC line and the curated chatName have to agree. They did not for Barrows:

@@ -1,14 +1,13 @@
 package com.gachaman.ui.loadout;
 
 import java.awt.Point;
-import java.awt.Rectangle;
-import java.awt.event.MouseEvent;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import net.runelite.api.Client;
-import net.runelite.api.GameState;
 import net.runelite.client.input.MouseListener;
-import lombok.RequiredArgsConstructor;
+import java.awt.*;
+import java.awt.event.*;
+import javax.inject.*;
+import lombok.*;
+import net.runelite.api.*;
+import net.runelite.client.input.*;
 
 /**
  * Non-modal, selective mouse listener (the plugin registers it on

@@ -1,17 +1,8 @@
 package com.gachaman.tools;
 
-import com.gachaman.Tuning;
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.GradientPaint;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.Shape;
-import java.awt.geom.AffineTransform;
-import java.awt.geom.Arc2D;
-import java.awt.geom.Ellipse2D;
-import java.awt.geom.Line2D;
-import java.awt.geom.Path2D;
+import com.gachaman.*;
+import java.awt.*;
+import java.awt.geom.*;
 
 /**
  * Procedural pseudo-3D treasure chest for the reveal ceremony. The chest is

@@ -1,22 +1,13 @@
 package com.gachaman.overlay;
 
-import com.gachaman.GachamanConfig;
-import com.gachaman.model.ActiveTask;
-import com.gachaman.model.GachaState;
-import com.gachaman.service.GachaStateService;
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Graphics2D;
-import java.awt.Shape;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import net.runelite.api.Client;
-import net.runelite.api.NPC;
-import net.runelite.client.ui.overlay.Overlay;
-import net.runelite.client.ui.overlay.OverlayLayer;
-import net.runelite.client.ui.overlay.OverlayPosition;
-import net.runelite.client.util.Text;
+import com.gachaman.*;
+import com.gachaman.model.*;
+import com.gachaman.service.*;
+import java.awt.*;
+import javax.inject.*;
+import net.runelite.api.*;
+import net.runelite.client.ui.overlay.*;
+import net.runelite.client.util.*;
 
 /** Outlines NPCs matching the active task (config-toggled). */
 @Singleton

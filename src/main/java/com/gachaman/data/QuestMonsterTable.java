@@ -1,19 +1,12 @@
 package com.gachaman.data;
 
-import com.google.gson.Gson;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import lombok.RequiredArgsConstructor;
-import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Quest;
+import com.google.gson.*;
+import java.io.*;
+import java.nio.charset.*;
+import java.util.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import net.runelite.api.*;
 
 /**
  * Curated mapping of quests to the NPCs they require fighting. While such a

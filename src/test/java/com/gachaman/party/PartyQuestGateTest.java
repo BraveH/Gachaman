@@ -1,20 +1,13 @@
 package com.gachaman.party;
 
-import com.gachaman.data.MonsterTable;
-import com.gachaman.model.TaskOffer;
-import com.gachaman.service.GachaRng;
-import com.gachaman.service.TaskGenerator;
-import com.google.gson.Gson;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
-import org.junit.Assert;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import com.gachaman.data.*;
+import com.gachaman.model.*;
+import com.gachaman.service.*;
+import com.google.gson.*;
+import java.io.*;
+import java.nio.charset.*;
+import java.util.*;
+import org.junit.*;
 
 /**
  * A quest lock cuts monsters out of the pool, and the pool decides how many

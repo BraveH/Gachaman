@@ -1,16 +1,11 @@
 package com.gachaman.tools;
 
-import com.google.gson.GsonBuilder;
-import java.io.File;
-import java.io.IOException;
-import java.io.Writer;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.Map;
-import java.util.Set;
-import net.runelite.api.gameval.AnimationID;
+import com.google.gson.*;
+import java.io.*;
+import java.nio.charset.*;
+import java.nio.file.*;
+import java.util.*;
+import net.runelite.api.gameval.*;
 
 /**
  * Authors {@code attack-anims.json}: the animation ids StyleTracker classifies

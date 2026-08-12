@@ -1,11 +1,7 @@
 package com.gachaman;
 
-import com.gachaman.model.CardWear;
-import com.gachaman.model.FirstStamp;
-import com.gachaman.model.Rarity;
-import com.gachaman.model.TaskDifficulty;
-import java.util.EnumMap;
-import java.util.Map;
+import com.gachaman.model.*;
+import java.util.*;
 
 /**
  * All economy/RNG constants in one place. Values are deliberate tuning

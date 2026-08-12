@@ -1,8 +1,7 @@
 package com.gachaman.model;
 
-import java.awt.Color;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import java.awt.*;
+import lombok.*;
 
 @Getter
 @RequiredArgsConstructor

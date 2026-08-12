@@ -1,20 +1,10 @@
 package com.gachaman.service;
 
-import com.gachaman.model.ActiveTask;
-import com.gachaman.model.AttackStyle;
-import com.gachaman.model.ContractRecord;
-import com.gachaman.model.GachaState;
-import com.gachaman.model.SideBet;
-import com.gachaman.model.TaskDifficulty;
-import com.gachaman.model.TaskOffer;
-import com.gachaman.persist.StateStore;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.function.Consumer;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import com.gachaman.model.*;
+import com.gachaman.persist.*;
+import java.util.*;
+import java.util.function.*;
+import org.junit.*;
 
 /**
  * What a completed contract actually files in the Dossier.

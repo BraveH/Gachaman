@@ -1,6 +1,6 @@
 package com.gachaman.party;
 
-import javax.annotation.Nullable;
+import javax.annotation.*;
 
 /**
  * How a party roll picks the combat level it sizes contracts to.

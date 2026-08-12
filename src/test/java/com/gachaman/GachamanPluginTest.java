@@ -1,7 +1,7 @@
 package com.gachaman;
 
-import net.runelite.client.RuneLite;
-import net.runelite.client.externalplugins.ExternalPluginManager;
+import net.runelite.client.*;
+import net.runelite.client.externalplugins.*;
 
 public class GachamanPluginTest
 {

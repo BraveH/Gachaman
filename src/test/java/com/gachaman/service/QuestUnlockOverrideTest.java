@@ -1,9 +1,8 @@
 package com.gachaman.service;
 
-import com.gachaman.data.QuestMonsterTable;
-import com.google.gson.Gson;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.data.*;
+import com.google.gson.*;
+import org.junit.*;
 
 /**
  * The manual unlock escape hatch, which exists for exactly one situation: a

@@ -1,42 +1,21 @@
 package com.gachaman.ui.panel;
 
+import java.util.List;
 import static com.gachaman.ui.panel.GachamanPanel.measuredWidth;
 import static com.gachaman.ui.panel.GachamanPanel.textBlock;
-import com.gachaman.model.Rarity;
-import com.gachaman.model.Variant;
-import com.gachaman.ui.CardRenderer;
-import java.awt.BasicStroke;
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Container;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.event.ComponentAdapter;
-import java.awt.event.ComponentEvent;
-import java.awt.image.BufferedImage;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.Collections;
-import java.util.List;
-import com.google.gson.Gson;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.ImageIcon;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JViewport;
-import javax.swing.SwingConstants;
-import javax.swing.SwingUtilities;
-import javax.swing.border.EmptyBorder;
-import net.runelite.client.ui.ColorScheme;
-import net.runelite.client.ui.FontManager;
+import com.gachaman.model.*;
+import com.gachaman.ui.*;
+import com.google.gson.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.awt.image.*;
+import java.io.*;
+import java.nio.charset.*;
+import java.util.*;
+import javax.inject.*;
+import javax.swing.*;
+import javax.swing.border.*;
+import net.runelite.client.ui.*;
 
 /**
  * How-to-play reference for the gamemode. Content is entirely static text and

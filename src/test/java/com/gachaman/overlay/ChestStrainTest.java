@@ -1,8 +1,7 @@
 package com.gachaman.overlay;
 
-import com.gachaman.Tuning;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.*;
+import org.junit.*;
 
 /**
  * The chest intro's three-stage strain schedule — pure timing math, no client,

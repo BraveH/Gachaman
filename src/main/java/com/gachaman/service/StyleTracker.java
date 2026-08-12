@@ -1,38 +1,19 @@
 package com.gachaman.service;
 
-import com.gachaman.data.DataJson;
-import com.gachaman.model.AttackStyle;
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Deque;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Actor;
-import net.runelite.api.Client;
-import net.runelite.api.EnumComposition;
-import net.runelite.api.EnumID;
-import net.runelite.api.GameState;
-import net.runelite.api.MenuAction;
-import net.runelite.api.ParamID;
-import net.runelite.api.StructComposition;
-import net.runelite.api.events.AnimationChanged;
-import net.runelite.api.events.GameStateChanged;
-import net.runelite.api.events.GameTick;
-import net.runelite.api.events.HitsplatApplied;
-import net.runelite.api.events.MenuOptionClicked;
-import net.runelite.api.events.StatChanged;
-import net.runelite.api.gameval.VarPlayerID;
-import net.runelite.api.gameval.VarbitID;
-import net.runelite.client.eventbus.Subscribe;
+import com.gachaman.data.*;
+import com.gachaman.model.*;
+import com.google.gson.*;
+import com.google.gson.reflect.*;
+import java.util.*;
+import javax.annotation.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import net.runelite.api.*;
+import net.runelite.api.events.*;
+import net.runelite.api.gameval.*;
+import net.runelite.client.eventbus.*;
 
 /**
  * Judges the attack style of every offensive action, IMMEDIATELY at the

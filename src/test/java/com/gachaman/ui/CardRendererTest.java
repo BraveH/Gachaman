@@ -1,14 +1,10 @@
 package com.gachaman.ui;
 
-import com.gachaman.model.CardWear;
-import java.awt.Rectangle;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.model.*;
+import java.awt.*;
+import java.util.*;
+import org.junit.*;
 
 public class CardRendererTest
 {

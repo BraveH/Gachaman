@@ -1,16 +1,13 @@
 package com.gachaman.service;
 
-import com.gachaman.GachamanConfig;
-import com.gachaman.overlay.RevealOverlay;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Client;
-import net.runelite.api.NPC;
-import net.runelite.api.events.HitsplatApplied;
-import net.runelite.api.events.InteractingChanged;
-import net.runelite.client.eventbus.Subscribe;
+import com.gachaman.*;
+import com.gachaman.overlay.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import net.runelite.api.*;
+import net.runelite.api.events.*;
+import net.runelite.client.eventbus.*;
 
 /**
  * Combat safety for modal ceremonies: if the local player takes damage or is

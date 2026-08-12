@@ -1,12 +1,8 @@
 package com.gachaman.ui.panel;
 
-import com.gachaman.service.ChestService;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.service.*;
+import java.util.*;
+import org.junit.*;
 
 /**
  * The tooltip on a tier row in the Chest Odds bands.

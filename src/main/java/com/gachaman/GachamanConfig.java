@@ -1,11 +1,7 @@
 package com.gachaman;
 
-import com.gachaman.party.PartySizing;
-import net.runelite.client.config.Config;
-import net.runelite.client.config.ConfigGroup;
-import net.runelite.client.config.ConfigItem;
-import net.runelite.client.config.ConfigSection;
-import net.runelite.client.config.Range;
+import com.gachaman.party.*;
+import net.runelite.client.config.*;
 
 @ConfigGroup(GachamanConfig.GROUP)
 public interface GachamanConfig extends Config {

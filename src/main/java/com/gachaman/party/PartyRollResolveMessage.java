@@ -1,11 +1,8 @@
 package com.gachaman.party;
 
-import java.util.List;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
-import net.runelite.client.party.messages.PartyMemberMessage;
+import java.util.*;
+import lombok.*;
+import net.runelite.client.party.messages.*;
 
 /**
  * The host settles the vote. Voting is by MAJORITY, not unanimity, and the

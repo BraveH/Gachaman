@@ -1,15 +1,13 @@
 package com.gachaman.service;
 
-import java.util.ArrayList;
-import java.util.List;
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import net.runelite.api.Client;
-import net.runelite.api.gameval.VarPlayerID;
-import net.runelite.client.config.ConfigManager;
-import net.runelite.client.plugins.slayer.SlayerConfig;
-import lombok.RequiredArgsConstructor;
+import java.util.*;
+import javax.annotation.*;
+import javax.inject.*;
+import lombok.*;
+import net.runelite.api.*;
+import net.runelite.api.gameval.*;
+import net.runelite.client.config.*;
+import net.runelite.client.plugins.slayer.*;
 
 /**
  * Double Docket: does a Gachaman contract's target intersect the player's live

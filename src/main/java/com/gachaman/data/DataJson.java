@@ -1,11 +1,10 @@
 package com.gachaman.data;
 
-import com.google.gson.Gson;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.lang.reflect.Type;
-import java.nio.charset.StandardCharsets;
-import lombok.extern.slf4j.Slf4j;
+import com.google.gson.*;
+import java.io.*;
+import java.lang.reflect.*;
+import java.nio.charset.*;
+import lombok.extern.slf4j.*;
 
 /**
  * Loads a data table out of {@code /com/gachaman/data/}.

@@ -1,14 +1,9 @@
 package com.gachaman.service;
 
-import com.gachaman.Tuning;
-import com.gachaman.model.FirstStamp;
-import com.gachaman.model.Rarity;
-import com.gachaman.model.Variant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.*;
+import com.gachaman.model.*;
+import java.util.*;
+import org.junit.*;
 
 public class FirstsServiceTest
 {

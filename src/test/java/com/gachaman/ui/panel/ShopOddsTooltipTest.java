@@ -1,7 +1,6 @@
 package com.gachaman.ui.panel;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.*;
 
 /**
  * The percentage the Chest Odds rows print, and the one place it is handed to a

@@ -1,9 +1,8 @@
 package com.gachaman.service;
 
-import com.gachaman.Tuning;
-import com.gachaman.model.Rarity;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.*;
+import com.gachaman.model.*;
+import org.junit.*;
 
 /** Fixed-seed distribution and math checks — no live client needed. */
 public class RollMathTest

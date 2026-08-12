@@ -1,9 +1,7 @@
 package com.gachaman.party;
 
-import java.util.Arrays;
-import java.util.List;
-import org.junit.Assert;
-import org.junit.Test;
+import java.util.*;
+import org.junit.*;
 
 /**
  * The majority rule and its tiebreak, in isolation. Statics only —

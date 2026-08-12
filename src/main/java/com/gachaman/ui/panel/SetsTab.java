@@ -1,26 +1,15 @@
 package com.gachaman.ui.panel;
 
-import com.gachaman.data.CardDatabase;
-import com.gachaman.data.CardDefinition;
-import com.gachaman.data.SetTable;
-import com.gachaman.model.GachaState;
-import com.gachaman.model.OwnedCard;
-import com.gachaman.service.GachaStateService;
-import com.gachaman.service.SetPerkService;
-import java.awt.Color;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.JComponent;
-import javax.swing.JPanel;
-import javax.swing.border.EmptyBorder;
-import net.runelite.client.ui.ColorScheme;
-import net.runelite.client.ui.FontManager;
+import com.gachaman.data.*;
+import com.gachaman.model.*;
+import com.gachaman.service.*;
+import java.awt.*;
+import java.util.*;
+import javax.inject.*;
+import javax.swing.*;
+import javax.swing.border.*;
+import net.runelite.client.ui.*;
 
 /**
  * Card sets: per-set progress, perk description, gold highlight on completed

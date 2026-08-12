@@ -1,39 +1,18 @@
 package com.gachaman.ui.panel;
 
-import com.gachaman.Tuning;
-import com.gachaman.data.MonsterTable;
-import com.gachaman.model.FirstStamp;
-import com.gachaman.model.GachaState;
-import com.gachaman.model.MonsterStats;
-import com.gachaman.model.PersonalBest;
-import com.gachaman.model.TaskDifficulty;
-import com.gachaman.service.GachaStateService;
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Component;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JTable;
-import javax.swing.RowSorter;
-import javax.swing.SortOrder;
-import javax.swing.SwingConstants;
-import javax.swing.border.EmptyBorder;
-import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.table.DefaultTableModel;
-import net.runelite.client.ui.ColorScheme;
-import net.runelite.client.ui.FontManager;
-import net.runelite.client.util.QuantityFormatter;
+import com.gachaman.*;
+import com.gachaman.data.*;
+import com.gachaman.model.*;
+import com.gachaman.service.*;
+import java.awt.*;
+import java.util.*;
+import javax.inject.*;
+import javax.swing.*;
+import javax.swing.border.*;
+import javax.swing.table.*;
+import net.runelite.client.ui.*;
+import net.runelite.client.util.*;
 
 /**
  * Journal: species codex, the Firsts Journal stamp page, per-difficulty

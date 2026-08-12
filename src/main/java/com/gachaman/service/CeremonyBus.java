@@ -1,14 +1,11 @@
 package com.gachaman.service;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.List;
-import java.util.function.Consumer;
-import javax.annotation.Nullable;
-import javax.inject.Singleton;
-import lombok.Value;
-import lombok.extern.slf4j.Slf4j;
+import java.util.*;
+import java.util.function.*;
+import javax.annotation.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
 
 /**
  * Queue of ceremony/celebration requests emitted by game services and drained

@@ -1,16 +1,10 @@
 package com.gachaman.service;
 
-import com.gachaman.Tuning;
-import com.gachaman.data.CardDefinition;
-import com.gachaman.model.GearSlot;
-import com.gachaman.model.Rarity;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.*;
+import com.gachaman.data.*;
+import com.gachaman.model.*;
+import java.util.*;
+import org.junit.*;
 
 /**
  * The house lean and the odds disclosure share this arithmetic on purpose, so these

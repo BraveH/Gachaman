@@ -1,17 +1,11 @@
 package com.gachaman.service;
 
-import com.gachaman.Tuning;
-import com.gachaman.data.MonsterTable;
-import com.gachaman.model.SideBet;
-import com.gachaman.model.TaskDifficulty;
-import com.gachaman.model.TaskOffer;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-import net.runelite.api.Quest;
+import com.gachaman.*;
+import com.gachaman.data.*;
+import com.gachaman.model.*;
+import java.util.*;
+import java.util.stream.*;
+import net.runelite.api.*;
 
 /**
  * Pure task-offer generation: 4 difficulty offers scaled to combat level

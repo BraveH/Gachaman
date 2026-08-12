@@ -1,9 +1,8 @@
 package com.gachaman.party;
 
-import com.gachaman.model.AttackStyle;
-import com.google.gson.Gson;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.model.*;
+import com.google.gson.*;
+import org.junit.*;
 
 /**
  * The allowed style rides the party handshake so the clash bonus can be

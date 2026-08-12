@@ -1,24 +1,10 @@
 package com.gachaman.persist;
 
-import com.gachaman.model.ActiveTask;
-import com.gachaman.model.AttackStyle;
-import com.gachaman.model.ContractRecord;
-import com.gachaman.model.DossierSummary;
-import com.gachaman.model.GachaState;
-import com.gachaman.model.OwnedCard;
-import com.gachaman.model.PatronRecord;
-import com.gachaman.model.TaskDifficulty;
-import com.gachaman.model.TaskOffer;
-import com.gachaman.model.Variant;
-import com.gachaman.service.PatronMark;
-import com.google.gson.Gson;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.model.*;
+import com.gachaman.service.*;
+import com.google.gson.*;
+import java.util.*;
+import org.junit.*;
 
 public class StateCodecTest
 {

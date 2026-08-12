@@ -1,7 +1,6 @@
 package com.gachaman.model;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import lombok.*;
 
 /**
  * The eleven equipment slots Gachaman gates. Index matches the equipment

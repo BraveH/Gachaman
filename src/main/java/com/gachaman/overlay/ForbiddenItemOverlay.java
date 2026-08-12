@@ -1,16 +1,11 @@
 package com.gachaman.overlay;
 
-import com.gachaman.service.PermissionService;
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.Rectangle;
-import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import net.runelite.api.widgets.WidgetItem;
-import net.runelite.client.ui.overlay.WidgetItemOverlay;
+import com.gachaman.service.*;
+import java.awt.*;
+import java.awt.image.*;
+import javax.inject.*;
+import net.runelite.api.widgets.*;
+import net.runelite.client.ui.overlay.*;
 
 /**
  * Draws a crossed-circle icon over forbidden equipment in the inventory and

@@ -1,21 +1,15 @@
 package com.gachaman.overlay;
 
-import com.gachaman.Tuning;
-import com.google.gson.Gson;
-import java.awt.Graphics2D;
-import java.awt.Image;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import javax.imageio.ImageIO;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.extern.slf4j.Slf4j;
+import com.gachaman.*;
+import com.google.gson.*;
+import java.awt.*;
+import java.io.*;
+import java.nio.charset.*;
+import java.util.*;
+import javax.imageio.*;
+import javax.inject.*;
+import lombok.extern.slf4j.*;
 
 /**
  * Plays the pre-rendered chest ceremony: body, lid, chains, padlock, strain,

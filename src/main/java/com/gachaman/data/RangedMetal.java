@@ -1,12 +1,9 @@
 package com.gachaman.data;
 
-import com.google.gson.Gson;
-import java.util.Collections;
-import java.util.Locale;
-import java.util.Map;
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import com.google.gson.*;
+import java.util.*;
+import javax.annotation.*;
+import javax.inject.*;
 
 /**
  * Ranged gear that wears a metal prefix, which the metal ladder gets wrong twice over.

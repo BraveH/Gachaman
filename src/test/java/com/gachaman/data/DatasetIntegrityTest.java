@@ -1,15 +1,10 @@
 package com.gachaman.data;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.HashSet;
-import java.util.Set;
-import org.junit.Assert;
-import org.junit.Test;
+import com.google.gson.*;
+import java.io.*;
+import java.nio.charset.*;
+import java.util.*;
+import org.junit.*;
 
 /** The four bundled datasets must parse and cross-reference cleanly. */
 public class DatasetIntegrityTest

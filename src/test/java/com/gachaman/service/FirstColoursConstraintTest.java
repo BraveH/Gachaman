@@ -1,17 +1,11 @@
 package com.gachaman.service;
 
-import com.gachaman.data.CardDefinition;
-import com.gachaman.model.GachaState;
-import com.gachaman.model.GearSlot;
-import com.gachaman.model.Rarity;
-import com.google.gson.Gson;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
-import java.util.function.Predicate;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.data.*;
+import com.gachaman.model.*;
+import com.google.gson.*;
+import java.util.*;
+import java.util.function.*;
+import org.junit.*;
 
 /**
  * First Colours: the steered pick, and the flag that makes the gift happen

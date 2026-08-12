@@ -1,23 +1,13 @@
 package com.gachaman.service;
 
-import com.gachaman.Tuning;
-import com.gachaman.data.CardDatabase;
-import com.gachaman.data.CardDefinition;
-import com.gachaman.data.HologramDefinition;
-import com.gachaman.model.AttackStyle;
-import com.gachaman.model.GearSlot;
-import com.gachaman.model.OwnedCard;
-import com.gachaman.model.TaskOffer;
-import com.gachaman.model.TimelineEvent;
-import com.gachaman.model.Variant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import com.gachaman.*;
+import com.gachaman.data.*;
+import com.gachaman.model.*;
+import java.util.*;
+import javax.annotation.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
 
 /**
  * The fortune timeline: records every roll, pull, equip and notable event as

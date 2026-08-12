@@ -1,20 +1,10 @@
 package com.gachaman.service;
 
-import com.gachaman.data.QuestMonsterTable;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.Getter;
-import net.runelite.api.Client;
-import net.runelite.api.Quest;
-import net.runelite.api.QuestState;
+import com.gachaman.data.*;
+import java.util.*;
+import javax.inject.*;
+import lombok.*;
+import net.runelite.api.*;
 
 /**
  * Quest combat exemptions: an NPC required by an IN_PROGRESS quest may be

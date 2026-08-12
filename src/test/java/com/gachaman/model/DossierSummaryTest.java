@@ -1,11 +1,7 @@
 package com.gachaman.model;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import org.junit.Assert;
-import org.junit.Test;
+import java.util.*;
+import org.junit.*;
 
 /** The totals header: a pure fold over the contract log. */
 public class DossierSummaryTest

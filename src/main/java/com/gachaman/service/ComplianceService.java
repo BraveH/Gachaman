@@ -1,21 +1,13 @@
 package com.gachaman.service;
 
-import com.gachaman.Tuning;
-import com.gachaman.model.ActiveTask;
-import com.gachaman.model.AttackStyle;
-import com.gachaman.model.GachaState;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.List;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Actor;
-import net.runelite.api.Client;
-import net.runelite.api.NPC;
-import net.runelite.client.util.Text;
+import com.gachaman.*;
+import com.gachaman.model.*;
+import java.util.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import net.runelite.api.*;
+import net.runelite.client.util.*;
 
 /**
  * Style-rule enforcement. On a re-roll the player is only WARNED; a violation

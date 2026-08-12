@@ -1,7 +1,6 @@
 package com.gachaman.party;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.*;
 
 /**
  * The tick-to-seconds conversion behind every countdown the party UI shows.

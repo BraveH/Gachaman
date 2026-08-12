@@ -1,16 +1,13 @@
 package com.gachaman.service;
 
-import com.gachaman.Tuning;
-import com.gachaman.model.GachaState;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Client;
-import net.runelite.api.Experience;
-import net.runelite.api.Skill;
-import net.runelite.api.events.StatChanged;
-import net.runelite.client.eventbus.Subscribe;
+import com.gachaman.*;
+import com.gachaman.model.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import net.runelite.api.*;
+import net.runelite.api.events.*;
+import net.runelite.client.eventbus.*;
 
 /** Awards one in-reveal reroll token per full +10 combat levels gained. */
 @Slf4j

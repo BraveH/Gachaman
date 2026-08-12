@@ -1,22 +1,14 @@
 package com.gachaman.service;
 
-import com.gachaman.model.ActiveTask;
-import com.gachaman.model.GachaState;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.ChatMessageType;
-import net.runelite.api.Client;
-import net.runelite.api.MenuAction;
-import net.runelite.api.MenuEntry;
-import net.runelite.api.NPC;
-import net.runelite.api.events.MenuEntryAdded;
-import net.runelite.api.events.MenuOptionClicked;
-import net.runelite.client.chat.ChatMessageManager;
-import net.runelite.client.chat.QueuedMessage;
-import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.util.Text;
+import com.gachaman.model.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import net.runelite.api.*;
+import net.runelite.api.events.*;
+import net.runelite.client.chat.*;
+import net.runelite.client.eventbus.*;
+import net.runelite.client.util.*;
 
 /**
  * Combat gating: attacks are only permitted against the active task's

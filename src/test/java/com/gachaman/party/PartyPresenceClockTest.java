@@ -1,8 +1,7 @@
 package com.gachaman.party;
 
-import com.gachaman.Tuning;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.*;
+import org.junit.*;
 
 /**
  * The presence broadcast's pure rules: when we speak, when we stop believing

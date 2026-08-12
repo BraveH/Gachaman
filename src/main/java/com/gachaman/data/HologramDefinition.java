@@ -1,7 +1,7 @@
 package com.gachaman.data;
 
-import com.gachaman.model.Rarity;
-import lombok.Value;
+import com.gachaman.model.*;
+import lombok.*;
 
 /** A hologram tier card: represents a whole tier, not a specific item. */
 @Value

@@ -1,13 +1,9 @@
 package com.gachaman.service;
 
-import com.gachaman.Tuning;
-import com.gachaman.model.ActiveTask;
-import com.gachaman.model.GachaState;
-import com.gachaman.model.TaskDifficulty;
-import com.gachaman.persist.StateStore;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import com.gachaman.*;
+import com.gachaman.model.*;
+import com.gachaman.persist.*;
+import org.junit.*;
 
 /**
  * Voucher-first purchaseCharge spend path and Compactor kill-count doubling

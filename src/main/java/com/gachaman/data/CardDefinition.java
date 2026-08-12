@@ -1,9 +1,8 @@
 package com.gachaman.data;
 
-import com.gachaman.model.GearSlot;
-import com.gachaman.model.Rarity;
-import java.util.Set;
-import lombok.Value;
+import com.gachaman.model.*;
+import java.util.*;
+import lombok.*;
 
 /**
  * One equipment card, derived at runtime from the item cache. cardId is the

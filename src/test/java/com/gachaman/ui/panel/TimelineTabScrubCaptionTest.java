@@ -1,10 +1,8 @@
 package com.gachaman.ui.panel;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
-import org.junit.Assert;
-import org.junit.Test;
+import java.text.*;
+import java.util.*;
+import org.junit.*;
 
 /**
  * The caption under the Timeline's scrub slider.

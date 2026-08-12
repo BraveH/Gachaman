@@ -3,7 +3,7 @@ package com.gachaman.service;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import org.junit.Test;
+import org.junit.*;
 
 /**
  * The Double Docket matching rule. Everything here is pure static — the

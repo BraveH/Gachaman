@@ -1,6 +1,6 @@
 package com.gachaman.ui;
 
-import java.awt.Color;
+import java.awt.*;
 
 /**
  * The two paint helpers every animated surface in the plugin needs, in one

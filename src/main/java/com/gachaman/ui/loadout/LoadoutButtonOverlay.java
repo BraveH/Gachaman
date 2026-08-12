@@ -1,25 +1,15 @@
 package com.gachaman.ui.loadout;
 
-import com.gachaman.model.GachaState;
-import com.gachaman.service.GachaStateService;
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Font;
-import java.awt.GradientPaint;
-import java.awt.Graphics2D;
-import java.awt.Rectangle;
-import java.awt.RenderingHints;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import net.runelite.api.Client;
-import net.runelite.api.MenuAction;
 import net.runelite.api.Point;
 import net.runelite.api.gameval.InterfaceID;
-import net.runelite.api.widgets.Widget;
-import net.runelite.client.ui.overlay.Overlay;
-import net.runelite.client.ui.overlay.OverlayLayer;
-import net.runelite.client.ui.overlay.OverlayPosition;
+import com.gachaman.model.*;
+import com.gachaman.service.*;
+import java.awt.*;
+import javax.inject.*;
+import net.runelite.api.*;
+import net.runelite.api.gameval.*;
+import net.runelite.api.widgets.*;
+import net.runelite.client.ui.overlay.*;
 
 /**
  * The loadout toggle drawn inside the worn-equipment page. Each frame it

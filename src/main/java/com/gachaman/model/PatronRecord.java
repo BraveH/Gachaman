@@ -1,8 +1,8 @@
 package com.gachaman.model;
 
-import com.gachaman.service.PatronMark;
-import javax.annotation.Nullable;
-import lombok.Value;
+import com.gachaman.service.*;
+import javax.annotation.*;
+import lombok.*;
 
 /**
  * One partner in the Patron's Mark ledger: how many shared contracts you have

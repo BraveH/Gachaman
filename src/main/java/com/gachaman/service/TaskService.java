@@ -1,43 +1,18 @@
 package com.gachaman.service;
 
-import com.gachaman.Tuning;
-import com.gachaman.data.MonsterTable;
-import com.gachaman.model.ActiveTask;
-import com.gachaman.model.AttackStyle;
-import com.gachaman.model.ContractRecord;
-import com.gachaman.model.GachaState;
-import com.gachaman.model.GearSlot;
-import com.gachaman.model.MonsterStats;
-import com.gachaman.model.PersonalBest;
-import com.gachaman.model.SideBet;
-import com.gachaman.model.TaskDifficulty;
-import com.gachaman.model.TaskOffer;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Deque;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.function.Consumer;
-import java.util.function.IntConsumer;
-import java.util.function.Supplier;
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.Value;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Client;
-import net.runelite.api.Experience;
-import net.runelite.api.Skill;
-import net.runelite.api.WorldType;
-import net.runelite.api.coords.LocalPoint;
-import net.runelite.api.gameval.VarPlayerID;
-import net.runelite.api.gameval.VarbitID;
+import com.gachaman.*;
+import com.gachaman.data.*;
+import com.gachaman.model.*;
+import java.util.*;
+import java.util.function.*;
+import javax.annotation.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import net.runelite.api.*;
+import net.runelite.api.coords.*;
+import net.runelite.api.gameval.*;
 
 /**
  * The kill-task engine: offer rolls, acceptance, per-kill crediting with
@@ -180,16 +155,20 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 
 	private final List<Listener> listeners = new ArrayList<>();
 	/** Optional hook the plugin wires for the party layer. */
+	@Setter
 	private Consumer<TaskOffer> offerAcceptedHook;
 	/** Party layer: clicking a party-roll offer casts a VOTE instead of accepting. */
+	@Setter
 	private IntConsumer partyVoteHook;
 	/**
 	 * Double Docket: supplies the live Slayer assignment name, or null. A hook
 	 * rather than an injected dependency so the whole payout path stays testable
 	 * without a Client — every unit test leaves it unwired and gets no bonus.
 	 */
+	@Setter
 	private Supplier<String> slayerTargetHook;
 	/** Double Docket: fired once, the moment a contract latches on to the bonus. */
+	@Setter
 	private Runnable slayerLatchHook;
 	/** Recent credited kill ticks for SPEED_KILLS side bets. */
 	private final Deque<Integer> recentKillTicks = new ArrayDeque<>();
@@ -229,21 +208,6 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		listeners.remove(listener);
 	}
 
-	public void setOfferAcceptedHook(Consumer<TaskOffer> hook) {
-		this.offerAcceptedHook = hook;
-	}
-
-	public void setPartyVoteHook(IntConsumer hook) {
-		this.partyVoteHook = hook;
-	}
-
-	public void setSlayerTargetHook(Supplier<String> hook) {
-		this.slayerTargetHook = hook;
-	}
-
-	public void setSlayerLatchHook(Runnable hook) {
-		this.slayerLatchHook = hook;
-	}
 
 	/**
 	 * The live Slayer assignment, or null. Swallows hook failures: a broken

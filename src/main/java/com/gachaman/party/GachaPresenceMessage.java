@@ -1,11 +1,8 @@
 package com.gachaman.party;
 
-import com.gachaman.service.AccountKey;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
-import net.runelite.client.party.messages.PartyMemberMessage;
+import com.gachaman.service.*;
+import lombok.*;
+import net.runelite.client.party.messages.*;
 
 /**
  * The sender's own presence: what the party page draws for one member.

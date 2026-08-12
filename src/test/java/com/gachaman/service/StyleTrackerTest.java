@@ -1,11 +1,8 @@
 package com.gachaman.service;
 
-import com.gachaman.model.AttackStyle;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.model.*;
+import java.util.*;
+import org.junit.*;
 
 public class StyleTrackerTest
 {

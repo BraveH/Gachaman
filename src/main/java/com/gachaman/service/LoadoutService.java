@@ -1,28 +1,13 @@
 package com.gachaman.service;
 
-import com.gachaman.data.CardDatabase;
-import com.gachaman.data.CardDefinition;
-import com.gachaman.data.HologramDefinition;
-import com.gachaman.data.RangedMetal;
-import com.gachaman.data.TierTable;
-import com.gachaman.model.AttackStyle;
-import com.gachaman.model.GachaState;
-import com.gachaman.model.GearSlot;
-import com.gachaman.model.OwnedCard;
-import com.gachaman.model.Variant;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.function.BiConsumer;
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import com.gachaman.data.*;
+import com.gachaman.model.*;
+import java.util.*;
+import java.util.function.*;
+import javax.annotation.*;
+import javax.inject.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
 
 /**
  * Loadout assignment rules, shared by the sidebar panel and the in-game
@@ -41,11 +26,9 @@ public class LoadoutService {
 
 	/** Optional hook fired after a successful assignment (Firsts + Timeline). */
 	@Nullable
+	@Setter
 	private BiConsumer<GearSlot, OwnedCard> assignHook;
 
-	public void setAssignHook(@Nullable BiConsumer<GearSlot, OwnedCard> hook) {
-		this.assignHook = hook;
-	}
 
 	/** Assign an owned card to a loadout slot. Returns false when invalid. */
 	public boolean assign(GearSlot slot, String ownedCardUuid) {

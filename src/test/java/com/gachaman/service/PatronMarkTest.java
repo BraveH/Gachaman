@@ -1,16 +1,9 @@
 package com.gachaman.service;
 
-import com.gachaman.Tuning;
-import com.gachaman.model.PatronRecord;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.TreeMap;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.*;
+import com.gachaman.model.*;
+import java.util.*;
+import org.junit.*;
 
 /**
  * The Patron's Mark rules, in isolation. Every decision the feature makes

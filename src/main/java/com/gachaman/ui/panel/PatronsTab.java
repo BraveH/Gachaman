@@ -1,29 +1,18 @@
 package com.gachaman.ui.panel;
 
+import java.util.List;
 import static com.gachaman.ui.panel.GachamanPanel.hex;
 import static com.gachaman.ui.panel.GachamanPanel.htmlWrap;
-import com.gachaman.Tuning;
-import com.gachaman.model.GachaState;
-import com.gachaman.model.PatronRecord;
-import com.gachaman.service.AccountKey;
-import com.gachaman.service.GachaStateService;
-import com.gachaman.service.PatronMark;
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.util.Collections;
-import java.util.List;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.JEditorPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.ScrollPaneConstants;
-import javax.swing.border.EmptyBorder;
-import net.runelite.client.ui.ColorScheme;
-import net.runelite.client.ui.FontManager;
-import net.runelite.client.util.QuantityFormatter;
+import com.gachaman.*;
+import com.gachaman.model.*;
+import com.gachaman.service.*;
+import java.awt.*;
+import java.util.*;
+import javax.inject.*;
+import javax.swing.*;
+import javax.swing.border.*;
+import net.runelite.client.ui.*;
+import net.runelite.client.util.*;
 
 /**
  * The Patrons page: everyone you have finished a shared contract with, most

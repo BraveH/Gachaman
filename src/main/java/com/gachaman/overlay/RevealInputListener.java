@@ -1,16 +1,13 @@
 package com.gachaman.overlay;
 
-import java.awt.event.KeyEvent;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseWheelEvent;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import net.runelite.api.Client;
-import net.runelite.api.GameState;
-import net.runelite.client.input.KeyListener;
-import net.runelite.client.input.MouseListener;
 import net.runelite.client.input.MouseWheelListener;
-import lombok.RequiredArgsConstructor;
+import net.runelite.client.input.MouseListener;
+import net.runelite.client.input.KeyListener;
+import java.awt.event.*;
+import javax.inject.*;
+import lombok.*;
+import net.runelite.api.*;
+import net.runelite.client.input.*;
 
 /**
  * Consumes ALL input while a MODAL ceremony is showing and routes clicks,

@@ -1,15 +1,10 @@
 package com.gachaman.tools;
 
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.Image;
-import java.awt.LinearGradientPaint;
-import java.awt.RenderingHints;
-import java.awt.geom.Point2D;
-import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.InputStream;
-import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.geom.*;
+import java.awt.image.*;
+import java.io.*;
+import javax.imageio.*;
 
 /** Procedural bow+fibre vs the stretched sprite, at several sheet sizes. */
 public final class ScrollCmp {

@@ -1,7 +1,6 @@
 package com.gachaman.service;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.*;
 
 /**
  * The strip used to be recorded as settled the moment it was armed, so a logout

@@ -1,7 +1,6 @@
 package com.gachaman.party;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.*;
 
 /**
  * The display name the Party page and its chat lines put on a remote member.

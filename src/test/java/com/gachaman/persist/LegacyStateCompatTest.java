@@ -1,16 +1,12 @@
 package com.gachaman.persist;
 
-import com.gachaman.model.GachaState;
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import java.io.ByteArrayOutputStream;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
-import java.util.zip.GZIPOutputStream;
-import org.junit.Assert;
-import org.junit.Test;
+import com.gachaman.model.*;
+import com.google.gson.*;
+import java.io.*;
+import java.nio.charset.*;
+import java.util.*;
+import java.util.zip.*;
+import org.junit.*;
 
 /**
  * A profile saved by an older build must still load after a feature is removed.

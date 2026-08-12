@@ -1,8 +1,8 @@
 package com.gachaman.model;
 
-import java.util.List;
-import javax.annotation.Nullable;
-import lombok.Value;
+import java.util.*;
+import javax.annotation.*;
+import lombok.*;
 
 /**
  * The totals line above the Dossier list. A pure fold over the contract log —
