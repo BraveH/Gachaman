@@ -25,6 +25,29 @@ import javax.imageio.ImageIO;
 public final class CeremonyArt {
 	private static final int W = 300;
 	private static final int H = 225;
+	/**
+	 * Decoded-size ceiling per frame, in bytes.
+	 *
+	 * <p>The Plugin Hub rejects any image whose DECODED size — width * height * 4,
+	 * not the compressed file — passes 1 MiB. On disk these frames are 60-70 KB,
+	 * so nothing about the file sizes hints at the problem. Four ORNATE frames
+	 * were over the line and a fifth sat 3% under it, which is why the cap is set
+	 * below the limit rather than at it.
+	 *
+	 * <p>What makes those frames large is not detail but REACH: the chain and the
+	 * broken padlock fall away from the chest, so the alpha bounding box stretches
+	 * to cover a thin diagonal of chain and one small padlock across a mostly
+	 * empty rectangle. The cheap-looking alternative — clamping how far the debris
+	 * may travel — would visibly cut the fall short, and packing the pieces into
+	 * separate sub-images would cost player code the token budget cannot spare.
+	 *
+	 * <p>So resolution is what gets traded, worst case 0.82 linear on ORNATE 38.
+	 * That frame's chain links and padlock were compared against the procedural
+	 * source at 1:1 (CeremonyFitCmp) and are indistinguishable; the measurable
+	 * delta sits on 1px trim edges and reaches the eye as nothing.
+	 */
+	private static final long MAX_DECODED = 900_000L;
+
 	/** Generous working canvas; every frame is cropped out of it. */
 	private static final int CW = 1100;
 	private static final int CH = 1000;
@@ -80,6 +103,8 @@ public final class CeremonyArt {
 		StringBuilder idx = new StringBuilder("{\n  \"fps\": ").append(FPS).append(",\n  \"tiers\": {\n");
 		long totalBytes = 0;
 		long peakPixels = 0;
+		long peakDecoded = 0;
+		int shrunk = 0;
 		for (Tuning.Chest tier : Tuning.Chest.values()) {
 			String name = tier.name().toLowerCase();
 			int step = 1000 / FPS;
@@ -104,12 +129,32 @@ public final class CeremonyArt {
 
 				int[] bb = bounds(img);
 				BufferedImage crop = img.getSubimage(bb[0], bb[1], bb[2] - bb[0], bb[3] - bb[1]);
+				// authored size: what the frame is DRAWN at, whatever it is stored at
+				int aw = crop.getWidth();
+				int ah = crop.getHeight();
+				BufferedImage out = crop;
+				if ((long) aw * ah * 4 > MAX_DECODED) {
+					double k = Math.sqrt(MAX_DECODED / (double) ((long) aw * ah * 4));
+					int sw = Math.max(1, (int) Math.floor(aw * k));
+					int sh = Math.max(1, (int) Math.floor(ah * k));
+					out = new BufferedImage(sw, sh, BufferedImage.TYPE_INT_ARGB);
+					Graphics2D sg = out.createGraphics();
+					sg.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+						RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+					sg.setRenderingHint(RenderingHints.KEY_RENDERING,
+						RenderingHints.VALUE_RENDER_QUALITY);
+					sg.drawImage(crop, 0, 0, sw, sh, null);
+					sg.dispose();
+					shrunk++;
+				}
 				File f = new File(dir, String.format("chest-%s-%03d.png", name, n));
-				ImageIO.write(crop, "png", f);
+				ImageIO.write(out, "png", f);
 				totalBytes += f.length();
-				tierPixels += (long) crop.getWidth() * crop.getHeight();
+				tierPixels += (long) out.getWidth() * out.getHeight();
+				peakDecoded = Math.max(peakDecoded, (long) out.getWidth() * out.getHeight() * 4);
 				frames.append(n == 0 ? "" : ", ")
-					.append("[").append(bb[0] - cx).append(",").append(bb[1] - cy).append("]");
+					.append("[").append(bb[0] - cx).append(",").append(bb[1] - cy)
+					.append(",").append(aw).append(",").append(ah).append("]");
 				n++;
 			}
 			peakPixels = Math.max(peakPixels, tierPixels);
@@ -123,6 +168,12 @@ public final class CeremonyArt {
 		}
 		System.out.printf("on disk: %.2f MB%n", totalBytes / 1048576.0);
 		System.out.printf("largest tier decoded (ARGB): %.1f MB%n", peakPixels * 4 / 1048576.0);
+		System.out.printf("largest SINGLE frame decoded: %,d bytes (Plugin Hub limit 1,048,576)%n",
+			peakDecoded);
+		System.out.printf("frames downscaled to fit: %d%n", shrunk);
+		if (peakDecoded > 1048576L) {
+			throw new IllegalStateException("a frame is still over the Plugin Hub image limit");
+		}
 	}
 
 	/** Tight alpha bounds, or the whole canvas if the frame is empty. */

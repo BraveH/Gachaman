@@ -52,3 +52,15 @@ tasks.register('attackAnims', JavaExec) {
 	classpath = sourceSets.test.runtimeClasspath
 	mainClass = 'com.gachaman.tools.AttackAnims'
 }
+
+tasks.register('ceremonyArt', JavaExec) {
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.gachaman.overlay.CeremonyArt'
+	args 'src/main/resources/com/gachaman/art/ceremony'
+}
+
+tasks.register('ceremonyFitCmp', JavaExec) {
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.gachaman.overlay.CeremonyFitCmp'
+	args System.getProperty('out', 'build/fitcmp')
+}

@@ -140,17 +140,21 @@ class CeremonyPlayer {
 		}
 		double sx = w / (double) ART_W;
 		double sy = h / (double) ART_H;
-		int dx = cx + (int) Math.round(offsets.get(frame).get(0) * sx);
-		int dy = cy + (int) Math.round(offsets.get(frame).get(1) * sy);
+		List<Integer> at = offsets.get(frame);
+		int dx = cx + (int) Math.round(at.get(0) * sx);
+		int dy = cy + (int) Math.round(at.get(1) * sy);
 		java.awt.Composite old = null;
 		if (alpha < 0.999f) {
 			old = g.getComposite();
 			g.setComposite(java.awt.AlphaComposite.getInstance(
 				java.awt.AlphaComposite.SRC_OVER, Math.max(0f, alpha)));
 		}
+		// index carries the AUTHORED size, which is not the stored size: a frame
+		// whose decoded bytes would pass the Plugin Hub's 1 MiB image limit is
+		// stored smaller and stretched back here, so the art keeps its extent
 		g.drawImage(art, dx, dy,
-			(int) Math.round(art.getWidth(null) * sx),
-			(int) Math.round(art.getHeight(null) * sy), null);
+			(int) Math.round(at.get(2) * sx),
+			(int) Math.round(at.get(3) * sy), null);
 		if (old != null) {
 			g.setComposite(old);
 		}
