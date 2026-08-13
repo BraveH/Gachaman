@@ -181,9 +181,13 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	// within the window build stacks; a forbidden attack breaks it, and it
 	// cancels only after the idle window passes with NO attacks at all —
 	// fighting a tanky monster keeps the chain alive even between kills.
-	private int comboStacks;
-	private int comboLastKillTick = -1;
-	/** Last activity (kill OR attack) keeping the chain alive. */
+	/** Compliant kills banked on the running chain; stacks are earned from these. */
+	private int comboKills;
+	/**
+	 * Last activity (kill OR attack) keeping the chain alive, or -1 for no
+	 * chain. Only a kill starts one; attacks merely hold an existing chain
+	 * open, which is why this doubles as the "is a chain running" sentinel.
+	 */
 	private int comboIdleAnchorTick = -1;
 
 	/**
@@ -604,43 +608,38 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 
 	// --- Rhythm Combo ---
 
-	/** Current combo stacks (0 when no chain is running). */
-	public int comboStacks() {
-		return comboStacks;
-	}
-
-	/** Tick of the kill that last fed the combo, or -1. */
-	public int comboLastKillTick() {
-		return comboLastKillTick;
+	/** Whether a chain is still running at the given tick. */
+	private boolean comboAlive(int nowTick) {
+		return comboIdleAnchorTick >= 0
+			&& nowTick - comboIdleAnchorTick <= Tuning.COMBO_IDLE_RESET_TICKS;
 	}
 
 	/** Stacks the chain is worth at the given tick (0 once the idle cutoff passes). */
 	public int comboStacksAt(int nowTick) {
-		if (comboLastKillTick < 0 || nowTick - comboIdleAnchorTick > Tuning.COMBO_IDLE_RESET_TICKS) {
-			return 0;
-		}
-		return comboStacks;
+		return comboAlive(nowTick) ? Tuning.comboStacks(comboKills) : 0;
 	}
 
-	/** Fraction of the growth window remaining at the given tick (0 = chain held, not growing). */
-	public double comboWindowFraction(int nowTick) {
-		if (comboLastKillTick < 0) {
+	/**
+	 * How far the chain has come toward its next stack, 0-1. Flat 0 on a dead
+	 * or already-maxed chain, so the meter has nothing left to promise.
+	 */
+	public double comboProgressAt(int nowTick) {
+		if (!comboAlive(nowTick) || comboKills >= Tuning.COMBO_MAX_KILLS) {
 			return 0;
 		}
-		return Math.max(0, 1.0 - (double) (nowTick - comboLastKillTick) / Tuning.COMBO_WINDOW_TICKS);
+		return (comboKills % Tuning.COMBO_KILLS_PER_STACK) / (double) Tuning.COMBO_KILLS_PER_STACK;
 	}
 
 	/** Ticks left before an alive chain cancels from idling (0 when no chain). */
 	public int comboIdleTicksRemaining(int nowTick) {
-		if (comboLastKillTick < 0) {
+		if (comboIdleAnchorTick < 0) {
 			return 0;
 		}
 		return Math.max(0, Tuning.COMBO_IDLE_RESET_TICKS - (nowTick - comboIdleAnchorTick));
 	}
 
 	private void resetCombo() {
-		comboStacks = 0;
-		comboLastKillTick = -1;
+		comboKills = 0;
 		comboIdleAnchorTick = -1;
 	}
 
@@ -654,26 +653,25 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	}
 
 	/** Advance the chain for an on-task compliant kill; returns the new stack count. */
-	private int advanceCombo(int killTick) {
-		if (comboLastKillTick < 0 || killTick - comboIdleAnchorTick > Tuning.COMBO_IDLE_RESET_TICKS) {
-			comboStacks = 1; // fresh chain (dead chains stay dead — attacks after
+	int advanceCombo(int killTick) {
+		if (comboIdleAnchorTick < 0 || killTick - comboIdleAnchorTick > Tuning.COMBO_IDLE_RESET_TICKS) {
+			comboKills = 1; // fresh chain (dead chains stay dead — attacks after
 			// the idle cutoff cannot revive them, they start this new one)
 		}
-		else if (killTick - comboLastKillTick <= Tuning.COMBO_WINDOW_TICKS) {
-			comboStacks = Math.min(Tuning.COMBO_MAX_STACKS, comboStacks + 1);
+		else {
+			// every kill on a live chain banks, however long it took to land;
+			// held at the cap so a long chain cannot bank credit it can't spend
+			comboKills = Math.min(Tuning.COMBO_MAX_KILLS, comboKills + 1);
 		}
-		// past the growth window the chain survives (attacks kept it alive) but
-		// this kill does not stack
-		comboLastKillTick = killTick;
 		comboIdleAnchorTick = killTick;
-		return comboStacks;
+		return Tuning.comboStacks(comboKills);
 	}
 
 	// StyleTracker.AttackListener: any judged attack keeps a LIVE chain alive —
 	// the idle countdown only runs while no attack commands are being issued
 	@Override
 	public void onAttack(AttackStyle style, int tick) {
-		if (comboLastKillTick >= 0 && tick - comboIdleAnchorTick <= Tuning.COMBO_IDLE_RESET_TICKS) {
+		if (comboIdleAnchorTick >= 0 && tick - comboIdleAnchorTick <= Tuning.COMBO_IDLE_RESET_TICKS) {
 			comboIdleAnchorTick = tick;
 		}
 	}
@@ -727,17 +725,21 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			// award BEFORE working off taint: with taint > 0 this kill's income
 			// (and its side bets) must still be halved — the debt clears after
 			if (task.getPerKillGc() > 0) {
-				// scaled by how the NPC compares to YOUR combat level (trivial
-				// mobs pay dust, peers pay a bonus, stronger pays much more),
-				// plus the early-game bonus compensating slower kill speeds,
-				// plus the rhythm combo for keeping the chain alive, halved
-				// when an ironman's kill was assisted
+				// the rhythm combo re-bases the contract's per-kill rate: at
+				// three stacks an 8 GC contract simply pays 14 a kill, and
+				// everything below scales off THAT. Kept a separate step from
+				// the multiplier chain because it is the one a player is meant
+				// to be able to do in their head off the pip count
+				double base = task.getPerKillGc() * Tuning.comboMultiplier(stacks);
+				// then scaled by how the NPC compares to YOUR combat level
+				// (trivial mobs pay dust, peers pay a bonus, stronger pays much
+				// more), plus the early-game bonus compensating slower kill
+				// speeds, halved when an ironman's kill was assisted
 				int playerCb = playerCombatLevel();
 				double mult = Tuning.killCbMultiplier(playerCb, kill.getNpcCombatLevel())
 					* Tuning.lowLevelMultiplier(playerCb)
-					* Tuning.comboMultiplier(stacks, playerCb)
 					* (assistedPenalty ? Tuning.ASSISTED_KILL_MULT : 1.0);
-				long scaled = Math.round(task.getPerKillGc() * mult);
+				long scaled = Math.round(base * mult);
 				awarded = creditSink.award(scaled, new CreditSink.GcContext(
 					CreditSink.Source.KILL, kill.getNpcName(), tagsFor(kill.getNpcName())));
 			}

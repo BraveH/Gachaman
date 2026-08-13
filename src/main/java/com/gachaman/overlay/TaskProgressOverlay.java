@@ -149,10 +149,12 @@ public class TaskProgressOverlay extends OverlayPanel {
 
 		// rhythm combo meter (transient — lives in TaskService, KillTracker ticks)
 		int nowTick = killTracker.currentTick();
-		int stacks = taskService.comboStacksAt(nowTick);
-		if (stacks >= 1) {
-			comboMeter.set(stacks, taskService.comboWindowFraction(nowTick),
-				taskService.comboIdleTicksRemaining(nowTick));
+		// shown from the first kill, not the first stack: with five kills to a
+		// stack the chain would otherwise build invisibly for most of a minute
+		int comboIdleLeft = taskService.comboIdleTicksRemaining(nowTick);
+		if (comboIdleLeft > 0) {
+			comboMeter.set(taskService.comboStacksAt(nowTick),
+				taskService.comboProgressAt(nowTick), comboIdleLeft);
 			panelComponent.getChildren().add(comboMeter);
 		}
 
@@ -236,20 +238,23 @@ public class TaskProgressOverlay extends OverlayPanel {
 		private Dimension preferredSize = new Dimension(150, HEIGHT);
 
 		private int stacks;
-		private double windowFraction;
+		private double progress;
 		private int idleTicksRemaining;
 		private String label = "";
 		private int labelStacks = -1;
 		private String secondsLabel = "";
 		private int labelSeconds = -1;
 
-		void set(int stacks, double windowFraction, int idleTicksRemaining) {
+		void set(int stacks, double progress, int idleTicksRemaining) {
 			this.stacks = stacks;
-			this.windowFraction = windowFraction;
+			this.progress = progress;
 			this.idleTicksRemaining = idleTicksRemaining;
 			if (stacks != labelStacks) {
 				labelStacks = stacks;
-				label = "x" + stacks;
+				// the payout, not the pip count — the pips already say that, and
+				// the whole point of the flat ladder is being able to read it
+				double m = Tuning.comboMultiplier(stacks);
+				label = "x" + (m == Math.rint(m) ? String.valueOf((int) m) : String.valueOf(m));
 			}
 			// 1 game tick = 0.6s; round up so the label never reads 0s early
 			int seconds = (int) Math.ceil(idleTicksRemaining * 0.6);
@@ -265,7 +270,6 @@ public class TaskProgressOverlay extends OverlayPanel {
 				RenderingHints.VALUE_ANTIALIAS_ON);
 			int x = preferredLocation.x;
 			int y = preferredLocation.y;
-			boolean held = windowFraction <= 0;
 
 			g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
 			g.setColor(GOLD);
@@ -275,10 +279,12 @@ public class TaskProgressOverlay extends OverlayPanel {
 			// stack pips
 			int px = x + textW + 8;
 			int py = y + 5;
-			Color filled = held ? new Color(255, 205, 70, 140) : GOLD;
 			Color empty = new Color(255, 205, 70, 60);
-			for (int i = 0; i < 10; i++) {
-				g.setColor(i < stacks ? filled : empty);
+			// the pip being worked on brightens with each kill banked toward it,
+			// so the five-kill climb to the next stack is legible at a glance
+			Color filling = new Color(255, 205, 70, 60 + (int) Math.round(progress * 120));
+			for (int i = 0; i < Tuning.COMBO_MAX_STACKS; i++) {
+				g.setColor(i < stacks ? GOLD : i == stacks ? filling : empty);
 				g.fillOval(px + i * 7, py, 5, 5);
 			}
 
@@ -287,7 +293,7 @@ public class TaskProgressOverlay extends OverlayPanel {
 			double idleFraction = Math.max(0, Math.min(1.0,
 				idleTicksRemaining / (double) Tuning.COMBO_IDLE_RESET_TICKS));
 			boolean urgent = idleFraction <= 0.25;
-			int ax = px + 10 * 7 + 6;
+			int ax = px + Tuning.COMBO_MAX_STACKS * 7 + 6;
 			g.setColor(urgent ? new Color(230, 90, 70, 160) : new Color(255, 205, 70, 90));
 			g.setStroke(new BasicStroke(2f));
 			g.drawArc(ax, y + 2, 12, 12, 90, -(int) Math.round(360 * idleFraction));

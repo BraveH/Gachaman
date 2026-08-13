@@ -56,34 +56,35 @@ public final class Tuning {
 	}
 
 	/**
-	 * Rhythm Combo: consecutive on-task kills within the window build stacks;
-	 * each stack adds maxBonus/MAX_STACKS to the kill multiplier. The max
-	 * bonus is +30% at low combat, fading linearly between the fade bounds to
-	 * a permanent +10% floor — the combo never fully retires.
+	 * Rhythm Combo: every five compliant on-task kills earn a stack, and each
+	 * stack multiplies the contract's base per-kill GC by a further quarter —
+	 * x1.25 at one stack up to x2.5 at six, so a maxed chain is 30 kills deep.
+	 * How long a kill takes is deliberately not a condition; only going idle
+	 * breaks the chain, so a slow tanky target still builds a full combo as
+	 * long as the player keeps attacking.
+	 *
+	 * <p>Combat level does not enter into it. The bonus is a flat ladder so a
+	 * player can read their own pip count and know exactly what the next kill
+	 * pays, which a level-faded percentage could never tell them.
+	 *
+	 * <p>Every base in {@link #PER_KILL_GC} is a multiple of 4, so a quarter
+	 * step always lands on a whole number of GC and the ladder needs no
+	 * rounding of its own.
 	 */
-	public static final int COMBO_WINDOW_TICKS = 42;       // ~25 seconds
-	public static final int COMBO_IDLE_RESET_TICKS = 100;  // ~60 seconds
-	public static final int COMBO_MAX_STACKS = 10;
-	public static final double COMBO_MAX_BONUS_LOW = 0.30;
-	public static final double COMBO_MAX_BONUS_FLOOR = 0.10;
-	public static final int COMBO_FADE_START_CB = 25;
-	public static final int COMBO_FADE_END_CB = 45;
+	public static final int COMBO_IDLE_RESET_TICKS = 50;   // ~30 seconds
+	public static final int COMBO_MAX_STACKS = 6;
+	public static final int COMBO_KILLS_PER_STACK = 5;
+	public static final double COMBO_STACK_STEP = 0.25;
 
-	public static double comboMaxBonus(int playerCb) {
-		if (playerCb <= COMBO_FADE_START_CB) {
-			return COMBO_MAX_BONUS_LOW;
-		}
-		if (playerCb >= COMBO_FADE_END_CB) {
-			return COMBO_MAX_BONUS_FLOOR;
-		}
-		double fraction = (double) (playerCb - COMBO_FADE_START_CB)
-			/ (COMBO_FADE_END_CB - COMBO_FADE_START_CB);
-		return COMBO_MAX_BONUS_LOW - (COMBO_MAX_BONUS_LOW - COMBO_MAX_BONUS_FLOOR) * fraction;
+	/** Kills a chain is worth holding on to; past this the ladder is capped. */
+	public static final int COMBO_MAX_KILLS = COMBO_MAX_STACKS * COMBO_KILLS_PER_STACK;
+
+	public static int comboStacks(int chainKills) {
+		return Math.min(COMBO_MAX_STACKS, Math.max(0, chainKills) / COMBO_KILLS_PER_STACK);
 	}
 
-	public static double comboMultiplier(int stacks, int playerCb) {
-		int capped = Math.max(0, Math.min(COMBO_MAX_STACKS, stacks));
-		return 1.0 + comboMaxBonus(playerCb) * capped / COMBO_MAX_STACKS;
+	public static double comboMultiplier(int stacks) {
+		return 1.0 + COMBO_STACK_STEP * Math.max(0, Math.min(COMBO_MAX_STACKS, stacks));
 	}
 
 	public static double killCbMultiplier(int playerCb, int npcCb) {

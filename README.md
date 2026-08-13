@@ -114,8 +114,10 @@ Every on-task kill pays Gacha Coins; the final kill pays a completion bonus. Sta
 
 - **Side bets** — optional riders like *"land a 20+ hit"* or *"a kill without taking damage"*. Some
   are **sealed**, and only revealed the moment you accidentally satisfy them.
-- **Rhythm Combo** — consecutive on-task kills within ~25 seconds build up to **+30% kill GC** at low
-  combat, fading to a permanent **+10%** floor as you level.
+- **Rhythm Combo** — every 5 on-task kills earn a stack, and each stack multiplies the contract's
+  base per-kill GC by a further quarter: **x1.25** at one stack up to **x2.5** at six, so a maxed
+  chain runs 30 kills deep. How long a kill takes never matters, and combat level does not affect
+  it; the chain only breaks after ~30 seconds with no attacks at all.
 - **Bestiary discovery** — the first on-task kill of each new species pays a bonus, with codex
   milestones at 50 / 100 / 150 species.
 

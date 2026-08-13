@@ -10,41 +10,51 @@ import org.junit.*;
 public class EarlyGameMathTest
 {
 	@Test
-	public void comboMaxBonusFadesToPermanentFloor()
+	public void comboLadderIsFlatQuarterSteps()
 	{
-		Assert.assertEquals(Tuning.COMBO_MAX_BONUS_LOW, Tuning.comboMaxBonus(3), 1e-9);
-		Assert.assertEquals(Tuning.COMBO_MAX_BONUS_LOW, Tuning.comboMaxBonus(Tuning.COMBO_FADE_START_CB), 1e-9);
-		Assert.assertEquals(Tuning.COMBO_MAX_BONUS_FLOOR, Tuning.comboMaxBonus(Tuning.COMBO_FADE_END_CB), 1e-9);
-		// the floor is permanent — never zero, even at max combat
-		Assert.assertEquals(Tuning.COMBO_MAX_BONUS_FLOOR, Tuning.comboMaxBonus(126), 1e-9);
-		// midpoint interpolates linearly
-		int mid = (Tuning.COMBO_FADE_START_CB + Tuning.COMBO_FADE_END_CB) / 2;
-		Assert.assertEquals((Tuning.COMBO_MAX_BONUS_LOW + Tuning.COMBO_MAX_BONUS_FLOOR) / 2,
-			Tuning.comboMaxBonus(mid), 1e-9);
-		// monotonic non-increasing
-		double prev = Double.MAX_VALUE;
-		for (int cb = 3; cb <= 126; cb++)
+		// the whole ladder, spelled out rather than derived — the point of the
+		// rewrite was that a player can read it, so a typo in the step must fail
+		double[] expected = {1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5};
+		Assert.assertEquals(expected.length, Tuning.COMBO_MAX_STACKS + 1);
+		for (int stacks = 0; stacks < expected.length; stacks++)
 		{
-			double bonus = Tuning.comboMaxBonus(cb);
-			Assert.assertTrue("fade must never increase (cb " + cb + ")", bonus <= prev);
-			Assert.assertTrue(bonus >= Tuning.COMBO_MAX_BONUS_FLOOR);
-			prev = bonus;
+			Assert.assertEquals("stack " + stacks, expected[stacks],
+				Tuning.comboMultiplier(stacks), 1e-9);
 		}
+		// above the cap clamps, below zero clamps
+		Assert.assertEquals(2.5, Tuning.comboMultiplier(99), 1e-9);
+		Assert.assertEquals(1.0, Tuning.comboMultiplier(-5), 1e-9);
 	}
 
 	@Test
-	public void comboMultiplierStacksAndClamps()
+	public void comboStacksAreEarnedEveryFiveKills()
 	{
-		Assert.assertEquals(1.0, Tuning.comboMultiplier(0, 3), 1e-9);
-		Assert.assertEquals(1.0 + Tuning.COMBO_MAX_BONUS_LOW, Tuning.comboMultiplier(10, 3), 1e-9);
-		// above the cap clamps, below zero clamps
-		Assert.assertEquals(Tuning.comboMultiplier(10, 3), Tuning.comboMultiplier(99, 3), 1e-9);
-		Assert.assertEquals(1.0, Tuning.comboMultiplier(-5, 3), 1e-9);
-		// per-stack step is maxBonus / MAX_STACKS
-		Assert.assertEquals(1.0 + Tuning.COMBO_MAX_BONUS_LOW / Tuning.COMBO_MAX_STACKS,
-			Tuning.comboMultiplier(1, 3), 1e-9);
-		// at high combat the full chain still pays the floor
-		Assert.assertEquals(1.0 + Tuning.COMBO_MAX_BONUS_FLOOR, Tuning.comboMultiplier(10, 100), 1e-9);
+		Assert.assertEquals(0, Tuning.comboStacks(0));
+		// four kills is still nothing — the stack lands on the fifth
+		Assert.assertEquals(0, Tuning.comboStacks(Tuning.COMBO_KILLS_PER_STACK - 1));
+		Assert.assertEquals(1, Tuning.comboStacks(Tuning.COMBO_KILLS_PER_STACK));
+		Assert.assertEquals(2, Tuning.comboStacks(2 * Tuning.COMBO_KILLS_PER_STACK));
+		// a maxed chain is MAX_STACKS * KILLS_PER_STACK kills deep, and holds there
+		Assert.assertEquals(Tuning.COMBO_MAX_STACKS, Tuning.comboStacks(Tuning.COMBO_MAX_KILLS));
+		Assert.assertEquals(Tuning.COMBO_MAX_STACKS, Tuning.comboStacks(Tuning.COMBO_MAX_KILLS * 9));
+		Assert.assertEquals(0, Tuning.comboStacks(-3));
+	}
+
+	@Test
+	public void everyPerKillBaseStaysWholeAcrossTheLadder()
+	{
+		// the ladder is only readable because a quarter step never produces a
+		// fraction of a GC; a base that is not a multiple of 4 would break that
+		for (int gc : Tuning.PER_KILL_GC.values())
+		{
+			Assert.assertEquals("base " + gc + " must be a multiple of 4", 0, gc % 4);
+			for (int stacks = 0; stacks <= Tuning.COMBO_MAX_STACKS; stacks++)
+			{
+				double paid = gc * Tuning.comboMultiplier(stacks);
+				Assert.assertEquals("base " + gc + " at stack " + stacks,
+					Math.rint(paid), paid, 1e-9);
+			}
+		}
 	}
 
 	@Test
