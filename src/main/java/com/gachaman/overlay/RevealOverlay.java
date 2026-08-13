@@ -85,12 +85,6 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 	private static final long DEED_BURST_MS = 1150;
 	private static final float HOVER_CHARGE_SEC = 0.8f;
 
-	/**
-	 * Base fireOnce bit for the strain groans, one per beat. Bits 0-4 and 9 are
-	 * already spoken for by the other intro cues, so the strain is parked well
-	 * clear of them; four beats occupy 16-19 and firedSounds is an int.
-	 */
-	private static final int SOUND_BIT_STRAIN = 16;
 
 	/**
 	 * How long after the last painted frame the modal still counts as on screen.
@@ -109,7 +103,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 
 	private static final Color DIM = new Color(0, 0, 0, 140); // 55% of 255
 	private static final Color GOLD = new Color(230, 190, 80);
-	private static final Color PANEL_BG = new Color(24, 20, 14, 235);
+
 	private static final Color REDEMPTION_RED = new Color(120, 20, 20);
 	/** Warm dark the tier is pulled toward for rules and outlines. */
 	private static final Color PARCH_EDGE_DARK = new Color(104, 82, 52);
@@ -129,7 +123,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 	private static final int PARTY_GLYPH_H = 15;
 	private static final Color PARCH_TOP = new Color(236, 222, 186);
 	private static final Color PARCH_BOTTOM = new Color(213, 192, 151);
-	private static final Color PARCH_EDGE = new Color(146, 120, 80);
+
 	private static final Color PARCH_INK = new Color(58, 44, 26);
 	private static final Color PARCH_INK_SOFT = new Color(104, 86, 58);
 	private static final Color PARCH_REWARD = new Color(128, 94, 20);
@@ -147,7 +141,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 	private static final Color PARCH_EDGE_SOFT = new Color(146, 120, 80, 153);
 	/** The Ante's ink: dark red on parchment, the colour of a debt, not a prize. */
 	private static final Color PARCH_ANTE = new Color(132, 44, 34);
-	private static final Color BANNER_UNDERLINE = new Color(0, 0, 0, 77);
+
 	private static final Color EMBER_HOT = new Color(255, 176, 60);
 	private static final Color EMBER_RED = new Color(220, 80, 30);
 	private static final Color RIM_SILVER_HI = new Color(214, 218, 228);

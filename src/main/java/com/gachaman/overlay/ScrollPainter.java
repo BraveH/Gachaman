@@ -29,10 +29,7 @@ final class ScrollPainter {
 
 	private static final int CAP_W = 7;
 	private static final int EDGE_REACH = 8;
-	private static final Color WOOD_LIGHT = new Color(168, 128, 76);
-	private static final Color WOOD_DARK = new Color(70, 48, 24);
-	private static final Color CAP_EDGE = new Color(34, 24, 12, 200);
-	private static final Color SPECULAR = new Color(255, 255, 245, 60);
+
 	private static final Color EDGE_SHADE = new Color(60, 42, 20, 90);
 	private static final Color EDGE_CLEAR = new Color(60, 42, 20, 0);
 	private static final Color VIGNETTE = new Color(120, 96, 60, 70);

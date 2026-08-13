@@ -77,8 +77,7 @@ public class GachamanPlugin extends Plugin {
 	// services
 	@Inject
 	private GachaStateService stateService;
-	@Inject
-	private CreditSink creditSink;
+
 	@Inject
 	private CeremonyBus ceremonyBus;
 	@Inject

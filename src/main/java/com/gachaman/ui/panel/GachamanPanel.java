@@ -55,7 +55,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	private static final int SCAN_POLL_MS = 400;
 	private static final String GITHUB_URL = "https://github.com/BraveH/Gachaman";
 	private static final String KOFI_URL = "https://ko-fi.com/amrothabet";
-	private static final int LINK_ICON_SIZE = 18;
+
 
 	private final GachaStateService stateService;
 	private final CardDatabase cardDatabase;
