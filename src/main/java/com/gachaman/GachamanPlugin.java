@@ -65,6 +65,8 @@ public class GachamanPlugin extends Plugin {
 	private ConfigManager configManager;
 	@Inject
 	private GachamanConfig config;
+	@Inject
+	private UpdateService updateService;
 
 	// data
 	@Inject
@@ -255,6 +257,7 @@ public class GachamanPlugin extends Plugin {
 
 	@Override
 	protected void startUp() {
+		updateService.start();
 		// service listener graph
 		styleTracker.addListener(complianceService);
 		styleTracker.addListener(taskService); // any attack keeps the combo chain alive
@@ -362,6 +365,7 @@ public class GachamanPlugin extends Plugin {
 
 	@Override
 	protected void shutDown() {
+		updateService.stop();
 		// renderer FIRST: commit-time ceremony submissions must only queue (and
 		// then be cleared), never be claimed into the overlay being torn down
 		ceremonyBus.removeRenderer(revealOverlay);
@@ -452,6 +456,7 @@ public class GachamanPlugin extends Plugin {
 	public void onGameStateChanged(GameStateChanged event) {
 		if (event.getGameState() == GameState.LOGGED_IN) {
 			stateLoadPending = true;
+			updateService.onLoggedIn();
 		}
 		else if (event.getGameState() == GameState.LOGIN_SCREEN) {
 			// credit kills still waiting on the loot oracle BEFORE checkpointing
