@@ -159,4 +159,34 @@ public class TaskGeneratorTest
 		Assert.assertTrue(insane.getCompletionGc() > easy.getCompletionGc() * 4);
 		Assert.assertTrue(insane.getPerKillGc() > easy.getPerKillGc() * 2);
 	}
+
+	@Test
+	public void bigHitBetIsAlwaysWinnableByThePlayerItIsDealtTo()
+	{
+		// the bug this replaced: the threshold came off combat level and was
+		// floored at 5, so a combat-12 account whose calculated max is 3 was
+		// dealt "land a hit of 6+" and could not win it at all
+		Assert.assertTrue("a player who maxes 3 must be dealt 3 or less",
+			TaskGenerator.bigHitThreshold(3) <= 3);
+		Assert.assertTrue("a player who maxes 6 must be dealt 6 or less",
+			TaskGenerator.bigHitThreshold(6) <= 6);
+		// winnable for EVERY observed ceiling, which is the whole property
+		for (int best = 1; best <= 120; best++)
+		{
+			Assert.assertTrue("unwinnable at best hit " + best,
+				TaskGenerator.bigHitThreshold(best) <= best);
+		}
+	}
+
+	@Test
+	public void bigHitBetFloorsAndClimbsAndCaps()
+	{
+		// ceiling unreadable (logged out, no style rolled): a low guess, never 0
+		Assert.assertEquals(2, TaskGenerator.bigHitThreshold(0));
+		// but once a real ceiling is known the guess never overrides it
+		Assert.assertEquals(1, TaskGenerator.bigHitThreshold(1));
+		// and it tracks the player upward rather than sitting at the floor
+		Assert.assertTrue(TaskGenerator.bigHitThreshold(40) > TaskGenerator.bigHitThreshold(10));
+		Assert.assertEquals(40, TaskGenerator.bigHitThreshold(999));
+	}
 }

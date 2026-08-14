@@ -58,6 +58,43 @@ public class EarlyGameMathTest
 	}
 
 	@Test
+	public void milestoneLadderTakesTheHighestTierOnly()
+	{
+		// ordinary contracts pay flat
+		Assert.assertEquals(1.0, Tuning.completionMilestoneMult(1), 1e-9);
+		Assert.assertEquals(1.0, Tuning.completionMilestoneMult(4), 1e-9);
+		Assert.assertEquals(1.0, Tuning.completionMilestoneMult(99), 1e-9);
+		// each tier, and crucially the overlaps: 10 is also a multiple of 5,
+		// 100 is a multiple of all of them. Highest wins, they never stack.
+		Assert.assertEquals(1.5, Tuning.completionMilestoneMult(5), 1e-9);
+		Assert.assertEquals(2.5, Tuning.completionMilestoneMult(10), 1e-9);
+		Assert.assertEquals(5.0, Tuning.completionMilestoneMult(50), 1e-9);
+		Assert.assertEquals(10.0, Tuning.completionMilestoneMult(100), 1e-9);
+		Assert.assertEquals(15.0, Tuning.completionMilestoneMult(250), 1e-9);
+		// and it repeats rather than firing once
+		Assert.assertEquals(10.0, Tuning.completionMilestoneMult(200), 1e-9);
+		Assert.assertEquals(2.5, Tuning.completionMilestoneMult(110), 1e-9);
+		// zero is "no contracts finished", not "a multiple of everything" —
+		// without the guard the modulo would call it a x15 milestone
+		Assert.assertEquals(1.0, Tuning.completionMilestoneMult(0), 1e-9);
+		Assert.assertEquals(1.0, Tuning.completionMilestoneMult(-5), 1e-9);
+	}
+
+	@Test
+	public void milestoneLadderKeepsTheAverageModest()
+	{
+		// the property that stops the ladder quietly becoming the economy: the
+		// peaks are dramatic but the mean lift over a long run stays near +30%.
+		double sum = 0;
+		for (int n = 1; n <= 1000; n++)
+		{
+			sum += Tuning.completionMilestoneMult(n);
+		}
+		double mean = sum / 1000.0;
+		Assert.assertTrue("average lift was " + mean, mean > 1.2 && mean < 1.45);
+	}
+
+	@Test
 	public void fragmentMapping()
 	{
 		Assert.assertEquals(0, Tuning.fragmentsFor(TaskDifficulty.EASY));

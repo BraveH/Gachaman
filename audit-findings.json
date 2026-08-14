@@ -1,0 +1,1146 @@
+{
+ "src/main/java/com/gachaman/service/TaskService.java": [
+  {
+   "file": "src/main/java/com/gachaman/service/TaskService.java",
+   "line": 475,
+   "kind": "dead-code",
+   "summary": "The 5-arg `acceptInternal` overload (lines 475-478) exists only to forward to the 6-arg one with a null proposal id, and has exactly one caller — line 433. Inline it (`acceptInternal(offer, null, null, true, null)`) and delete the overload. In the same edit, drop the `long partyAnchorId` parameter: both call sites (433 and 471) pass a literal 0, so `.partyAnchorId(partyAnchorId)` on line 496 is always `.partyAnchorId(0)`. ActiveTask.java line 100 already documents the persisted field as \"exactly that mistake and is dead weight for it\" — the field must stay for save-format compatibility, but the parameter threading a constant through two signatures is pure overhead.",
+   "why_safe": "The overload's entire body is a forwarding call; inlining it at the single call site produces byte-identical behaviour. partyAnchorId is provably always 0: grep across src shows only two call sites (TaskService:433 and :471), both passing the literal 0, and no other main-source writer of the parameter. ActiveTask.partyAnchorId keeps its @SerializedName and its 0 default, so saved games encode and decode identically.",
+   "chars_saved": 270
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/TaskService.java",
+   "line": 298,
+   "kind": "dedupe",
+   "summary": "Seven FANFARE submissions repeat the identical 77-char boilerplate `ceremonyBus.submit(CeremonyBus.Type.FANFARE, new CeremonyBus.Fanfare(<Size>, title, detail, null))` (lines 298, 520, 861, 901, 910, 1158, 1181). Add one convenience method to CeremonyBus (same package, com.gachaman.service): `public void fanfare(Fanfare.Size size, String title, String detail) { submit(Type.FANFARE, new Fanfare(size, title, detail, null)); }` (~137 chars) and every site becomes `ceremonyBus.fanfare(CeremonyBus.Fanfare.Size.MEDIUM, \"...\", \"...\");` — 56 chars saved per site, 392 in this file, 255 net after the helper. The SAME helper then serves 8 further FANFARE sites in 6 other files (RevealOverlay, BossKcService, ChestService x2, FirstsService, GraduationService, MilestoneService, SetPerkService) for roughly 450 more, ~703 net repo-wide. A larger alternative — three size-specific methods smallFanfare/mediumFanfare/largeFanfare (~375 chars of helper) — saves 83 per site: 581 in this file, but only 206 net if TaskService alone is converted (i.e. WORSE than the single helper in-file) and ~870 net if all 15 sites repo-wide are converted. Recommend the single-helper form.",
+   "why_safe": "Pure mechanical extraction: the helper body is character-for-character the expression it replaces, with the same Type.FANFARE and the same null iconItemId. All seven TaskService sites pass null for the icon, so no site loses an argument. CeremonyBus has no existing member named `fanfare` (its methods are addTap, removeTap, setFallback, addRenderer, removeRenderer, clear, submit, enqueue, drain), so no overload ambiguity. The SMALL-coalescing logic lives inside enqueue(), which is reached through submit() either way, so banner coalescing behaviour is untouched.",
+   "chars_saved": 255
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/TaskService.java",
+   "line": 272,
+   "kind": "dedupe",
+   "summary": "The two-line prologue `GachaState state = stateService.get(); ActiveTask task = state == null ? null : state.getActiveTask();` is repeated verbatim at getActiveAnteStake (272-274), syncPartyKills (578-579), completeSharedIfReached (590-591) and forcePartyComplete (600-601). Extract `@Nullable private ActiveTask activeTask() { GachaState state = stateService.get(); return state == null ? null : state.getActiveTask(); }` (~143 chars); each site becomes `ActiveTask task = activeTask();` (72 saved x 4 = 288). checkSideBets (817-825) folds in too: `ActiveTask task = activeTask(); if (task == null) { return; }` replaces the state guard AND lets line 825's re-read be deleted (~81 more).",
+   "why_safe": "Every one of the five sites uses `state` for nothing except deriving the task, so the local becomes unused and the derived value is identical. In checkSideBets the read moves earlier by four lines, past `recentKillTicks.add(...)` and the size-trim loop — neither touches stateService, so the task observed is the same object either way. Note the check must stay `task == null`, not a separate state-null test: activeTask() conflates \"no state\" with \"no task\", which is exactly what all five original guards already did (each returns/short-circuits identically in both cases). Do NOT apply this to canRollOffers, which needs its distinct `state != null` test.",
+   "chars_saved": 226
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/TaskService.java",
+   "line": 404,
+   "kind": "terser",
+   "summary": "`demotePartyOffers` rebuilds each offer field-by-field through the 9-arg TaskOffer constructor (lines 404-406, ~243 chars) purely to flip partyRoll to false. TaskOffer is @Value but has no @With. Add `@With` to TaskOffer (6 chars in src/main/java/com/gachaman/model/TaskOffer.java) and the loop body collapses to `personal.add(offer.withPartyRoll(false));`.",
+   "why_safe": "I checked TaskOffer's field list against the constructor call argument-for-argument: difficulty, monsterName, monsterCombatLevel, killsRequired, perKillGc, completionGc, sideBets, redemption, partyRoll — the reconstruction copies all eight leading fields verbatim and only forces the ninth to false, which is exactly what withPartyRoll(false) does. One nuance worth stating: Lombok's @With returns `this` when the value is unchanged, so an offer already carrying partyRoll=false yields the same instance instead of a fresh copy. TaskOffer is @Value (deeply immutable, no identity semantics anywhere — it is only read via getters and passed to the ceremony bus), so instance sharing is unobservable. @With generates methods only; it adds no fields and cannot affect Gson serialisation.",
+   "chars_saved": 193
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/TaskService.java",
+   "line": 663,
+   "kind": "terser",
+   "summary": "Two hand-inlined copies of the `comboAlive` predicate sit next to the helper that already implements it. Line 663 `if (comboIdleAnchorTick < 0 || killTick - comboIdleAnchorTick > Tuning.COMBO_IDLE_RESET_TICKS)` is exactly `if (!comboAlive(killTick))`; line 680 `if (comboIdleAnchorTick >= 0 && tick - comboIdleAnchorTick <= Tuning.COMBO_IDLE_RESET_TICKS)` is exactly `if (comboAlive(tick))`.",
+   "why_safe": "comboAlive(n) is defined at line 618 as `comboIdleAnchorTick >= 0 && n - comboIdleAnchorTick <= Tuning.COMBO_IDLE_RESET_TICKS`. Line 680 is that expression verbatim with n = tick. Line 663 is its exact De Morgan negation (`< 0 ||  > RESET` is the complement of `>= 0 && <= RESET`), so `!comboAlive(killTick)` matches on every input including the boundary tick. comboAlive is private and reads only the field both sites already read, so no ordering or side effect changes. ComboChainTest already pins advanceCombo's boundary behaviour (lines 101, 111, 123) and would catch any slip.",
+   "chars_saved": 141
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/TaskService.java",
+   "line": 1251,
+   "kind": "terser",
+   "summary": "`client.getRealSkillLevel(...)` appears 9 times (349, 919, and seven times in playerCombatLevel at 1253-1259). A short private helper `private int lvl(Skill skill) { return client.getRealSkillLevel(skill); }` (~75 chars) turns each of the 9 call sites into `lvl(Skill.X)`, saving 21 chars apiece.",
+   "why_safe": "Straight delegation with no added state — the helper is a private instance method on the same field the call sites already read, evaluated in the same order at the same points. playerCombatLevel's seven arguments keep their exact positional order (ATTACK, STRENGTH, DEFENCE, HITPOINTS, MAGIC, RANGED, PRAYER), so Experience.getCombatLevel receives identical inputs. The name `lvl` collides with nothing in the file or in any of its eleven wildcard imports.",
+   "chars_saved": 119
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/TaskService.java",
+   "line": 313,
+   "kind": "dedupe",
+   "summary": "The null-or-empty pending-offer test `state.getPendingOffers() == null || state.getPendingOffers().isEmpty()` is spelled out four times. Extract `private List<TaskOffer> pending() { GachaState state = stateService.get(); List<TaskOffer> offers = state == null ? null : state.getPendingOffers(); return offers == null ? List.of() : offers; }` (~200 chars). hasPendingOffers becomes `return !pending().isEmpty();` (110 saved), hasPendingPartyOffers becomes a two-liner over the local (97), presentOffers drops its whole guard (92).",
+   "why_safe": "A never-null accessor that returns List.of() where the old code short-circuited on null gives the identical answer at all three sites: !isEmpty() is false for an empty list exactly as the null test made it false, and hasPendingPartyOffers' get(0) is still reached only when non-empty, preserving the first-element convention its comment says must match demotePartyOffers. presentOffers submits the same list instance it does today (pending() returns the state's own list unchanged when present). List.of() is immutable and nothing mutates the returned list. Deliberately NOT applied to canRollOffers, rollOffers or presentPartyOffers: canRollOffers needs its own `state != null` test (which activeTask()/pending() would swallow), and the other two already route through hasPendingOffers().",
+   "chars_saved": 99
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/TaskService.java",
+   "line": 412,
+   "kind": "dedupe",
+   "summary": "acceptOffer (412-418) and the 6-arg acceptPartyOffer (462-470) open with a character-identical 259-char guard-plus-fetch block. Extract `@Nullable private TaskOffer offerAt(int index)` holding that exact guard; each site collapses to `TaskOffer offer = offerAt(index); if (offer == null) { return false; }`. Standalone net is ~50 chars; composed with the pending() helper above (the guard body shrinks to `return state == null || state.getActiveTask() != null || index >= offers.size() ? null : offers.get(index);`) the pair is worth ~110 more, so pending() + offerAt() together net roughly 208.",
+   "why_safe": "The extracted guard is copied verbatim, so the four conditions fire in the same order with the same short-circuits and both callers still return false in exactly the cases they do now. One disclosure on the composed variant: with a NEGATIVE index and a null pendingOffers list, today's code returns false via the `getPendingOffers() == null` test, whereas the pending()-backed version would reach List.of().get(-1) and throw. Keep an `index < 0 ||` term in the composed helper to close that — it makes negative indices return false in all cases, where today some paths return false and some throw IndexOutOfBoundsException. Neither is reachable in practice: the only main-source caller is RevealOverlay:791, which passes a rendered offer-card position (0..n), and normalized() backfills null collections.",
+   "chars_saved": 50
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/TaskService.java",
+   "line": 3,
+   "kind": "dead-code",
+   "summary": "`import java.util.Deque;` on line 3 is fully redundant — line 7 already has `import java.util.*;` — and it also violates the wildcard-imports rule in CLAUDE.md, which reserves explicit single-class imports for documented collision resolvers.",
+   "why_safe": "Deque is not a collision resolver here: I checked all eleven wildcard imports in this file (com.gachaman.*, com.gachaman.data.*, com.gachaman.model.*, java.util.*, java.util.function.*, javax.annotation.*, javax.inject.*, lombok.*, lombok.extern.slf4j.*, net.runelite.api.*, net.runelite.api.coords.*, net.runelite.api.gameval.*) and none of them exports a type named Deque, so java.util.* resolves it unambiguously. This is not one of the five collisions CLAUDE.md lists (Inject/Singleton, List, Point, InterfaceID/InventoryID, Timer). The odd placement above the com.gachaman imports marks it as a leftover.",
+   "chars_saved": 25
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/TaskService.java",
+   "line": 1063,
+   "kind": "terser",
+   "summary": "`int newTotal = taskNumber;` (line 1063) is a pure alias for the value computed 52 lines earlier at line 1011. Delete the declaration and use taskNumber at its three read sites (1069, 1078, 1111). The explanatory comment stays — comments are free.",
+   "why_safe": "newTotal is assigned once, from taskNumber, and never reassigned; taskNumber is likewise assigned once (`state.getTotalTasksCompleted() + 1`) and never reassigned, and both are read after the same point. Substituting one for the other is a textual rename with no evaluation-order or effectively-final consequence — neither is captured by the lambda passed to stateService.mutate (the lambda reads milestoneFinal, fragmentsEarnedFinal, pbFinal and the arrays, plus newTotal at 1111, which remains effectively final as taskNumber).",
+   "chars_saved": 22
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/TaskService.java",
+   "line": 804,
+   "kind": "bug",
+   "summary": "Efficiency note on the hottest path in the plugin, reported with no refactor attached: the party-progress fan-out calls stateService.get() FOUR times per listener per kill (804-808) — twice in the condition, once for isParty(), once to build the argument. With five registered listeners that is 20 state reads per credited kill, and the four reads are not guaranteed to agree with each other. I am deliberately NOT proposing the obvious hoist: re-evaluating per iteration is load-bearing if any listener mutates state (a listener that ended the contract currently suppresses notification of the listeners after it), so hoisting the check out of the loop would be a real behaviour change, not a cleanup. A strictly-identical rewrite that reads once per ITERATION into a local is available but is worth only ~35 chars, below the noise floor of these estimates.",
+   "why_safe": "No change proposed, so nothing to make safe. Flagged because the task asks for correctness observations regardless of token impact: the repeated reads mean the condition and the argument are separate observations of mutable state, which is fragile even though GachaStateService.get() is an unsynchronised field read that is stable on the client thread today.",
+   "chars_saved": 0
+  }
+ ],
+ "src/main/java/com/gachaman/service/KillTracker.java": [
+  {
+   "file": "src/main/java/com/gachaman/service/KillTracker.java",
+   "line": 396,
+   "kind": "dead-code",
+   "summary": "`public boolean isPlayerLowHp(double fraction)` has zero callers anywhere in the repository, and duplicates TaskService.killTrackerLowHp() (line 917), which reimplements the same test inline as `boosted * 4 <= real`. Delete isPlayerLowHp (~212 chars). (The alternative — injecting KillTracker into TaskService to reuse it — saves less and adds a dependency edge, so deletion is the better trade.)",
+   "why_safe": "Verified unreachable three ways: `grep -arn isPlayerLowHp src` returns only the declaration; the broader `grep -arn \"PlayerLowHp|lowHp|LowHp|LOW_HP\" src docs README.md` returns only the declaration plus TaskService's separately-named private twin; and a scan of every `killTracker.` / `killTracker::` reference in src/main (addListener, removeListener, flushPending, currentTick) shows no method reference could be hiding it — the same method-reference trap that made presentOffers() look dead. The plugin uses no reflection (CLAUDE.md forbids it), so there is no other route to this method. Deleting it removes no behaviour: TaskService's CLUTCH_KILL check is its own private copy and is untouched.",
+   "chars_saved": 212
+  }
+ ],
+ "src/main/java/com/gachaman/ui/panel/ShopTab.java": [
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/ShopTab.java",
+   "line": 899,
+   "kind": "bake-to-resource",
+   "summary": "ChestTile's procedural chest icon (lines 898-914) is a pure function of (tier, lit/dim) with only 8 possible outputs, drawn from scratch on every paint. Author the 8 sprites in src/test (the repo already does exactly this: src/test/java/com/gachaman/overlay/ChestPainter.java and CeremonyArt.java write PNGs into src/main/resources/com/gachaman/art/) and replace the block with a cached ImageUtil.loadImageResource + one g2.drawImage. This deletes far more than the draw calls: it also kills bodyColor() (lines 950-961) and desaturate() (lines 976-982) outright.",
+   "why_safe": "Deletion chain, verified by reading every use. `body` is read ONLY at lines 903 and 913 — both inside the icon block — so baking the icon makes bodyColor() dead. `trim` is read at 894 (tile border) and at 906/908/909/912 (icon). The border at 894 is `affordable ? trim : ColorScheme.MEDIUM_GRAY_COLOR`, i.e. it uses `trim` only when affordable, while the desaturation at 886-889 runs only when NOT affordable — so the desaturated `trim` reaches the icon and nothing else. Bake the icon and desaturate() has no remaining caller either. trimColor() must stay (the affordable border). Pixel result is the same: antialiased shapes composited SRC_OVER from a transparent ARGB buffer give cov*src + (1-cov)*dst, identical to drawing straight onto the tile background, provided the test-side author issues the same calls in the same order with KEY_ANTIALIASING on and 1.5f stroke — the same guarantee ChestPainter/CeremonyArt already rely on. The sprite cache is a plain HashMap and needs no synchronization: paintComponent is EDT-only. PNGs live in src/main/resources and cost zero tokens.",
+   "chars_saved": 850
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/ShopTab.java",
+   "line": 456,
+   "kind": "dedupe",
+   "summary": "bandHeader() (456-521) rebuilds, line for line, the row that oddsRow() (571-585) already builds: same `new JPanel(new BorderLayout(ROW_GAP, 0))`, setOpaque(false), setAlignmentX, right-hand GachamanPanel.line + setToolTipText, ellipsis budget, truncatedLine, add(left, CENTER)/add(right, EAST), `Math.max(left.h, right.h)` and setMaximumSize. Give oddsRow a trailing `int reserved` parameter (`budget = SECTION_INNER_WIDTH - reserved - right.getPreferredSize().width - ROW_GAP`), pass 0 at the three existing call sites (328, 383, 436), and have bandHeader call `oddsRow(title, pct(total), color, tip, markerSize.width + ROW_GAP)` then add the marker to BorderLayout.WEST. The listener loop at 516 becomes `for (Component part : row.getComponents())`, which drops the need for named `left`/`right` refs.",
+   "why_safe": "Arithmetically identical. bandHeader's current budget is `SECTION_INNER_WIDTH - markerSize.width - right.width - 2 * ROW_GAP`; with reserved = markerSize.width + ROW_GAP the helper computes the same value. The font is the same object in both: bandHeader line 463 and oddsRow lines 575/578 both call FontManager.getRunescapeSmallFont(). The row height already ignores the marker in the current code (`Math.max(left, right)` only), so hoisting it changes nothing; the marker is a same-font label anyway. getComponents() after the helper returns [left, right, marker] — the same three labels the current array literal names, and Swing does not bubble mouse events, so each still receives exactly one toggle listener. Adding the marker to WEST after setMaximumSize does not disturb the cap.",
+   "chars_saved": 540
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/ShopTab.java",
+   "line": 102,
+   "kind": "dedupe",
+   "summary": "WidthCap exists three times in the same package: ShopTab.java:102, HelpTab.java:296, PartyTab.java:538. HelpTab's and PartyTab's are already byte-identical to each other (PartyTab's own comment calls it \"a private twin of HelpTab's\"), and ShopTab's differs only in hardcoding CONTENT_WIDTH instead of taking a cap field. Hoist one package-private `static final class WidthCap` into GachamanPanel and call `new GachamanPanel.WidthCap(section, CONTENT_WIDTH)` at ShopTab.java:91.",
+   "why_safe": "The two-arg form already exists verbatim in HelpTab and PartyTab, so no new code is written — one of the three copies simply moves. ShopTab's fixed CONTENT_WIDTH becomes the constructor argument, which is what the other two already do. getPreferredSize/getMaximumSize bodies are character-identical across all three. Number given is the ShopTab-attributable share (its ~460-char copy, less ~18 for the widened call). Repo-wide the collapse is ~850: 3 copies at ~470 become one shared ~500 plus three ~20-char call-site deltas.",
+   "chars_saved": 440
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/ShopTab.java",
+   "line": 158,
+   "kind": "dedupe",
+   "summary": "wrappedText() re-implements GachamanPanel.textBlock(String, Color, int) (GachamanPanel.java:940) statement for statement — same JTextArea, same setEditable/setFocusable/setOpaque/setLineWrap/setWrapStyleWord/setBorder(null)/setForeground/setFont/setAlignmentX, same setSize-then-measure, same preferred and maximum pinning. The only difference is that ShopTab also pins the minimum. Collapse the body to: `JTextArea area = GachamanPanel.textBlock(text, color, SECTION_INNER_WIDTH); area.setMinimumSize(area.getPreferredSize()); return area;` (12 call sites in this file are untouched).",
+   "why_safe": "textBlock already sets preferredSize and maximumSize to (width, measured height) after the same setSize(width, Short.MAX_VALUE) measure, so the resulting component is identical apart from minimumSize, which the wrapper then applies from the preferred size textBlock just pinned — the exact `fixed` Dimension value the current code uses. SECTION_INNER_WIDTH is GachamanPanel.SECTION_WIDTH (line 30), the same 205 HelpTab passes. textBlock returns JTextArea (not JComponent), so setMinimumSize is reachable without a cast. Do NOT instead move the minimum-size pin into textBlock itself: that would change layout behaviour for HelpTab's and PartyTab's existing callers.",
+   "chars_saved": 430
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/ShopTab.java",
+   "line": 191,
+   "kind": "dedupe",
+   "summary": "buildBalanceSection() (191-199) is character-identical to OverviewTab.buildBalanceSection() lines 185-191 — same GachamanPanel.section(null), same `formatNumber(state.getGc()) + \" GC\"` label, same getRunescapeBoldFont().deriveFont(26f), same BRAND_ORANGE, same LEFT_ALIGNMENT, same section.add. OverviewTab then continues with its \"Lifetime earned\" line; ShopTab returns. Hoist a `static JPanel balanceSection(GachaState state)` into GachamanPanel, delete ShopTab's private method, and call `addSection(GachamanPanel.balanceSection(state))` at line 76. OverviewTab keeps its extra lines by appending to the returned panel. ShopTab's own comment at line 190 (\"Same big GC readout as the Overview tab\") already documents the duplication.",
+   "why_safe": "The six statements are copies of each other, so the hoisted helper is a verbatim move — no logic is rewritten and both call sites get the same panel back. OverviewTab's additional smallLine calls simply follow `JPanel section = GachamanPanel.balanceSection(state);`, which is where its own code already picks up. Number given is the repo-net figure: ShopTab sheds ~370 (whole method) while GachamanPanel's new helper costs ~80 more than OverviewTab's inline copy saved.",
+   "chars_saved": 300
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/ShopTab.java",
+   "line": 707,
+   "kind": "dedupe",
+   "summary": "The Compactor block (707-716) and the Extender block (717-725) are the same five-statement shape with different literals: fullWidthButton with a `free > 0 ? name + \" — FREE voucher\" : name + \" — \" + formatNumber(price) + \" GC\"` label, setToolTipText with the same `(free > 0 ? \" Uses your free voucher — no GC.\" : \"\")` tail, setEnabled(free > 0 || gc >= price), addActionListener(e -> buyCharge(...)), section.add. Extract `private JButton chargeButton(boolean compactor, String pretty, int price, int free, long gc, String tip)` and call it twice, passing only the two prose tooltips as literals.",
+   "why_safe": "Behaviour is identical because every varying piece is already a parameter of the same expression on both sides: pretty name, price constant, free-voucher count, and the boolean handed to buyCharge. The duplicated voucher sentence `\" Uses your free voucher — no GC.\"` (32 chars, appears at 712 and 721) collapses into the helper. The long tooltip prose stays at the call sites verbatim, so no player-visible string changes.",
+   "chars_saved": 270
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/ShopTab.java",
+   "line": 240,
+   "kind": "terser",
+   "summary": "Three parallel switch statements over the 4-constant Tuning.Chest enum — chestName (240-251), bodyColor (950-961), trimColor (963-974) — each spending ~250-280 chars to express a 4-entry lookup table. Replace with ordinal-indexed static arrays, e.g. `private static final String[] CHEST_NAMES = {\"Rusty Chest\", \"Battered Chest\", \"Gilded Chest\", \"Ornate Chest\"};` and `return CHEST_NAMES[tier.ordinal()];`. NOTE THE OVERLAP: the ~127 chars for bodyColor are already counted in the bake-to-resource finding, which deletes bodyColor entirely — the number here is chestName (~47) + trimColor (~127) only, so the two findings can be added without double-counting.",
+   "why_safe": "Tuning.Chest is declared `RUSTY, BATTERED, GILDED, ORNATE` (Tuning.java:199-200) and each switch's `default:` arm is the ORNATE case, so array order matches switch behaviour for every value that exists. Same colours, same strings, no player-visible change. One real difference to be honest about: if a fifth constant were ever added, the switch would silently return the Ornate value while the array would throw — pin the invariant with an array-length test in src/test (free, and TuningTableTest already exists as the place for it).",
+   "chars_saved": 175
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/ShopTab.java",
+   "line": 37,
+   "kind": "dead-code",
+   "summary": "The `creditSink` field is never read. It is declared at line 37, taken as a constructor parameter at line 47 and assigned at line 55, and that is every occurrence in the file. Delete the field, the parameter and the assignment.",
+   "why_safe": "Verified by a repo-wide grep for both `creditSink` and `CreditSink`: within ShopTab.java the only three hits are the declaration, the constructor parameter and the assignment — no method body touches it. Nothing reflective can reach it (CLAUDE.md forbids reflection outright) and there is no Lombok annotation on the class. ShopTab is constructed only by Guice via the @Inject constructor; no test constructs it (the tests touch only the static ShopTab.rowTooltip and ShopTab.pct), so dropping the parameter breaks no caller. The `com.gachaman.service.*` wildcard import stays — other service types in this file need it.",
+   "chars_saved": 90
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/ShopTab.java",
+   "line": 461,
+   "kind": "terser",
+   "summary": "`Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)` (45 chars) is written out three times — lines 461, 518 and 865. Hoist to `private static final Cursor HAND = ...`.",
+   "why_safe": "getPredefinedCursor returns a shared, immutable, cached Cursor instance per type, so a single static reference is the same object the three calls already hand back. Small, but the file is at the token limit and this is free. Note the bandHeader/oddsRow dedupe finding removes one of the three sites on its own, so take that one first and re-count.",
+   "chars_saved": 41
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/ShopTab.java",
+   "line": 927,
+   "kind": "terser",
+   "summary": "`Tuning.CHEST_CARDS.get(tier)` is evaluated twice in the same expression at lines 927-928 (once for the number, once for the singular/plural test). Hoist to a local, exactly as the constructor already does at line 859 (`int cards = Tuning.CHEST_CARDS.get(tier);`).",
+   "why_safe": "CHEST_CARDS is a static final EnumMap built once in Tuning (line 206) and never mutated, so both reads return the same Integer and one local is equivalent. The identical hoist is already present a few lines above in the same class, so this matches the file's own style.",
+   "chars_saved": 26
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/ShopTab.java",
+   "line": 886,
+   "kind": "dead-code",
+   "summary": "`if (!affordable || remaining == 0)` at line 886 — the `|| remaining == 0` disjunct can never decide the branch.",
+   "why_safe": "The constructor at line 846 assigns `this.affordable = affordable && remaining != 0`, so remaining == 0 already implies the field is false, and `!affordable` is true whenever `remaining == 0` is. Removing the second disjunct cannot change which branch runs. Note this does NOT apply to line 934's `if (!affordable && remaining != 0)`, where the remaining test is load-bearing (it suppresses the progress bar on a retired tile).",
+   "chars_saved": 18
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/ShopTab.java",
+   "line": 615,
+   "kind": "bug",
+   "summary": "requestOdds() latches permanently if the client-thread body throws. `oddsRequested = true` is set at line 611; it is only ever cleared at line 618, inside the SwingUtilities.invokeLater posted from INSIDE the client-thread lambda. If chestService.oddsFor(wanted) throws (it walks the card DB and reads live skill levels), that continuation is never posted, oddsRequested stays true forever, and every later requestOdds() returns at line 608. Fix: wrap the client-thread body in try/finally so the EDT continuation is always posted (clearing the flag even when the snapshot is null).",
+   "why_safe": "This is a real defect, not a style point, and the fix changes nothing on the success path — the finally block posts the same continuation that the happy path posts today. Worth reporting regardless of tokens: the failure is silent and permanent within a session.",
+   "chars_saved": 0
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/ShopTab.java",
+   "line": 213,
+   "kind": "bug",
+   "summary": "Sentinel collision on the Rusty lifetime counter. Line 213-215 computes `remaining = Tuning.RUSTY_LIFETIME_CAP - chestService.rustyChestsOpened()` with no floor, while -1 is the file's documented \"uncapped\" sentinel (line 841). A persisted chestsOpenedByTier value above the cap of 3 yields remaining == -1, so the retired Rusty tile renders as a normal uncapped chest: `remaining == 0` (line 852/886/923) is false so it is neither greyed nor labelled \"Rusted away\", `remaining > 0` is false so no \"N left\" is printed, and the tile stays clickable. Clicking it then hits ChestService.openChest's rustyAvailable() guard, returns null, and the player gets the generic \"cannot be opened right now (another reveal in progress, or not enough GC)\" dialog — which names two reasons, neither of them the real one. Fix: `Math.max(0, ...)`.",
+   "why_safe": "Real defect: the counter is read from persisted state via state.getChestsOpenedByTier().getOrDefault(...) (ChestService.java:181-187), so a stale, hand-edited or migrated save can exceed the cap even though openChest's own guard prevents it during normal play. Clamping to 0 preserves every current behaviour exactly — for opened counts of 0..3 the clamp is a no-op, and at >3 it selects the already-correct retired rendering rather than the uncapped one.",
+   "chars_saved": 0
+  }
+ ],
+ "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/ui/panel/AlbumTab.java": [
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/ui/panel/AlbumTab.java",
+   "line": 513,
+   "kind": "bake-to-resource",
+   "summary": "StardustIcon (lines 513-549, 1023 stripped chars) and CheckboxIcon (551-592, 1093 chars) are two hand-painted Icon classes that draw a FIXED 13x13 image with no dependence on runtime state — StardustIcon uses only hardcoded Colors, CheckboxIcon only ColorScheme.DARKER_GRAY_COLOR / LIGHT_GRAY_COLOR / Color.WHITE, both static finals. This is exactly the case src/test/java/com/gachaman/tools/IconArt.java already exists for (its javadoc: 'painted at runtime by PanelIcon and by two GachamanPanel methods... painting them on every panel build was re-deriving a constant'). Author stardust.png, checkbox-off.png, checkbox-on.png in IconArt, then lines 129/148/149 become GachamanPanel.icon(\"stardust\") / icon(\"checkbox-off\") / icon(\"checkbox-on\").",
+   "why_safe": "Same pixels: the PNGs are generated by moving the identical paintIcon drawing code into IconArt, and a src/test comparison test (free) can pin raster equality. NOT a single-file edit — it needs three things: (a) GachamanPanel.java:426 `private static ImageIcon icon(String name)` must drop `private` to package-private so AlbumTab can call it (contrast GachamanPanel.hex() at line 929, which is ALREADY package-private and needs no change); (b) three new author methods + PNG writes in src/test/java/com/gachaman/tools/IconArt.java, which is free budget; (c) three committed PNGs under src/main/resources/com/gachaman/ui/, also free. One pixel-level caveat worth surfacing to the owner: Swing auto-derives a grayed disabled icon from an ImageIcon but not from a painted Icon — nothing in AlbumTab ever calls ownedOnlyBox.setEnabled(false) (verified by grep: no setEnabled in the file at all), so there is no visible difference today. On a HiDPI display a 13x13 PNG resamples where vector strokes would re-render crisply; the repo already accepts that tradeoff for panel-icon.png and the link icons.",
+   "chars_saved": 2076
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/ui/panel/AlbumTab.java",
+   "line": 787,
+   "kind": "dead-code",
+   "summary": "The entire hologram branch of the live-effect pass is unreachable. paintLiveEffect line 787 `boolean holo = entry.variant == Variant.HOLOGRAM` is always false, so the scanline block (805-814, 280 chars), the `|| holo` in the border test (816) and the `: HOLO_EDGE` arm (819) never execute, and the constants HOLO_SCAN / HOLO_EDGE (lines 71-72) are read only from there. hasLiveEffect line 490's `|| entry.variant == Variant.HOLOGRAM` is likewise always false.",
+   "why_safe": "Reachability proof, three independent links: (1) rebuild() line 246 does `if (owned.isHologram()) continue;` before populating ownedVariantByCardId, and OwnedCard.isHologram() IS `variant == Variant.HOLOGRAM`, so that map can never hold HOLOGRAM; (2) applyFilters line 434 sets Entry.variant to `owned ? ownedVariant : Variant.NORMAL` — the only two sources; (3) hologram OwnedCards carry cardId -1 (OwnedCard javadoc), which matches no CardDefinition anyway. Line 357's own comment states it outright: 'Holograms never enter the grid'. REPORTING ONLY, not proposing removal — the owner may intend this as future-proofing if holograms ever join the grid, and the class javadoc at line 38 still advertises 'shiny/hologram/EPIC+ cells'. Their call. Note this edit and the shinySheenColor finding both rewrite paintLiveEffect; sequence them.",
+   "chars_saved": 474
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/ui/panel/AlbumTab.java",
+   "line": 451,
+   "kind": "terser",
+   "summary": "slotNames() (451-458) and rarityNames() (460-467) are byte-identical enum-to-displayName array loops differing only in the enum type; 471 stripped chars for two methods used once each. Both collapse into their call sites at lines 112-113 as `comboOf(\"All slots\", Arrays.stream(GearSlot.values()).map(GearSlot::getDisplayName).toArray(String[]::new))` and the Rarity equivalent, deleting both methods.",
+   "why_safe": "Identical output: Arrays.stream preserves enum declaration order, which is what the loops produce and what applyFilters lines 406-409 rely on when it maps selectedIndex-1 back through GearSlot.values() / Rarity.values(). Recommend the stream form over a generic `<T> String[] names(T[], Function<T,String>)` helper specifically because it needs NO new import — java.util.* is already wildcard-imported for Arrays and the method reference never names Stream or Function — whereas the Function variant costs an import and saves ~110 chars less. The readability cost is real: a two-line chain at each call site is denser than a named slotNames(), so this is a budget trade, not a clarity win.",
+   "chars_saved": 326
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/ui/panel/AlbumTab.java",
+   "line": 116,
+   "kind": "dedupe",
+   "summary": "Four vertical/horizontal BoxLayout panels are hand-assembled with the same 3-4 line incantation: north (116-118), headerRow (122-125), searchRow (184-188) and holoPanel (195-197) each do `new JPanel()` + `setLayout(new BoxLayout(self, axis))` + `setOpaque(false)` (+ `setAlignmentX(Component.LEFT_ALIGNMENT)` on three of them) — 497 chars of boilerplate. A `static JPanel box(int axis)` helper collapses each to one line; holoPanel's field declaration at line 89 becomes `= box(BoxLayout.Y_AXIS)`.",
+   "why_safe": "Every property set is identical; the only delta is that `north` would additionally get setAlignmentX(LEFT_ALIGNMENT), which is inert because north is added with BorderLayout.NORTH (line 200) and BorderLayout ignores alignmentX. 289 chars is the conservative net with the ~208-char helper kept local to AlbumTab. Put the helper in GachamanPanel instead (package-private, next to the existing section()/line()/row() family) and AlbumTab nets ~440 while 14 further sites across the other tabs can draw on it — grep counts 18 `setLayout(new BoxLayout(` and 36 `setAlignmentX(Component.LEFT_ALIGNMENT)` calls repo-wide, with no existing helper.",
+   "chars_saved": 289
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/ui/panel/AlbumTab.java",
+   "line": 664,
+   "kind": "terser",
+   "summary": "hasVisibleEffectCells (664-688, 637 chars) re-derives the same firstRow/lastRow arithmetic paintComponent uses, then runs a nested row/col loop only to compute a monotonically increasing flat index. Because the index is monotonic, the whole thing is a flat scan over one contiguous index range: hoist the two isEmpty guards into one `if (entries.isEmpty() || vis.isEmpty())`, then loop `for (int i = firstRow * c; i < last; i++)` with `last = Math.min(entries.size(), (Math.max(firstRow, (vis.y + vis.height) / rowH) + 1) * c)`.",
+   "why_safe": "Scans exactly the same cells. index = row * c + col strictly increases across the nested loops, so the inner `if (index >= entries.size()) return false` is precisely the flat loop's upper bound, and Math.min against entries.size() reproduces it. Keeping `Math.max(firstRow, ...)` preserves the existing lastRow clamp verbatim, so even the vis.y<0 case (unreachable through a JViewport, but free to preserve) behaves the same. Both callers — tickEffects (line 656) and updateEffectTimer (769) — only read the boolean.",
+   "chars_saved": 150
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/ui/panel/AlbumTab.java",
+   "line": 363,
+   "kind": "dedupe",
+   "summary": "The Service Record phrase `QuantityFormatter.formatNumber(n) + (n == 1 ? \" kill\" : \" kills\")` is written out three times: the hologram tooltip (365-366), the hologram detail line (380-381) and the grid tooltip (1052-1055). A `private static String servedText(int kills)` returning `\"present for \" + formatNumber(kills) + (kills == 1 ? \" kill\" : \" kills\")` covers all three, since all three prefix it with only a separator (\" — \", \"    \", \" — \").",
+   "why_safe": "Character-identical output at all three sites — the separators stay at the call sites, only the shared tail moves. ServiceRecordService's javadoc pins the wording ('The album says \"present for N kills\" — never \"killed N\"'), so a single helper is also the right place for that invariant and a free src/test assertion. Deliberately excludes DossierTab.java:168, which uses the same pluralisation but with `.append()` on a StringBuilder and no 'present for' prefix — folding that in would change nothing but wouldn't shrink either.",
+   "chars_saved": 92
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/ui/panel/AlbumTab.java",
+   "line": 322,
+   "kind": "terser",
+   "summary": "updateHeader builds the rarity-counts HTML colour with a hand-rolled `rgb(r,g,b)` triple — `Color c = rarity.getColor();` plus two lines of .append(c.getRed()) / getGreen() / getBlue() (322-324, 176 chars). GachamanPanel.hex(Color) at line 929 already formats a colour for exactly this purpose and is used this way by DossierTab, PatronsTab and TimelineTab.",
+   "why_safe": "javax.swing.text.html.CSS parses `#rrggbb` and `rgb(r,g,b)` to the same Color, so the label renders identically. GachamanPanel.hex is already package-private and AlbumTab is in the same package, so `GachamanPanel.hex(rarity.getColor())` needs no visibility change and no import (unlike the icon() helper in the first finding, which does). A static import would save a further 14 chars but costs ~48 for the import line at a single use site, so qualify it.",
+   "chars_saved": 73
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/ui/panel/AlbumTab.java",
+   "line": 305,
+   "kind": "terser",
+   "summary": "updateHeader() calls stateService.get() a second time at line 305 into a local named `stardustState`, when rebuild() already holds the same state in a local at line 240 and passes it to rebuildHoloSection(state) two lines later. Change the signature to `updateHeader(@Nullable GachaState state)` and drop line 305 plus the longer local name.",
+   "why_safe": "Same object: rebuild() runs on the EDT and nothing between line 240 and the updateHeader() call at 259 mutates state — ensureSorted() only reads cardDatabase and sorts a local list. updateHeader already handles a null state (line 306-307 guard on `stardustState == null`), so the @Nullable parameter form is a straight substitution. Also removes an asymmetry: rebuildHoloSection takes the state, updateHeader silently re-fetched it.",
+   "chars_saved": 48
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/ui/panel/AlbumTab.java",
+   "line": 826,
+   "kind": "terser",
+   "summary": "shinySheenColor (826-829) reimplements Paint.withAlpha: it destructures a Color into getRed/getGreen/getBlue and rebuilds it with alpha 64. The body becomes `return Paint.withAlpha(CardRenderer.prismaticColor(now, 60), 64 / 255f);`.",
+   "why_safe": "Paint.withAlpha computes `Math.max(0, Math.min(255, Math.round(alpha * 255f)))`, and 64/255f * 255f rounds to exactly 64, so the returned Color is bit-identical. com.gachaman.ui.* is already wildcard-imported at line 9, so Paint resolves with no new import. Paint's own javadoc says it exists precisely to stop this pattern being re-copied ('had drifted into CardRenderer, RevealOverlay and KillJuiceOverlay as three byte-identical copies'). Touches paintLiveEffect's neighbourhood — sequence with the hologram dead-code finding.",
+   "chars_saved": 35
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/ui/panel/AlbumTab.java",
+   "line": 479,
+   "kind": "terser",
+   "summary": "keyOf() folds entry.variant into the thumbnail cache key, but the cached raster is variant-independent: rasterize() line 970 hardcodes `.variant(Variant.NORMAL)` for every cell. Dropping `+ entry.variant` leaves `cardId + (owned ? \":o:\" : \":u:\") + serviceKills`.",
+   "why_safe": "The raster depends only on (cardId, owned, serviceKills): name/subtitle branch on owned (968, 972), rarity and art come from cardId, killsServed is serviceKills, and the RescaleOp darkening at 980 branches on owned. The file's own comment at 964-966 states it — 'base raster is always the NORMAL face: time-varying variant effects... are painted live in paintComponent instead of being baked in'. No key collisions: with a fixed \":o:\"/\":u:\" delimiter and cardId first, \"12:o:35\" and \"123:o:5\" stay distinct. Small side benefit — a card upgrading NORMAL->SHINY now reuses its (identical) cached raster instead of re-rasterizing.",
+   "chars_saved": 23
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/ui/panel/AlbumTab.java",
+   "line": 410,
+   "kind": "terser",
+   "summary": "applyFilters resolves variantSel with a nested ternary (410-411) while the slot and rarity filters immediately above (406-409) both use the `values()[getSelectedIndex() - 1]` idiom. The variant combo is built at line 114 as [\"All variants\", \"Normal\", \"Shiny\"] and Variant.values() is [NORMAL, SHINY, HOLOGRAM], so the same idiom applies verbatim.",
+   "why_safe": "Index-for-index identical over every reachable value: 1 -> values()[0] = NORMAL, 2 -> values()[1] = SHINY, 0 -> null. Index 3 (which would reach HOLOGRAM) is unreachable because the combo holds exactly three items, and the `<= 0` guard covers the -1 no-selection case that the current `== 1 / == 2` chain also falls through to null on. Collapses two filter idioms into one in the block the enum-names finding already touches.",
+   "chars_saved": 17
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/ui/panel/AlbumTab.java",
+   "line": 508,
+   "kind": "bug",
+   "summary": "Documentation bug: the javadoc block at 508-512 ('Two-state checkbox icon: a dark rounded square with a light border, plus a crisp white 2px check mark when selected') describes CheckboxIcon but is stranded above StardustIcon, which carries its own /** Static 4-point sparkle */ comment on the next line. Java binds only the LAST doc comment before a declaration, so the checkbox description documents nothing and CheckboxIcon at line 551 — 40 lines further down — has no javadoc at all.",
+   "why_safe": "Pure comment relocation, zero code change and zero budget impact (comments are free and must never be shortened). Report-only. Note this is subsumed if the icon-baking finding is applied: both classes move to src/test/java/com/gachaman/tools/IconArt.java and the comment should travel with the drawing code it describes.",
+   "chars_saved": 0
+  }
+ ],
+ "src/main/java/com/gachaman/ui/CardRenderer.java": [
+  {
+   "file": "src/main/java/com/gachaman/ui/CardRenderer.java",
+   "line": 81,
+   "kind": "dedupe",
+   "summary": "Nine copies of the same 'child Graphics2D' preamble. Three sites do create()+AA (drawBack:81-82, drawFace:106-107, drawGlow:240-241), four do create()+setClip (drawShiny:260-261, drawHologram:290-291, drawSheen:322-323, drawWearGrime:775-776), two do create()+setClip+AA (drawWearLines:846-848, drawWearEdge:963-965). Collapse to one helper: private static Graphics2D layer(Graphics2D g, @Nullable Shape clip) { Graphics2D out = (Graphics2D) g.create(); if (clip != null) { out.setClip(clip); } out.setRenderingHint(KEY_ANTIALIASING, VALUE_ANTIALIAS_ON); return out; } and call layer(g, null) / layer(g2, clip) at all nine. Shape and Nullable are already imported via java.awt.* and javax.annotation.*.",
+   "why_safe": "Graphics.create() copies the parent's rendering hints, and every clipped child descends from a graphics on which AA was already turned ON (drawBack:82, drawFace:107) - so setting AA explicitly in the four sites that currently omit it is a provable no-op, not a new hint. The null-clip branch is what keeps drawBack/drawFace/drawGlow identical: passing clip straight through would call setClip(null), which CLEARS the caller's clip (a RuneLite overlay or Swing paint clip) instead of leaving it alone. Order of operations is unchanged: clip then hint, both before any drawing.",
+   "chars_saved": 388
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/CardRenderer.java",
+   "line": 375,
+   "kind": "terser",
+   "summary": "Five parallel switch tables over the same enum - creaseCount(375), scratchCount(391), wearAlpha(404), grimeAlpha(418), edgeNicks(435) - are 917 stripped chars of case/return boilerplate for 20 numbers. Replace with one ordinal-indexed table, static final int[][] WEAR_TUNING = {{0,0,0,0,0},{0,6,96,34,20},{1,10,150,62,38},{2,16,200,92,60}}, and five one-line accessors returning WEAR_TUNING[wear.ordinal()][n]. Bigger variant: move the five numbers onto CardWear itself as final int fields - the enum already has @Getter, so the accessors cost zero source - which saves ~660 instead of 366 (enum grows 229, seven main call sites grow ~4 chars each) at the price of touching two files and the tests.",
+   "why_safe": "NONE is ordinal 0 and every switch's default arm returns 0, so a table row of zeroes reproduces the default exactly; the other three rows are the literal case values in enum declaration order. Null behaviour is also unchanged - switch(wear) on null already throws NPE, and so does wear.ordinal() - and the only caller that can see null (wearSegments:619) returns before reaching either. Worth pinning the row order with a test asserting each accessor against the four constants, since tests are free.",
+   "chars_saved": 366
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/CardRenderer.java",
+   "line": 878,
+   "kind": "dedupe",
+   "summary": "ofKind() builds two throwaway ArrayLists every frame (drawWearLines:844-845) purely so the two pass methods can iterate one kind. Delete ofKind entirely and give strokePass/ridgePass an int kind parameter, skipping non-matching segments in the loop they already run (ridgePass can fold it into its existing continue: if (seg[4] != kind || len < 1e-6)). The five call sites then pass the single segments list plus KIND_CREASE / KIND_SCRATCH.",
+   "why_safe": "Each pass visits the same segments in the same list order and draws exactly the same subset, so the five passes still layer in the same z-order - all crease valleys, then the crease shadow ridge, then the crease stock ridge, then the two scratch ridges. The two isEmpty() guards that disappear (drawWearLines:851 and strokePass:890) were already redundant: with no matching segments the passes only call setStroke/setColor on a Graphics2D that is disposed at the end of the method, which paints nothing. Also drops two per-frame list allocations per card.",
+   "chars_saved": 260
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/CardRenderer.java",
+   "line": 268,
+   "kind": "dedupe",
+   "summary": "Seven places hand-roll the recolour that the file's own alpha(Color,int) helper (1078) already does. drawShiny:268-269 writes new Color(c.getRed(), c.getGreen(), c.getBlue(), 0) and the same with 70; drawGlow:249 writes new Color(color.getRed(), ..., Math.min(255, alpha)); drawWearGrime unpacks WEAR_GRIME into three locals (777-779) only to rebuild it four times (786-790, 808). Use alpha(c, 0), alpha(c, 70), alpha(color, alpha), alpha(WEAR_GRIME, ...) and delete the three unpack lines.",
+   "why_safe": "alpha() is exactly new Color(r, g, b, clamp(a)) on the same base colour. Every value passed is already inside 0..255 - drawGlow's is guarded by the if (alpha <= 0) continue two lines above, and the grime values are alpha (max 92), alpha/3, 0 and Math.max(1, alpha/12) - so the helper's clamp is a no-op and Math.min(255, alpha) is preserved by it anyway. The int local named alpha shadowing the static method alpha() is legal Java and the file already relies on it at 853-874.",
+   "chars_saved": 248
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/CardRenderer.java",
+   "line": 852,
+   "kind": "dedupe",
+   "summary": "new BasicStroke(w, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND) is spelled out seven times - five in drawWearLines (852, 858, 861, 871, 873) and two in drawWearEdge (1052, 1056). A three-line helper, private static BasicStroke roundStroke(float width), removes ~50 chars per site and lets each pass call fit on one line. While in drawWearEdge, the same Line2D.Double(ax, ay, bx, by) is constructed twice per mark (1055, 1058) for the wide-faint and narrow-bright strokes of one dash - hoist it to a local and draw it twice (saves one allocation per mark per frame, ~6 chars).",
+   "why_safe": "Same constructor, same three arguments, same order, so every stroke is byte-identical to the one it replaces; BasicStroke is immutable and each call site still gets its own instance. Graphics2D.draw() does not mutate the Shape it is handed, so drawing one Line2D twice is identical to drawing two equal ones.",
+   "chars_saved": 231
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/CardRenderer.java",
+   "line": 984,
+   "kind": "terser",
+   "summary": "In drawWearEdge's perimeter walk (979-1015) the inward normal is assigned by hand in all four branches, but it is always the tangent rotated a quarter turn: (inx, iny) == (-ty, tx) on every side - top (1,0)->(0,1), right (0,1)->(-1,0), bottom (-1,0)->(0,-1), left (0,-1)->(1,0). Drop inx/iny from the four branches and derive them in two lines after the if/else. Separately, at 1048-1049 the '- dx * len / 2 + (bite ? dx * len / 2 : 0)' pair cancels for bites: double back = bite ? 0 : len / 2; then subtract dx * back / dy * back.",
+   "why_safe": "Both are algebraic identities on the four literal direction pairs the branches already assign, checked case by case, so every mark starts and ends at the same double coordinates - nothing rounds, and the values feed straight into Line2D.Double. I also priced a fully table-driven version of the whole branch (side index plus tangent arrays) and it came out LARGER than the current if/else once the ternary side-selection line is counted, so the branch itself is worth keeping.",
+   "chars_saved": 120
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/CardRenderer.java",
+   "line": 123,
+   "kind": "terser",
+   "summary": "drawFace makes a whole child Graphics2D (123-127) just to scope KEY_INTERPOLATION for one drawImage - set the hint on g2 and draw directly, dropping the create()/dispose() pair. Also, view.getName().hashCode() is recomputed at 141, 211 and 229; one local seed hoisted above the first wear pass covers all three.",
+   "why_safe": "g2 is drawFace's own private copy, created at 106 and disposed at 232, so the hint cannot escape to the caller - and nothing drawn on g2 or its children after the art is an image or a TexturePaint, the only things KEY_INTERPOLATION affects. I verified this rather than assuming it: rendering the full post-art repertoire (RadialGradientPaint fill, GradientPaint fill, fillOval, drawString, a fractional-coordinate Line2D and a stroked RoundRectangle2D) with and without the hint set gives 0 differing pixels out of 52,000. String.hashCode is specified and pure, so hoisting it cannot change the seed.",
+   "chars_saved": 85
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/CardRenderer.java",
+   "line": 95,
+   "kind": "terser",
+   "summary": "drawBack's gacha sigil (95-98) repeats the sub-expression r + r / 2 eight times across four drawLine calls. Hoist int d = r + r / 2 and the four lines shorten to drawLine(cx, cy - d, cx + d, cy) and so on.",
+   "why_safe": "Pure integer arithmetic on a local that never changes between the four calls, so every endpoint is the identical int. Note the tempting further step - one drawPolygon over the four points - is NOT equivalent: BasicStroke(2f) defaults to CAP_SQUARE/JOIN_MITER, so four separate capped lines and one mitered closed path differ by a pixel or two at each vertex.",
+   "chars_saved": 43
+  }
+ ],
+ "src/main/java/com/gachaman/ui/panel/GachamanPanel.java": [
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/GachamanPanel.java",
+   "line": 490,
+   "kind": "dedupe",
+   "summary": "ONE FIX, FIVE CALL SITES. The 8-line JScrollPane recipe in wrapScroll() (construct AS_NEEDED/NEVER -> setBorder(null) -> setUnitIncrement -> viewport background -> styleScrollbar) is repeated verbatim in DossierTab.java:69-76, PatronsTab.java:63-70, TimelineTab.java:108-115 (669 chars each, byte-identical across all three) and AlbumTab.java:202-209. Extract the core into GachamanPanel: `static JScrollPane scrollPane(JComponent inner, int unit, Color viewportBg)` performing exactly those five steps in that order. Then (a) wrapScroll's body becomes `return scrollPane(inner, 16, ColorScheme.DARK_GRAY_COLOR);`; (b) add `static JScrollPane htmlListScroll(JEditorPane list)` holding the 6 identical list.* lines (setEditable, setContentType, putClientProperty(HONOR_DISPLAY_PROPERTIES), setFont, setBackground, setBorder — KEEP that order, HONOR_DISPLAY_PROPERTIES must precede setFont) plus `return scrollPane(list, 16, ColorScheme.DARKER_GRAY_COLOR);`, and the three list tabs each collapse to `add(GachamanPanel.htmlListScroll(list), BorderLayout.CENTER);`; (c) AlbumTab collapses to `add(GachamanPanel.scrollPane(grid, THUMB_H / 3, ColorScheme.DARK_GRAY_COLOR), BorderLayout.CENTER);`. EXCLUDE LoadoutTab.java:329-335 — it deliberately sets no unit increment (JDK default 1) and no viewport background, so routing it through the helper would change scroll speed and repaint the viewport; leave it alone.",
+   "why_safe": "The helper performs the identical five calls in the identical order on the same objects; the three list blocks are byte-identical to each other and AlbumTab differs only in the two values that become parameters. `scroll` is a pure local in every block (verified by grep: DossierTab's 7th 'scroll' hit is a comment), so nothing downstream depends on it. All files are in package com.gachaman.ui.panel and already use wildcard imports, so no import churn.",
+   "chars_saved": 1580
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/GachamanPanel.java",
+   "line": 281,
+   "kind": "dedupe",
+   "summary": "rebuildIfDirty() is an 11-case switch (lines 286-320, 628 chars) whose every arm is `xxxTab.rebuild(); break;`. Replace with a `private final EnumMap<Tab, Runnable> rebuilders = new EnumMap<>(Tab.class);` populated where the cards are already registered: turn each `content.add(wrapScroll(shopTab), Tab.SHOP.name());` into `addCard(Tab.SHOP, wrapScroll(shopTab), shopTab::rebuild);` with a 3-line private helper doing `content.add(card, tab.name()); rebuilders.put(tab, rebuild);`. The switch body becomes `rebuilders.get(tab).run();`. This then makes 9 of the 11 tab FIELDS write-only (grep confirms shopTab, albumTab, setsTab, journalTab, timelineTab, dossierTab, patronsTab, loadoutTab, helpTab are referenced only at their declaration, their `this.x = x` assignment, the content.add and the switch) — delete those 9 field declarations (lines 63-68, 70-72) and their 9 assignments (lines 110-115, 117-119), using the constructor parameters directly. Keep the overviewTab and partyTab fields: setInPartySupplier/setVoteViewSupplier read them.",
+   "why_safe": "All 11 tabs declare package-private `void rebuild()` in the same package, so the method references compile and bind identically. Card registration order is unchanged, and the constructor already ends with an explicit contentLayout.show(CARD_LOADING), so CardLayout's implicit first-card default is irrelevant either way. Constructor parameters (and hence Guice injection) are untouched. The only divergence is a Tab added later with no registration: today it silently no-ops, after the change it NPEs into the existing catch(Exception) and gets logged — which is strictly better and unreachable for all 11 current tabs.",
+   "chars_saved": 870
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/GachamanPanel.java",
+   "line": 883,
+   "kind": "dedupe",
+   "summary": "GameSliderUI's three private colors (lines 883-885) are byte-for-byte the same values as GameScrollBarUI's (lines 510-513): TRACK = new Color(28,27,25) in both, THUMB = new Color(82,72,58) in both, and GameSliderUI's THUMB_EDGE = new Color(115,102,82) equals GameScrollBarUI's THUMB_EDGE_LIGHT. Hoist the four stone colors to the outer class once and delete the three duplicate declarations. Give them DISTINCT names (STONE_TRACK / STONE_THUMB / STONE_EDGE / STONE_EDGE_DARK) rather than reusing TRACK/THUMB: MeterBar (line 739) has its own TRACK = new Color(28,28,28), a genuinely different colour, and although an inner field legally shadows the outer one, leaving two same-named different-valued TRACKs is a trap for whoever next deletes the 'redundant' inner field. The longer names are paid for by THUMB_EDGE_LIGHT (16 chars, 4 occurrences) shrinking to STONE_EDGE.",
+   "why_safe": "Nested classes reference outer-class static fields unqualified, Color is immutable, and the RGB values are identical — every painted pixel is the same. MeterBar keeps its own distinct TRACK untouched.",
+   "chars_saved": 185
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/GachamanPanel.java",
+   "line": 158,
+   "kind": "dedupe",
+   "summary": "The constructor's loading card (lines 158-163: new JPanel(new GridBagLayout()), setOpaque(false), label foreground LIGHT_GRAY, label font RunescapeSmall, add(label, new GridBagConstraints())) is centeredNote() (lines 687-696) with the label passed in instead of created. Extract `static JPanel centered(JLabel label)` containing that body plus `panel.setAlignmentX(Component.LEFT_ALIGNMENT); return panel;`, then centeredNote() is `return centered(new JLabel(text, SwingConstants.CENTER));` and the constructor is `content.add(centered(scanLabel), CARD_LOADING);`.",
+   "why_safe": "scanLabel is already constructed with SwingConstants.CENTER (line 76), so the two labels are configured identically. The only added call on the loading panel is setAlignmentX(LEFT_ALIGNMENT), and that panel's parent is `content`, a CardLayout — CardLayout ignores component alignment entirely, so the rendered result is unchanged. centeredNote keeps its JComponent return type and every external caller (JournalTab and others) is untouched.",
+   "chars_saved": 180
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/GachamanPanel.java",
+   "line": 698,
+   "kind": "dedupe",
+   "summary": "confirm() (698-706) and info() (708-714) share the same four-line tail — createDialog, sizeForTargetScreen, setVisible(true), dispose() — and sizeForTargetScreen (730-735) has exactly those two callers. Fold both into one `private static void showDialog(JOptionPane pane, Component parent, String titleText)` that creates the dialog, inlines sizeForTargetScreen's four lines (setLocationRelativeTo, pack, setMinimumSize(getSize()), setLocationRelativeTo), shows it and disposes. confirm() keeps `return Integer.valueOf(JOptionPane.YES_OPTION).equals(pane.getValue());` after the call; info() becomes a single showDialog(...) statement. Move sizeForTargetScreen's mixed-DPI javadoc onto showDialog (comments are free).",
+   "why_safe": "Same calls in the same order on the same objects; the dialog is modal so setVisible returns only after JOptionPane has stored its value, exactly as today, and confirm() still reads pane.getValue() after the dialog closes. Dropping the separate sizeForTargetScreen method costs nothing — it had no other caller (grep-verified).",
+   "chars_saved": 130
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/GachamanPanel.java",
+   "line": 795,
+   "kind": "terser",
+   "summary": "`ColorScheme.DARKER_GRAY_COLOR.darker()` (38 chars) appears 5 times in this file — button() at 795, three times in the styleCombo arrow-button construction at 829-831, and styleSpinner at 876 — plus once each in AlbumTab.java and JournalTab.java. Declare it once as `static final Color SUNKEN = ColorScheme.DARKER_GRAY_COLOR.darker();` and use SUNKEN at the five local sites, GachamanPanel.SUNKEN at the two remote ones.",
+   "why_safe": "Color.darker() is a pure function of an immutable Color and returns an equal (if not identical) instance every call; Swing only reads the RGB. Sharing one instance paints the same and removes 7 redundant allocations.",
+   "chars_saved": 125
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/GachamanPanel.java",
+   "line": 34,
+   "kind": "terser",
+   "summary": "LOWEST PRIORITY — offered for the number, not recommended. Every Tab's label is exactly the Title Case of its constant name (OVERVIEW/'Overview' ... HELP/'Help'), so the 11 label arguments, the `label` field and the Tab(String) constructor could collapse to a bare constant list plus `private final String label = name().charAt(0) + name().substring(1).toLowerCase(Locale.ROOT);`. TRADEOFF the owner should weigh: it is a less obvious idiom, and it hard-codes the assumption that no future tab wants a two-word label ('Set Bonuses') — such a tab would need the field put back. Locale.ROOT is mandatory, not optional: TIMELINE contains an I, and a default-locale toLowerCase in a Turkish locale renders it 'Tımelıne'.",
+   "why_safe": "Enum field initialisers run after the implicit super(name, ordinal), so name() is available and returns the constant's name; with Locale.ROOT the eleven produced strings are character-identical to today's literals. java.util.* is already wildcard-imported, so Locale needs no new import.",
+   "chars_saved": 110
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/GachamanPanel.java",
+   "line": 857,
+   "kind": "terser",
+   "summary": "styleSpinner declares `JComponent spinner` then immediately guards `if (!(spinner instanceof JSpinner)) return;` and casts. Both call sites (TimelineTab.java:72 and :73) pass fields declared `private final JSpinner` (TimelineTab.java:50-51), so the guard can never fire. Change the signature to `static void styleSpinner(JSpinner s)` and delete the four guard/cast lines.",
+   "why_safe": "The only two callers pass a statically-typed JSpinner, so the compiler proves the guard was dead; a future non-JSpinner caller now fails at compile time instead of silently doing nothing, which is a strict improvement. No behaviour change for any existing call.",
+   "chars_saved": 94
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/GachamanPanel.java",
+   "line": 922,
+   "kind": "terser",
+   "summary": "FALLBACK_WIDTH is spelled `PluginPanel.PANEL_WIDTH + PluginPanel.SCROLLBAR_WIDTH - 2 * PluginPanel.BORDER_OFFSET - PluginPanel.SCROLLBAR_WIDTH` across two lines — SCROLLBAR_WIDTH is added and then subtracted. Collapse to the one-line `PluginPanel.PANEL_WIDTH - 2 * PluginPanel.BORDER_OFFSET;` and let the existing javadoc keep carrying the 242/6/17 reasoning (a comment noting the cancellation is free).",
+   "why_safe": "Identical compile-time constant: 225 + 17 - 12 - 17 == 225 - 12 == 213. Only the spelling of the expression changes; VIEWPORT_WIDTH above it is left alone because its -9 does not cancel.",
+   "chars_saved": 63
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/GachamanPanel.java",
+   "line": 477,
+   "kind": "dead-code",
+   "summary": "`scanTimer.setRepeats(true);` restates javax.swing.Timer's documented default (`repeats` is initialised to true; setRepeats' javadoc says the default is true). The line can go; the Timer still fires every SCAN_POLL_MS.",
+   "why_safe": "Documented JDK default, not an implementation detail — a fresh javax.swing.Timer already repeats. Note this is NOT the same as the `isRunning()` guards in ensureScanTimer/stopScanTimer: those also look redundant (TimerQueue ignores a redundant add/remove) but that rests on unspecified internals, so leave them.",
+   "chars_saved": 29
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/GachamanPanel.java",
+   "line": 411,
+   "kind": "bug",
+   "summary": "Misplaced javadoc: the block at lines 411-424 documents linkIcon() ('A flat icon that opens a URL', the JLabel-rather-than-JButton rationale, the LinkBrowser-rather-than-Desktop.browse rationale) but sits above icon(), and is immediately followed at line 425 by a second javadoc ('A flat panel icon, authored by com.gachaman.tools.IconArt'). Javadoc keeps only the LAST comment before a declaration, so the linkIcon rationale is attached to nothing and will not appear on either method. Move it down to sit directly above linkIcon() at line 431.",
+   "why_safe": "Comment relocation only — no code touched, and comments are stripped before the token count, so this is free. Pure documentation-correctness fix.",
+   "chars_saved": 0
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/GachamanPanel.java",
+   "line": 484,
+   "kind": "bug",
+   "summary": "Benign cross-thread field access: scanTimer is written on the EDT (ensureScanTimer, reached from onActivate/refreshNow) but read from the client thread by stop() -> stopScanTimer(), called from GachamanPlugin.shutDown (GachamanPlugin.java:439), and the field is not volatile. The client thread can read a stale null and fail to stop a running 400ms poll. Self-healing in practice: clientToolbar.removeNavigation two lines later drives onDeactivate -> stopScanTimer on the EDT, and refreshNow() already returns early once started==false, so the worst case is a poll or two of extra work with no visible effect. Fix, if wanted, is `private volatile Timer scanTimer;` (7 chars) or routing stop()'s call through SwingUtilities.invokeLater.",
+   "why_safe": "Reported for correctness only, no behaviour change proposed. Adding `volatile` would cost chars rather than save them, so it is the owner's call; javax.swing.Timer.stop() itself is thread-safe, which is why the current code has never misbehaved.",
+   "chars_saved": 0
+  }
+ ],
+ "src/main/java/com/gachaman/service/ChestService.java": [
+  {
+   "file": "src/main/java/com/gachaman/service/ChestService.java",
+   "line": 442,
+   "kind": "terser",
+   "summary": "Four null-forwarding convenience overloads exist where every caller is countable: rollSlot 6-arg (442-445, one main caller at 855 plus four test callers), roll 4-arg (310-313, three callers, all inside this class), bucketFor 2-arg (496-498, one caller at 755), isReachable 1-arg (601-603, one caller at 515). Delete all four and pass the explicit null/true at each site.",
+   "why_safe": "Pure delegation — each body is a single call to the wider overload with a literal argument, so inlining it at the call site is definitionally the same call. Grepped the whole of src: rollSlot's 6-arg form is used only by rerollSlot:855 and EarlyGameMathTest (158/191/202/222), and src/test costs nothing to update per CLAUDE.md; roll's 4-arg form has no test callers at all (the `.roll(` hits in the repo are styleService); pickCardOfRarity/bucketFor/isReachable 1-and-2-arg forms have zero test callers. No reflection anywhere in the plugin (CLAUDE.md forbids it), so no hidden use. Breakdown after adding the extra argument at each surviving site: rollSlot 244, roll 160, bucketFor 100, isReachable 72.",
+   "chars_saved": 576
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/ChestService.java",
+   "line": 860,
+   "kind": "terser",
+   "summary": "rerollSlot() hand-copies all 10 fields of ChestOpenResult to change one. Add @With to the @Value class (line 38) and replace lines 860-863 with `pending = pending.withSlots(slots);`.",
+   "why_safe": "Lombok's @With generates `this.slots == slots ? this : new ChestOpenResult(<all other fields verbatim>)`; `slots` is a freshly built ArrayList so it is never ==, meaning the generated call is byte-for-byte the constructor invocation being deleted. RolledSlot (line 26) already proves @Value+@With compiles in this file. Gson binds by field, so the persisted blob shape is untouched, and the aliasing of the mutable `slots` list is unchanged.",
+   "chars_saved": 239
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/ChestService.java",
+   "line": 511,
+   "kind": "dedupe",
+   "summary": "bucketFor() runs two near-identical rarity-descent loops (511-520 gated, 522-530 ungated). Collapse to one loop wrapped in `for (int pass = 0; pass < 2; pass++)` with `final boolean gate = pass == 0 && !rarity.atLeast(Rarity.EPIC);` and `constrained(..., pass == 0 ? require : null)`.",
+   "why_safe": "Bit-identical, including RNG: pass 1 sets gate=false so `!gate || isReachable(c)` short-circuits and isReachable is never called, exactly matching the current second loop; `constrained(x, null)` returns the same list instance (asserted by FirstColoursConstraintTest), so passing null in pass 1 reproduces the current second loop's omission of the constraint exactly. When rarity >= EPIC, pass 0 has gate=false and returns `new RollBucket(candidates, false)`, matching today's `new RollBucket(candidates, proximityGated=false)`. Note the preserved `Rarity.values()[r]` ordinal coupling deserves a comment naming it.",
+   "chars_saved": 181
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/ChestService.java",
+   "line": 671,
+   "kind": "dedupe",
+   "summary": "pickHologram() open-codes a cumulative weighted walk that RollOdds.weightedIndex already implements. Switch `List<Double> weights` to `double[]` and end with `return holos.get(RollOdds.weightedIndex(rng.nextDouble() * total, weights));`.",
+   "why_safe": "Identical algorithm and identical fallback: RollOdds.weightedIndex returns `weights.length - 1` when the walk falls off the end, which is precisely the current `holos.get(holos.size() - 1)`. One rng.nextDouble() consumed either way, in the same position, so no fixed-seed test moves. The empty-holos case behaves the same (both index -1), and the only caller guards with `!cardDatabase.holograms().isEmpty()` at line 451. Bonus: drops Double boxing per candidate.",
+   "chars_saved": 178
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/ChestService.java",
+   "line": 206,
+   "kind": "dedupe",
+   "summary": "openChest, openSlotChest and openThemedChest each end with the same five statements (pending=result; rerollUsedThisReveal=false; persistPending(); ceremonyBus.submit(type,result); return result). Extract `private ChestOpenResult deal(ChestOpenResult result, CeremonyBus.Type type)` and make each `return deal(roll(...), CeremonyBus.Type.X);`.",
+   "why_safe": "Java evaluates arguments left-to-right, so roll() still runs before any field assignment or bus submit, and the submit still happens after persistPending() — ordering is preserved exactly. MUST NOT be applied to openFirstColoursChest (line 290): its single stateService.mutate that writes the blob and clears the owed flag together is deliberate crash-window protection documented at lines 283-287.",
+   "chars_saved": 178
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/ChestService.java",
+   "line": 865,
+   "kind": "dedupe",
+   "summary": "The copy-list / try / catch / log.warn(\"chest listener failed\") loop appears verbatim three times (865-872, 969-976, 1001-1008). Extract `private void notifyListeners(Consumer<ChestListener> action)` and call `notifyListeners(ChestListener::onRerollSpent)`, `notifyListeners(l -> l.onChestCommitted(result, dupeGcFinal))`, `notifyListeners(l -> l.onDeedClaimed(slot))`.",
+   "why_safe": "Same defensive copy, same per-listener try/catch, same log message and level, same iteration order. Consumer is already in scope via `import java.util.function.*` (line 7). All captured values are effectively final: `result` is assigned once (line 886), `dupeGcFinal` already exists at line 903 for this exact reason, and `slot` is an unreassigned parameter. Subsumed by the cross-file Listeners util finding below — count one or the other, not both.",
+   "chars_saved": 157
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/ChestService.java",
+   "line": 338,
+   "kind": "terser",
+   "summary": "The jackpot block (338-355) uses a nested if plus a single-use local. Collapse to `boolean jackpot = themedSetTag == null && targetSlot == null && !rusty && rng.chance(Tuning.JACKPOT_CHANCE);` then `if (jackpot && tier != Tuning.Chest.ORNATE) { effective = Tuning.Chest.values()[tier.ordinal() + 1]; }`.",
+   "why_safe": "RNG consumption is identical: rng.chance is the last && term, so it is evaluated only when the three guards pass — exactly the current nesting. Tuning.java:199-201 declares `RUSTY, BATTERED, GILDED, ORNATE`, so ordinal+1 maps BATTERED->GILDED and GILDED->ORNATE, the only two transitions the current chain performs; ORNATE is excluded by the guard and still takes the cardCount++ path unchanged. The single-use local `jackpotChance` disappears. This does trade a self-documenting if/else for a silent enum-declaration-order dependency — pin BATTERED->GILDED and GILDED->ORNATE in a src/test case (tests are free) and add a comment naming the coupling. Estimate already discounts the trailing comment on line 354, which the review bot strips anyway.",
+   "chars_saved": 145
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/ChestService.java",
+   "line": 366,
+   "kind": "dedupe",
+   "summary": "roll() (366-387) and rerollSlot() (831-849) both build the card pool with the same four-way targetSlot/themedSetTag/rusty/all chain. Extract `private List<CardDefinition> poolFor(@Nullable String targetSlot, @Nullable String themedSetTag, boolean rusty, @Nullable GachaState state)` keyed on the slot NAME (roll passes `targetSlot == null ? null : targetSlot.name()`, rerollSlot passes `pending.getTargetSlot()` straight through).",
+   "why_safe": "NOT strictly identical — call it a dedupe plus a latent-crash fix, and rank it last of the structural items. GearSlot.name()/valueOf() round-trips exactly, so pool contents are unchanged on every live path. The one behavioural delta: reroll of a themed or slot-targeted chest whose pool came back empty currently reaches rng.pick(emptyList) -> list.get(random.nextInt(0)) -> IllegalArgumentException; sharing roll()'s existing empty-pool fallback turns that crash into the documented fall-back-to-all-cards path (plus its log.warn, which now also fires on reroll). That state requires bosses.json to name a set sets.json does not define, which DatasetIntegrityTest already guards. Keep the `else { pool = new ArrayList<>(cardDatabase.all().values()); }` branch assigning rather than early-returning, so the empty-check still covers the all-cards branch exactly as roll() does today.",
+   "chars_saved": 132
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/ChestService.java",
+   "line": 397,
+   "kind": "terser",
+   "summary": "The per-card loop in roll() (397-408) duplicates the rollSlot call across its pity-locked and ordinary branches. Collapse to one call: `boolean locked = i == 0 && pityBreak; Rarity rarity = locked ? Rarity.LEGENDARY : rollRarity(Tuning.CHEST_ODDS.get(effective), pityBonus); ... slots.add(locked ? slot.withPityLocked(true) : slot);`",
+   "why_safe": "RNG-identical: the ternary short-circuits, so rollRarity is still NOT called on the pity-locked card — which is the property EarlyGameMathTest and the fixed-seed tests depend on. Same rollSlot argument vector, same `i == 0 ? require : null` steer (the `steer` local just moves inline), same withPityLocked(true) applied to exactly the first slot when pityBreak.",
+   "chars_saved": 125
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/ChestService.java",
+   "line": 912,
+   "kind": "terser",
+   "summary": "commitPending()'s mutate lambda walks result.getSlots() twice — once for the pity counter (916-918) and once to count near-misses (924-928). Merge into one walk, computing `counter` unconditionally and applying it inside the existing themed/RUSTY guard.",
+   "why_safe": "Both walks are pure reads over the same immutable list in the same order, and `counter` is only ever consumed inside the guard, so computing it unconditionally and discarding it changes nothing. Confirmed safe against retry semantics: GachaStateService.mutate (line 72) applies the function exactly once, never in a CAS loop, so the stardust accumulation cannot double-count either way.",
+   "chars_saved": 42
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/ChestService.java",
+   "line": 757,
+   "kind": "terser",
+   "summary": "oddsFor() iterates `cards` twice back-to-back (757-760 fills flags[], 761-766 fills namesByBand). Merge into one loop with a `CardDefinition card = cards.get(i)` local, which also removes three repeated cards.get(i) calls.",
+   "why_safe": "The second loop reads only flags[i] for its own index, never a later one, so the fill and the consume can share a pass. namesByBand is a HashMap read by key and its values are TreeSets, so neither insertion order nor iteration order affects the output rows.",
+   "chars_saved": 32
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/ChestService.java",
+   "line": 410,
+   "kind": "terser",
+   "summary": "`boolean deed = false; if (cond) { deed = true; }` at 410-413 is a two-statement write of one expression: `boolean deed = themedSetTag == null && rng.chance(Tuning.DEED_CHANCE.getOrDefault(tier, 0.0));`",
+   "why_safe": "Identical short-circuit order — `themedSetTag == null` is still evaluated first and still gates whether rng.chance runs, so RNG consumption is unchanged.",
+   "chars_saved": 30
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/ChestService.java",
+   "line": 360,
+   "kind": "terser",
+   "summary": "`int hardCap = Tuning.PITY_HARD_CAP;` in roll() is read exactly once, on the next line. Inline it. (The identically named local in oddsFor at line 723 is read twice and must stay.)",
+   "why_safe": "Both are references to the same compile-time constant; inlining a single-use local of a static final int is a no-op semantically.",
+   "chars_saved": 22
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/ChestService.java",
+   "line": 878,
+   "kind": "dead-code",
+   "summary": "A stray `@Nullable` sits on line 878, separated by two blank lines from the javadoc and signature of `public synchronized long commitPending()` — a method returning primitive `long`, which can never be null. Leftover from an earlier edit; delete it.",
+   "why_safe": "javax.annotation.Nullable is a JSR-305 type-qualifier nickname with no @Target restriction, so it compiles here but carries no meaning on a primitive return and is not read by anything (no reflection in this plugin per CLAUDE.md). Removing it cannot change behaviour, and it currently misleads any reader or static-analysis pass into thinking commitPending can return null.",
+   "chars_saved": 11
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/ChestService.java",
+   "line": 299,
+   "kind": "bug",
+   "summary": "The free First Colours gift chest silently consumes one of the three lifetime Rusty chests the shop will sell. openFirstColoursChest rolls with `Tuning.Chest.RUSTY` (line 299), and commitPending increments `byTier` from `result.getPurchasedTier()` unconditionally (line 909), so rustyChestsOpened() -> rustyAvailable() drops to 2 remaining. ShopTab.java:214 shows that count to the player as `RUSTY_LIFETIME_CAP - rustyChestsOpened()`.",
+   "why_safe": "Reported, not proposed — any fix changes player-visible behaviour, which CLAUDE.md reserves for the owner. The evidence that this is unintended is in the method's own javadoc (lines 275-280): it says the chest is deliberately NOT gated on rustyAvailable() because 'the lifetime cap limits what the shop will sell', yet the gift does reduce what the shop will sell. The doc addresses only the opposite direction (the cap must not withhold the gift). Grepped every read of chestsOpenedByTier: RUSTY is the only key ever consulted, so the analogous inflation from free themed chests (which commit as GILDED with price 0) is invisible and harmless. If the owner decides the gift should not count, the surgical fix is to guard the byTier merge on pricePaid > 0, or to stamp gift opens under a distinct key.",
+   "chars_saved": 0
+  },
+  {
+   "file": "src/main/java/com/gachaman/service/ChestService.java",
+   "line": 131,
+   "kind": "bug",
+   "summary": "`pending` is written only under `synchronized` (openChest, rerollSlot, commitPending) but exposed through a plain Lombok @Getter and read off the client thread — ShopTab.java:205 and 652 call getPending() on the Swing EDT. No happens-before edge, so the EDT can observe a stale reference.",
+   "why_safe": "Lowest-ranked and honestly labelled: no known symptom, and the practical worst case is a shop tile that briefly shows the wrong 'A reveal is in progress…' line until the next rebuild — not corruption, since ChestOpenResult is a deeply immutable @Value. Noting it because the file otherwise takes the lock scrupulously, so the gap looks accidental. The fix is `volatile` on the field, which COSTS about 9 chars rather than saving any. Deliberately not reporting addChestListener/removeChestListener being unsynchronized: registration (GachamanPlugin:323/331) and removal (433/436) both run on the client thread, as does every iteration site, so there is no real race there.",
+   "chars_saved": 0
+  }
+ ],
+ "src/main/java/com/gachaman/service/ComplianceService.java": [
+  {
+   "file": "src/main/java/com/gachaman/service/ComplianceService.java",
+   "line": 168,
+   "kind": "dedupe",
+   "summary": "CROSS-FILE, and the single biggest lever I found: the exact copy-list / try / catch / log.warn listener-notify loop repeats at ~17 sites — ComplianceService (168, 216, 228, 262, 295, 319), StyleTracker (395, 466), KillTracker (237, 365), CreditSink (115, 152), TaskService (1229), GachaStateService (107), plus ChestService's three. One shared `Listeners.notify(List<T> listeners, Consumer<T> action, String label)` util collapses all of them.",
+   "why_safe": "Every site is structurally the same: defensive `new ArrayList<>(listeners)` copy, per-listener try/catch, log.warn with a site-specific label and the exception. Passing the label as a parameter preserves each site's log text verbatim, so no log output changes; the defensive copy and iteration order are preserved; a throwing listener still cannot abort the loop. Figure is for the ~14 sites OUTSIDE ChestService only, so it is additive with finding A rather than double-counting it (~130 net per site less a ~250-char one-off util). Each file needs the util's package imported, which the existing `com.gachaman.*` wildcard imports already cover if it is placed there. I measured the ChestService sites precisely and sampled the others by grep, so treat this number as an estimate, not a measurement.",
+   "chars_saved": 1550
+  }
+ ],
+ "src/main/java/com/gachaman/ui/panel/OverviewTab.java": [
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/OverviewTab.java",
+   "line": 4,
+   "kind": "terser",
+   "summary": "Add `import static com.gachaman.ui.panel.GachamanPanel.*;` and drop the `GachamanPanel.` qualifier from all 59 uses in the file (smallLine x19, wrapped x10, button x10, section x7, line x4, MeterBar x4, confirm x2, centeredNote, SECTION_WIDTH, escape). 59 x 14 chars = 826 removed, one 52-char import line added. Optional extra: the on-demand static import also pulls in `Component.LEFT_ALIGNMENT` inherited through GachamanPanel, letting the 5 `Component.LEFT_ALIGNMENT` uses shed 10 chars each. If the 7 `section(...)` calls read oddly next to the local variables also named `section`, leave those qualified and take 675 instead.",
+   "why_safe": "Pure name resolution -- identical bytecode. The repo already sanctions exactly this pattern: DossierTab, HelpTab, PartyTab, PatronsTab and TimelineTab all carry `import static com.gachaman.ui.panel.GachamanPanel.<member>;` today, so OverviewTab is the outlier. No ambiguity is introduced: static-import-on-demand competes only with other static-import-on-demand declarations, and GachamanPanel's static members (section, line, smallLine, wrapped, button, row, escape, article, confirm, info, hex, htmlWrap, textBlock, measuredWidth, centeredNote, DOT, the width constants, MeterBar, GameSliderUI) collide with nothing in java.util.*, java.awt.*, javax.swing.* or the com.gachaman.* wildcards. A local variable named `section` and a static method named `section` coexist legally -- Java keeps variable and method namespaces separate. Consistent with CLAUDE.md's wildcard-imports rule.",
+   "chars_saved": 773
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/OverviewTab.java",
+   "line": 182,
+   "kind": "terser",
+   "summary": "`Box.createVerticalStrut(...)` is spelled out 26 times in this one file (21 x `section.add(...)`, 4 x `card.add(...)`, 1 bare in `addSection`). Replace with a helper -- `private static void gap(JComponent panel, int height) { panel.add(Box.createVerticalStrut(height)); }` -- turning `section.add(Box.createVerticalStrut(4));` (39 chars) into `gap(section, 4);` (16). 26 sites x ~23 chars = 593 saved against a ~104-char helper. Better still: put `gap` in GachamanPanel so the other tabs reach it through the static import from the previous finding -- `Box.createVerticalStrut` appears 86 times across the panel package (ShopTab 19, JournalTab 11, PartyTab 5, HelpTab 5, SetsTab 5, AlbumTab 4, DossierTab 4, LoadoutTab 2, PatronsTab 2, TimelineTab 2), which is ~1880 chars repo-wide for one helper.",
+   "why_safe": "A one-line delegation with no state and no branching: `Box.createVerticalStrut(h)` returns a fresh Filler each call in both forms, and `panel.add(component)` is the same single-argument overload. Nothing about layout, sizing or paint order changes -- every strut keeps its exact pixel height and its exact position in the child order. The saving in this file assumes the helper is reachable unqualified (either declared privately here, or in GachamanPanel with the static import above); if it must be written `GachamanPanel.gap(...)` the saving drops to ~137.",
+   "chars_saved": 489
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/OverviewTab.java",
+   "line": 187,
+   "kind": "terser",
+   "summary": "Two more static imports in the same spirit as the GachamanPanel one: `import static net.runelite.client.util.QuantityFormatter.*;` drops 18 chars from each of 13 `QuantityFormatter.formatNumber(...)` calls (~176 net), and `import static net.runelite.client.ui.ColorScheme.*;` drops 12 chars from each of 24 `ColorScheme.*` references -- LIGHT_GRAY_COLOR x14, MEDIUM_GRAY_COLOR x6, BRAND_ORANGE x3, DARKER_GRAY_HOVER_COLOR x1 (~237 net). Lower priority than the GachamanPanel import because `formatNumber(...)` and `LIGHT_GRAY_COLOR` unqualified are marginally less self-describing; take one, both or neither.",
+   "why_safe": "Name resolution only -- no bytecode difference and no behaviour difference. No ambiguity: static-import-on-demand declarations only conflict with each other, and the three candidate types export disjoint simple names (GachamanPanel's helpers and width constants, QuantityFormatter's formatNumber/quantityToStackSize/quantityToRSDecimalStack/parseQuantity, ColorScheme's Color constants). None of these names is already declared in OverviewTab, so nothing is shadowed.",
+   "chars_saved": 413
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/OverviewTab.java",
+   "line": 522,
+   "kind": "terser",
+   "summary": "`antePercentChoices()` materialises an int[] purely so two places can recover an arithmetic progression. Delete the method: the combo-box loop becomes `for (int percent = Tuning.ANTE_MIN_PERCENT; percent <= Tuning.ANTE_MAX_PERCENT; percent += 10)`, and the arm listener's `choices[Math.max(0, percents.getSelectedIndex())]` becomes `Tuning.ANTE_MIN_PERCENT + 10 * Math.max(0, percents.getSelectedIndex())`. The 263-char method and the 45-char `final int[] choices = ...` line go, against ~98 chars added at the two use sites.",
+   "why_safe": "The array is exactly `{MIN, MIN+10, ..., MIN+(count-1)*10}` with `count = (MAX-MIN)/10 + 1`, i.e. index i maps to `MIN + 10*i` and the last element is MAX whenever (MAX-MIN) is a multiple of 10 -- which it is: ANTE_MIN_PERCENT=10, ANTE_MAX_PERCENT=50 (Tuning:438-439). So the loop enumerates the identical 10/20/30/40/50 items in the identical order, the combo box gets the identical labels with the identical baked GC figures, `setSelectedIndex(0)` still lands on 10%, and index->percent recovery is the same arithmetic the array encoded. `Math.max(0, ...)` is preserved for the -1 no-selection case.",
+   "chars_saved": 210
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/OverviewTab.java",
+   "line": 353,
+   "kind": "dedupe",
+   "summary": "The 'Cancel Party Roll' button is built twice, character-for-character apart from the tooltip tail: lines 353-358 (party-vote branch) and lines 386-391 (host force-start branch). Both do strut(3) / `GachamanPanel.button(\"Cancel Party Roll\")` / the same 'Host only: abort this party roll for every member who joined it' tooltip stem / `cancelRoll()` listener / add. Collapse into `private void addCancelRoll(JPanel section, String tail)` and call it with `\" (before a contract is accepted).\"` and `\".\"`. ~673 chars of call sites become a ~366-char helper plus ~102 chars of calls.",
+   "why_safe": "Both tooltips are reproduced exactly by concatenating the shared stem with the differing tail -- 'Host only: abort this party roll for every member who joined it (before a contract is accepted).' and 'Host only: abort this party roll for every member who joined it.' -- so both strings, both button labels, both listeners and the 3px strut before each are byte-identical to today. The two call sites keep their existing positions and guard conditions (`partyVote && partyRollService.canCancelRoll()` and `partyRollService.canForceStart()`), so nothing about when the button appears changes.",
+   "chars_saved": 205
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/OverviewTab.java",
+   "line": 309,
+   "kind": "terser",
+   "summary": "Ten buttons in this file repeat the same four-beat sequence: declare, `setToolTipText(...)`, `addActionListener(...)`, `add(...)`. Add an overload beside the existing one in GachamanPanel -- `static JButton button(String text, @Nullable String tooltip, ActionListener action)` -- so the fully-declarative cases (Decline, View Rolled Contracts, Start Roll Now, Disarm the Ante, Arm the Ante, and both Cancel Party Roll bodies) become a single `section.add(GachamanPanel.button(label, tooltip, listener));`, while the three that also call `setEnabled` (Join, Roll Contracts, Propose Party Roll) keep their local variable and still shed two lines. ~413 chars of call sites against a ~212-char helper here; ShopTab (8 listeners/11 tooltips), AlbumTab (5/7), LoadoutTab (2/4) and TimelineTab (1/2) would take roughly another 700-900.",
+   "why_safe": "The helper delegates to the existing `button(String)`, so font, focus painting, background, foreground, compound border and alignment are unchanged. For the two buttons that currently set no tooltip, passing null is exactly equivalent: `JComponent.setToolTipText(null)` clears the client property and calls `ToolTipManager.unregisterComponent`, which is a no-op on a component that was never registered -- so no tooltip appears either way. Every label string, tooltip string, listener body and `setEnabled` predicate is carried across verbatim, and each button keeps its position in the section's child order. `ActionListener` needs no new import in OverviewTab (the lambdas are target-typed) and GachamanPanel already imports `java.awt.event.*`.",
+   "chars_saved": 200
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/OverviewTab.java",
+   "line": 663,
+   "kind": "dedupe",
+   "summary": "`buildFragmentSection` and `buildPitySection` are the same six-beat shape: section(title) / MeterBar(done/total, colour, \"<done> / <total> <unit>\") / strut(3) / wrapped(note, MEDIUM_GRAY_COLOR) / return. A shared `private static JPanel meterSection(String title, int done, int total, Color bar, String unit, String note)` leaves each caller as a single return statement carrying only its own title, colour rule and note text. Medium confidence on the readability trade -- the pity section's colour is a threshold expression that has to move into the argument list, which is the one part that reads slightly worse.",
+   "why_safe": "Both fractions are already `(double) done / total` with an int numerator and an int denominator, and both labels are already `done + \" / \" + total + \" \" + unit` -- fragments use 'fragments', pity uses 'cards'. The pity colour rule `frac >= 0.8 ? new Color(226,148,62) : new Color(150,120,220)` is preserved by computing it at the call site from the same `(double) done / Tuning.PITY_HARD_CAP`; the fragment colour is the unconditional `new Color(230,190,80)`. Both notes keep their exact wording, including the fragment note's interpolated `tasksLeft`. Both sections keep their titles, their 3px strut and their MEDIUM_GRAY note colour. Note this saving overlaps with the `gap` helper and static-import findings above -- the three are not strictly additive.",
+   "chars_saved": 200
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/OverviewTab.java",
+   "line": 415,
+   "kind": "dedupe",
+   "summary": "`headerRow` (lines 415-418 and 429) hand-builds precisely what `GachamanPanel.row(left, right)` already builds: `new JPanel(new BorderLayout(6, 0))`, `setOpaque(false)`, `setAlignmentX(Component.LEFT_ALIGNMENT)`, left in CENTER, right in EAST. Replace the five statements with `JPanel headerRow = GachamanPanel.row(monster, wiki);` placed after the wiki button is configured, and keep the existing explicit `headerRow.setMaximumSize(...)` line immediately after it. ~225 chars of setup become ~54.",
+   "why_safe": "`GachamanPanel.row` (GachamanPanel:779-789) is field-for-field the same constructor, layout, hgap, opacity, alignment and constraint pair; `right` is non-null here so the null branch is not taken. The one difference -- row() sets a 30px maximum height where this code computes `Math.max(monster, wiki)` preferred heights -- is neutralised by keeping the existing `setMaximumSize` call, which runs after and overwrites row()'s value. BorderLayout is order-independent, so moving the panel's construction below the wiki button's configuration changes nothing. The monster label's tooltip, the wiki button's colours/margin/font and the URL are all untouched; note this row must NOT become `unlockRow`-style WEST placement, since the file's comment at 156-164 documents why the two rows differ.",
+   "chars_saved": 171
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/OverviewTab.java",
+   "line": 497,
+   "kind": "terser",
+   "summary": "The side-bet label is assembled with an if/else that duplicates `QuantityFormatter.formatNumber(bet.getPayoutGc()) + \" GC\"` in both arms, followed by a second if that prepends the completed marker. Collapse to one expression: `String text = (bet.isCompleted() ? \"* \" : \"\") + (bet.isSealed() && !bet.isCompleted() ? \"???\" : TaskService.describeSideBet(bet)) + \" - \" + QuantityFormatter.formatNumber(bet.getPayoutGc()) + \" GC\";` (with the real em-dash). ~358 chars become ~219.",
+   "why_safe": "Same three-way truth table. Sealed-and-incomplete still renders '??? - <n> GC'; every other case still renders 'describeSideBet(bet) - <n> GC'; completed still gets the '* ' prefix in front of whichever body was chosen -- and because a completed bet always takes the describeSideBet arm today (the sealed arm requires `!isCompleted()`), no combination changes. `describeSideBet` is only invoked in the branch that already invoked it, so a sealed incomplete bet is still never described. Colour selection (`bet.isCompleted() ? SIDEBET_DONE : LIGHT_GRAY`) is untouched.",
+   "chars_saved": 139
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/OverviewTab.java",
+   "line": 111,
+   "kind": "terser",
+   "summary": "`QuestExemptionService.Unlock` is spelled out 8 times (lines 111, 119, 126-127, 129, 143, 145, 165) at 22 chars of qualifier each. Add `import com.gachaman.service.QuestExemptionService.*;` -- a nested-type import, distinct from the static imports above -- and write `Unlock` throughout, including in the `Comparator.comparing((Unlock u) -> ...)` cast and the `Unlock::getNpcName` method reference.",
+   "why_safe": "A nested-type import of a public static nested class; the `com.gachaman.service.*` wildcard already present does not reach nested types, which is the only reason the qualifier is there. `Unlock` collides with nothing in java.util.*, java.awt.*, javax.swing.* or the other com.gachaman.* wildcards -- it is a name unique to this service. Generic inference in the comparator chain is unaffected because the explicit `(Unlock u)` parameter type is preserved, just written short.",
+   "chars_saved": 77
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/OverviewTab.java",
+   "line": 336,
+   "kind": "dedupe",
+   "summary": "Lines 336 and 338 re-implement two predicates TaskService already exposes publicly: `state.getPendingOffers() != null && !state.getPendingOffers().isEmpty()` is `taskService.hasPendingOffers()` (TaskService:312-316), and `state.getPendingOffers().get(0).isPartyRoll()` is `taskService.hasPendingPartyOffers()` (TaskService:325-327). Worth doing for the invariant more than the bytes: `hasPendingPartyOffers`'s own javadoc says it is 'deliberately the SAME first-element convention demotePartyOffers uses, so the predicate and the demotion can never disagree' -- and this panel is a third, uncoordinated copy of that convention. Using the service methods also inherits their null-state guard, which the inline `get(0)` at line 338 does not have.",
+   "why_safe": "Identical predicates over the identical data. One honest caveat: the service methods re-read `stateService.get()` rather than using the `GachaState` captured at the top of `rebuild()`, so in principle they observe a state swapped by the client thread mid-rebuild. That is already this panel's established pattern -- line 369 calls `taskService.canRollOffers()`, which does its own `stateService.get()`, in the same method -- and the swap window is a single EDT statement, so no rendered output changes in practice. If even that is unwanted, take the second replacement only (line 338), where `state` is already known non-null and the semantics are exact.",
+   "chars_saved": 54
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/OverviewTab.java",
+   "line": 692,
+   "kind": "terser",
+   "summary": "`prettyCharge` is a three-statement if/if/return that is a two-line ternary chain: `return \"COMPACTOR\".equals(charge) ? \"Compactor\" : \"EXTENDER\".equals(charge) ? \"Extender\" : charge;`. Small, but free.",
+   "why_safe": "Same evaluation order, same three outcomes, same null tolerance (the constant is the receiver of `.equals`, so a null `charge` falls through to the final `charge` return exactly as it does today). Deliberately NOT rewritten as a generic capitalise-the-string helper, which would change what an unrecognised value renders as -- the ternary keeps the identity fallthrough that today's third `return charge;` provides.",
+   "chars_saved": 45
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/OverviewTab.java",
+   "line": 374,
+   "kind": "terser",
+   "summary": "`if (partyRollService.isProposalLive()) { if (partyRollService.canForceStart()) { ... } } else { ... }` has an outer `if` whose entire body is a second `if` with no else. Flatten to `if (!partyRollService.isProposalLive()) { <propose branch> } else if (partyRollService.canForceStart()) { <start/cancel branch> }`, which removes a nesting level and a tab from every line of the force-start block. Separate observation, NOT a change to make: when a proposal is live but this client is not the host, the `Box.createVerticalStrut(4)` at line 373 is added with nothing after it, leaving a stray 4px gap at the foot of the section. The flattening preserves that gap exactly; removing it would be a visible change and is the owner's call.",
+   "why_safe": "`if (A) { if (B) X }  else Y` and `if (!A) Y else if (B) X` are the same truth table for all four combinations of A and B, and both `isProposalLive()` and `canForceStart()` are pure reads (a Lombok getter over the `proposalLive` field at PartyRollService:200-201, and a `proposalLive && localMemberId == proposerId` comparison at :874-876), so the swapped evaluation order has no side effects. The strut at line 373 stays outside the conditional, so the stray-gap case renders identically.",
+   "chars_saved": 35
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/OverviewTab.java",
+   "line": 350,
+   "kind": "bug",
+   "summary": "`clientThread.invokeLater(taskService::presentOffers)` silently binds to the `invokeLater(BooleanSupplier)` overload, not `invokeLater(Runnable)`. `presentOffers()` returns false when state is null or pendingOffers is null/empty, and RuneLite re-queues a supplier that returns false, retrying it EVERY game tick forever. A 'View Rolled Contracts' click that lands after the offers are cleared (party-roll cancel, TTL expiry, world hop, accept via the ceremony overlay) leaks a permanent tick task that will fire `ceremonyBus.submit(TASK_OFFERS, ...)` the next time any offer set exists -- popping the offer ceremony unprompted, possibly stacked on the fresh roll's own ceremony. Fix: force the Runnable overload with a block lambda, `e -> clientThread.invokeLater(() -> { taskService.presentOffers(); })`. Note a zero-arg expression lambda `() -> taskService.presentOffers()` does NOT fix it (a zero-parameter lambda counts as explicitly typed, so the same most-specific rule applies); the braces are load-bearing. This is the only such call in the repo -- `rollOffers` returns List and `openSlotChest` returns ChestOpenResult, both of which bind to Runnable; `loadoutTabButton::create`/`::remove` are void.",
+   "why_safe": "Verified twice, not inferred. (1) Compiled and ran a reproduction of the two overloads against a boolean-returning exact method reference: prints 'BOOLEANSUPPLIER overload'. This is JLS 15.12.2.5 -- for an exact method reference, a functional interface whose return is non-void is more specific than one whose return is void. (2) `javap -p -c` on client-1.12.35.jar confirms both `invokeLater(Runnable)` and `invokeLater(BooleanSupplier)` exist, and `invokeList` calls `Iterator.remove()` only when `getAsBoolean()` returns true, otherwise logging 'Deferring task {}' and leaving the entry queued. The fix changes only which overload is selected; `presentOffers()` still runs on the client thread exactly once per click, so no user-facing behaviour is removed.",
+   "chars_saved": 0
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/OverviewTab.java",
+   "line": 239,
+   "kind": "bug",
+   "summary": "`addProposalCards` calls `partyRollService.proposalGroups()` on the EDT, and `buildTaskSection` (line 381) calls `partyRollService.agreedCount()` on the EDT. Both iterate collections that are only ever mutated on the client thread: `proposalGroups()` walks `inbox.values()` (a plain LinkedHashMap, PartyRollService:139) and then `describe(entry)` walks `entry.stances` (plain HashMap, :130); `agreedCount()` walks `stances.values()` (plain HashMap, :218). Every mutation of those maps happens inside a `clientThread.invokeLater(...)` body in the @Subscribe handlers, so a party message arriving while the EDT is repainting Overview can throw ConcurrentModificationException mid-rebuild -- which `GachamanPanel.rebuildIfDirty` catches and logs, leaving the Contract section blank or half-drawn with no visible cause -- or hand back a torn read during a HashMap resize. The window is wide open: the rebuild is dispatched via `SwingUtilities.invokeLater` from `GachamanPanel.refresh()`, so it runs asynchronously while the client thread keeps processing party traffic, and a tab-strip click can start a rebuild at any moment. Fix belongs in PartyRollService (snapshot into an immutable list on the client thread, or make the reader hop), not in the panel.",
+   "why_safe": "Not speculation about thread identity: every writer to `inbox`/`stances` in PartyRollService is wrapped in `clientThread.invokeLater` (lines 341, 390, 435, 559, 607, 682, 751, 894, 930, 950, 980, 1182, 1444, 1593, 1668), and every reader named here is reached only from `OverviewTab.rebuild()`, which `GachamanPanel.refresh()` marshals onto the EDT. The service's own `antePercentArmed` is declared `volatile` (TaskService:208) precisely because the panel reads it off-thread, which shows the cross-thread contract was considered elsewhere and simply missed for these two maps. Reporting only -- any fix must preserve the roster, vote labels and agreed count exactly as rendered today.",
+   "chars_saved": 0
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/OverviewTab.java",
+   "line": 706,
+   "kind": "bug",
+   "summary": "`trimDouble` formats with `String.format(\"%.1f\", value)`, which uses the default locale. On a client running under a comma-decimal locale (de, fr, es, pt-BR, and much of the EU) the style cycle renders '2,5 / 3 contracts' and the Double Docket line renders 'x1,5' -- while every other number in the same panel comes from `QuantityFormatter.formatNumber`, which is comma-grouped, so the player sees '1,250 GC' and 'x1,5' side by side and the two commas mean opposite things. Fix is `String.format(Locale.ROOT, \"%.1f\", value)`; `Locale` is already in scope via the `java.util.*` wildcard and is already used at line 133.",
+   "why_safe": "Report only, no feature touched -- this pins the separator that a UK/US player already sees today, so on the overwhelmingly common locales the rendered string is byte-identical. Affects the two call sites that can produce a fractional value: the cycle-progress bar label (line 221, half-kills give x.5 progress) and the Double Docket multiplier text and tooltip (lines 483, 487). The integer path returns early via `String.valueOf((int) value)` and is locale-independent already.",
+   "chars_saved": 0
+  },
+  {
+   "file": "src/main/java/com/gachaman/ui/panel/OverviewTab.java",
+   "line": 134,
+   "kind": "bug",
+   "summary": "A raw NUL byte (0x00) sits inside a string literal used as a dedupe separator: seen.add(npcName.toLowerCase(Locale.ROOT) + \"<NUL>\" + questName). It is deliberate as a separator but written as a literal byte instead of the \\0 escape, so `file` reports the source as \"data\" and ripgrep/grep classify it as binary and SKIP it. Consequence for anyone auditing this repo: every repo-wide search silently misses ~900 lines of UI. In this audit it made proposalGroups(), PendingProposal, ProposalMember, joinProposal(long) and declineProposal(long) all look like dead code until I re-ran the greps with `grep -a` — i.e. it nearly produced a recommendation to delete live, user-facing party-roll UI. Replace the raw byte with \"\\0\" (or \"\u0000\").",
+   "why_safe": "Runtime-identical: \"\\0\" compiles to the same single U+0000 character, so the dedupe key is byte-for-byte what it is today. Costs 1 extra source char and restores the file to every grep-based tool.",
+   "chars_saved": -1
+  }
+ ],
+ "src/main/java/com/gachaman/overlay/RevealOverlay.java": [
+  {
+   "file": "src/main/java/com/gachaman/overlay/RevealOverlay.java",
+   "line": 1610,
+   "kind": "dedupe",
+   "summary": "Four byte-similar ballistic-scatter particle loops. `drawShockwave` L1610-1624 (607 chars), `drawDeedBurst` L2729-2738 (382), `drawFireworks` L2870-2879 (437) and — outside this file — `KillJuiceOverlay.drawBurst` L212-223 (536). All four are: two/three `Paint.hash01` draws, `ang = h1 * PI * 2`, `speed = min + h2 * span`, `px = cx + cos(ang)*speed*ts`, `py = cy + sin(ang)*speed*ts*k + gravity*ts*ts`, a colour picked by `p % mod`, `fillRect`. Collapse into one static helper next to `Paint.hash01` (which already exists as the shared home for exactly this kind of drift): `scatter(g, cx, cy, seed, stride, count, ts, speedMin, speedSpan, ySpread, gravity, sizeBase, sizeSpan, alpha, mod, first, rest)`.",
+   "why_safe": "Pixel-exact reproduction of all four is possible: passing `stride` covers drawDeedBurst's odd `hash01(p*71+5)`/`(p*71+6)` seeding (seed=5, stride=71) alongside the others' `seed + p*3` (stride=3); `(mod, first, rest)` reproduces `(p & 1) == 0` as mod 2, `p % 3 == 0` as mod 3, and drawDeedBurst's constant gold as mod 1; `(sizeBase, sizeSpan)` reproduces the fixed `3` as span 0 and drawShockwave's `2 + (int)(h3*3*(1-u))`; `ySpread` covers KillJuice's `*0.8`. Computing an unused h3 for the fireworks case changes no other hash value. HONEST COST: net saving inside RevealOverlay alone is only ~276 chars (helper body ~700 vs 1426 removed, 3 call sites ~450); the ~650 figure requires KillJuiceOverlay to adopt it too, and a 17-parameter call does NOT read better than the loop it replaces — worth the owner's judgement, not an automatic yes. NOTE: this subsumes the separate `if (size <= 0) continue;` dead-branch finding below.",
+   "chars_saved": 650
+  },
+  {
+   "file": "src/main/java/com/gachaman/overlay/RevealOverlay.java",
+   "line": 924,
+   "kind": "dead-code",
+   "summary": "Orphaned sound-cue scaffolding on the CHEST path. `fireOnce`/`firedSounds` exist only to gate cues that no longer exist: the single call site is `if (el >= 850 && fireOnce(9)) { }` (L924-925) with an EMPTY body, and `firedSounds` is read nowhere but inside `fireOnce`. Same shape for `dealSoundIndex` (field L219, reset L388) whose only use is the `while` loop at L932-935 that increments it and nothing else reads it. `onFlipEffectsLocked` has two more empty-bodied guards: `if (slot.isDuplicate()) { }` (L1040-1041) and `if (slot.isNearMiss()) { }` (L1055-1057, comment-only body). Delete: field L187 + its four resets (L348, L387, L399, L420), `fireOnce` (L1028-1035), L924-925, L219/L388/L932-935, L1040-1041, L1055-1057.",
+   "why_safe": "Verified repo-wide: there is NO SoundService anywhere in src/main (only a stale mention in a src/test comment, ChestStrainTest L125), so these hooks cannot fire. Every write is read only by the machinery being deleted; no branch has an observable effect, so not a pixel or a chat line changes. Caveat for the owner: this is intent-bearing scaffolding for a future sound feature, not accidental cruft — it is fully separable from every other finding here, so it can be declined on its own without affecting the rest.",
+   "chars_saved": 600
+  },
+  {
+   "file": "src/main/java/com/gachaman/overlay/RevealOverlay.java",
+   "line": 985,
+   "kind": "dead-code",
+   "summary": "The same orphaned sound scaffolding on the STYLE ROLL and TASK OFFERS paths. In `advanceModalLocked`, `wheelTickCount` (field L224, reset L400) is only ever compared against itself (L988-990); once it goes, its inputs `t` (L985) and `theta` (L986) and `count` (L987) are dead too, and the whole PH_SPIN body collapses to `if (el >= spinMs()) { phase = PH_SPIN_RESULT; phaseStartMs = now; }` (the local `long spin` can be inlined). Identically, `offerWhooshCount` (field L230, reset L422) is only compared against itself at L1001-1003, which kills `int started` at L1000.",
+   "why_safe": "Neither counter is read outside its own self-comparison — confirmed by repo-wide grep (only the four sites listed each). The wheel's on-screen angle is recomputed independently in drawStyleRoll from wheelThetaEnd and phaseStartMs, so deleting the duplicate theta computation in the advance step cannot move the wheel; the phase transition still fires on the same `el >= spinMs()` test. The offers unroll transition still fires on `el >= unrollTotalMs()`.",
+   "chars_saved": 525
+  },
+  {
+   "file": "src/main/java/com/gachaman/overlay/RevealOverlay.java",
+   "line": 2761,
+   "kind": "dead-code",
+   "summary": "Orphaned sound scaffolding on the FANFARE path. `drawFanfare` opens with `if (fanfareSounds == 0) { fanfareSounds = 1; switch (fan.getSize()) { case SMALL: break; case MEDIUM: break; default: break; } }` (L2761-2771) — a switch whose every arm is a bare break, guarding a flag bit nobody reads (fireFanfareBurst uses bits 1..3, never bit 0). `drawFireworks` has `if (bt < 60 && fireFanfareBurst(m)) { }` (L2866-2867) with an empty body, and `fireFanfareBurst` (L2883-2890) exists only to serve it. Delete those plus the field (L240) and its two resets (L293, L340).",
+   "why_safe": "`fanfareSounds` is written in five places and read only by `fireFanfareBurst`, whose boolean result is consumed only by an empty if-body — nothing downstream observes it. The banner, confetti and firework particles are all drawn from `el`/`fan`, untouched by this block.",
+   "chars_saved": 460
+  },
+  {
+   "file": "src/main/java/com/gachaman/overlay/RevealOverlay.java",
+   "line": 1139,
+   "kind": "dead-code",
+   "summary": "`drawChestIntro` computes two write-only locals left behind by the bake-to-PNG migration. `double lidOpen` (L1139) is assigned in all four tier branches (L1151, L1161, L1172, L1194) and never read; `float leak` (L1141) is assigned at L1191 and never read. The lid angle and seam glow are now inside the pre-rendered frames the CeremonyPlayer blits. Removing them empties two whole blocks outright: the GILDED `if (el >= 3200) { ... }` (L1171-1173) and the ORNATE `if (el >= 4000 && el < 6400) { ... }` (L1190-1192).",
+   "why_safe": "Verified by a scripted write-only sweep over every local declaration in the file (`lidOpen` was the only hit; `leak` was masked in the sweep only because the word appears in a prose comment at L1207, not in code). Neither value reaches `ceremonyPlayer.draw`, which takes `frameAt(tier, el)` — the frame index — and nothing else. The shake, flash and camera-shake locals in the same branches ARE read and must stay. Note the comment above L1190 documents the seam-leak upper bound and is orphaned by the deletion — comments are free, so rewrite rather than shorten it.",
+   "chars_saved": 385
+  },
+  {
+   "file": "src/main/java/com/gachaman/overlay/RevealOverlay.java",
+   "line": 1670,
+   "kind": "dedupe",
+   "summary": "Third copy of the 'load /com/gachaman/art/<name>.png into a static cache' idiom. `RevealOverlay.ART` + `blitArt` (L1666-1678), `ScrollPainter.ART` + `blit` (L141-155) and `ScrollPainter.TEXTURE` (L53-72) each carry their own map/sentinel plus the same try-with-resources + ImageIO.read + catch. Hoist one loader (`Paint` is already the declared home for shared paint helpers) and leave each caller with its own blit geometry.",
+   "why_safe": "All three resolve the same resource root with the same class loader and the same swallow-on-failure semantics, so a shared loader returns the identical Image for the identical name. Deliberately EXCLUDES CeremonyPlayer's loader (L118-131): that one is backed by a bounded LRU (`removeEldestEntry`) because chest frames are large, and merging it into an unbounded map would change memory behaviour. Adopting a `tried`-sentinel loader (the shape ScrollPainter.TEXTURE already uses) also fixes the retry bug reported separately below, so count these two findings together, not twice.",
+   "chars_saved": 220
+  },
+  {
+   "file": "src/main/java/com/gachaman/overlay/RevealOverlay.java",
+   "line": 1638,
+   "kind": "dedupe",
+   "summary": "`drawPityEdgeGlow` (L1638-1645) and `drawOffersBackdrop` (L1933-1940) contain the identical eight-line four-sided gradient vignette — same four GradientPaint constructions, same four fillRect extents, differing only in the two colour variable names (outer/inner vs edge/mid). Extract `private static void drawEdgeBands(Graphics2D g, int cw, int ch, int band, Color outer, Color inner)`.",
+   "why_safe": "Line-for-line identical after alpha-renaming the two colours; both callers already compute `band` and both colours before the sequence, so the call sites reduce to one line each with no other change. The superficially similar frame in `drawShockwave` (L1600-1605) is deliberately NOT included: it uses a solid colour with corner-excluding side bands, and folding it in would double-blend the corners.",
+   "chars_saved": 172
+  },
+  {
+   "file": "src/main/java/com/gachaman/overlay/RevealOverlay.java",
+   "line": 2674,
+   "kind": "terser",
+   "summary": "`drawDeedChoice`'s two branches (L2674-2694) repeat the same box chrome: `fillRoundRect(r.x, r.y, r.width, r.height, 10, 10)` then `setStroke` then the identical `drawRoundRect`. Hoist a `boolean lit = deeded || chosen;` and select the three colours plus the stroke width with conditionals, leaving only the genuinely different tail (gold label centred at `r.height/2 + 4` vs small label at `r.height - 10` plus the padlock) inside the if/else.",
+   "why_safe": "Every geometry argument is already identical between the branches; only fill colour, border colour and stroke width vary, and each maps to a two-way conditional on `lit`/`hovered` with the exact same values (`lit ? 2.5f : hovered ? 2.5f : 1.6f` reproduces both current widths). Draw order (fill, then border, then text, then padlock) is preserved, so the composite is pixel-identical.",
+   "chars_saved": 150
+  },
+  {
+   "file": "src/main/java/com/gachaman/overlay/RevealOverlay.java",
+   "line": 1145,
+   "kind": "terser",
+   "summary": "After `lidOpen` is gone, all four tier branches of `drawChestIntro` compute the white flash with the same formula anchored on the same instant: `flash = max(0, PEAK * exp(-(el - give) / TAU))` where `give` is exactly `ChestStrain.giveMs(tier)` (RUSTY 900, BATTERED 1400, GILDED 2800, ORNATE 6400) and only (PEAK, TAU) differ: (0.30,200), (0.55,220), (0.5,260), (0.85,300). Hoist it out of the branch chain into one statement driven by two small `static final double[]` tables indexed by `tier.ordinal()`, leaving each branch with only its shake (and ORNATE its camera shake).",
+   "why_safe": "The four hard-coded thresholds are literally the values ChestStrain.giveMs already returns — checked against ChestStrain L76-88 and against ChestStrainTest, which pins them. Tuning.Chest declares RUSTY, BATTERED, GILDED, ORNATE in that order (Tuning L199-201), so ordinal indexing matches the table order. ORDERING NOTE: this only becomes valid once `lidOpen` is deleted — while it exists, GILDED's lid block is anchored at 3200, not at giveMs 2800, and the branches are not uniform. The per-tier shake formulas are deliberately left alone: RUSTY's window (300..800) does not match ChestStrain.straining (300..680) and ORNATE's frequency varies with load, so a shake table could not be made exact.",
+   "chars_saved": 120
+  },
+  {
+   "file": "src/main/java/com/gachaman/overlay/RevealOverlay.java",
+   "line": 1393,
+   "kind": "dedupe",
+   "summary": "The cosine flip is written out twice in `drawRevealSlot`: L1354-1360 (reroll flip-back, face-first) and L1396-1402 (reveal flip, back-first), each a `double s = Math.cos(...)` followed by a five-line if/else picking sign and side. Push the sign handling into `drawScaledX` — take the signed cosine plus a `faceWhenPositive` flag, and do `boolean face = (v > 0) == faceWhenPositive; scaleX = Math.abs(v);` — so each call site becomes one line.",
+   "why_safe": "Behaviourally exact including the `s == 0` boundary: today the `s > 0` test is false at zero and the else-branch passes `-s` (0.0), which `drawScaledX` discards via its existing `scaleX < 0.04` early-return; `Math.abs(0.0)` takes the same early return, so the same nothing is drawn. `Math.abs(s)` equals `-s` for every negative s. The early-return guard, the g.create()/dispose() pair and the transform order are untouched.",
+   "chars_saved": 115
+  },
+  {
+   "file": "src/main/java/com/gachaman/overlay/RevealOverlay.java",
+   "line": 490,
+   "kind": "dead-code",
+   "summary": "In `handleClick`, `int actionArg = -1;` (L490) is never reassigned anywhere in the method — every path leaves it at -1 before `executeAction(action, actionArg)` at L564. Drop the local and pass the literal.",
+   "why_safe": "Read the whole method: the only writes in the block are to `action`, `rerollIndex`, `deedClicked`, `acceptedIndex`, `phase`, `phaseStartMs` and `flipAtMs`. None of the actions reachable from handleClick (ACT_COMMIT_DRAIN, ACT_NONE) consult the arg in `executeAction` — only ACT_ACCEPT_DRAIN does, and that is raised solely by `stagedAdvance`/`advanceModalLocked`, which keep their own arg. `executeAction(action, -1)` is exactly what already runs.",
+   "chars_saved": 45
+  },
+  {
+   "file": "src/main/java/com/gachaman/overlay/RevealOverlay.java",
+   "line": 1619,
+   "kind": "dead-code",
+   "summary": "`drawShockwave`'s `int size = 2 + (int) (h3 * 3 * (1 - u));` is followed by `if (size <= 0) { continue; }` (L1619-1621), which can never be taken.",
+   "why_safe": "`Paint.hash01` returns >= 0 by construction (it masks to 0x7FFFFFFF before the divide) and `u` is `clamp01(...)`, so `(1 - u) >= 0` and the whole added term is >= 0, leaving size >= 2 always. OVERLAP: if the shared scatter helper above is adopted this branch disappears with it — do not count both savings.",
+   "chars_saved": 40
+  },
+  {
+   "file": "src/main/java/com/gachaman/overlay/RevealOverlay.java",
+   "line": 2395,
+   "kind": "terser",
+   "summary": "`drawWrappedCentre` ends with `return y + gapAfter - (lines.isEmpty() ? 0 : 0);` — a ternary yielding 0 on both arms. It is `return y + gapAfter;`.",
+   "why_safe": "Both branches evaluate to the literal 0 and `lines.isEmpty()` has no side effect (it is a local ArrayList from `wrapText`), so the arithmetic is unchanged for every input. Worth a glance from the owner regardless of the saving: the vestigial branch suggests an intended 'no lines drawn, so claim no gap' rule that was never implemented — but implementing it now would move the footer stack, so identical behaviour means deleting the ternary, not filling it in.",
+   "chars_saved": 30
+  },
+  {
+   "file": "src/main/java/com/gachaman/overlay/RevealOverlay.java",
+   "line": 2286,
+   "kind": "bug",
+   "summary": "`drawVoters` draws its '+N more' overflow label on top of an already-inked line. The wrap at L2282-2285 does `cx = x; y += rowH;` BEFORE the out-of-room test at L2286, so by the time the label is drawn it uses the reset `cx` (== x, the left margin) with baseline `y - rowH + ...` (the PREVIOUS row). It therefore overprints the first voter chip of the last drawn row instead of appending after it.",
+   "why_safe": "Not a refactor — a genuine rendering defect, 0 chars. The branch is only reachable immediately after a wrap: `y` changes nowhere else in the loop, and the guard at L2265 proves the first row always fits, so `y + rowH > parchBot - 6` can only flip to true on the iteration where `y` just advanced — which is exactly the iteration that reset `cx` to `x`. Failure scenario: a party of five or more voting on a short scroll (small client, cardW at its 120px floor) — the second row fills, a third is refused, and '+3 more' is stamped over the first name on row two. Fix by capturing `cx` before the wrap resets it, or by testing for room before wrapping.",
+   "chars_saved": 0
+  },
+  {
+   "file": "src/main/java/com/gachaman/overlay/RevealOverlay.java",
+   "line": 1670,
+   "kind": "bug",
+   "summary": "`blitArt` caches with `ART.computeIfAbsent(name, ...)` whose mapping function returns null when the PNG is missing. HashMap does not record a null mapping, so a missing asset is re-looked-up through the classloader and re-fed to ImageIO on EVERY frame, for every missing name. `ScrollPainter.blit` (L143-155) has the identical hole; `ScrollPainter.TEXTURE` (L53-72) shows the intended fix with a `tried` sentinel.",
+   "why_safe": "0 chars — a robustness/perf defect, not a saving. Severity is LATENT, not live: I listed src/main/resources/com/gachaman/art and all four wheel PNGs (wheel-hub, wheel-pointer, wheel-rim, wheel-shadow) plus the roller and parchment art are present, so no shipped path currently misses. It bites on a partial/corrupt jar or a stripped build, where the style roulette would do four failed classloader lookups per frame while the wheel spins. Fixing it is the same edit as the shared-loader finding above (cache a null sentinel), so count them once.",
+   "chars_saved": 0
+  },
+  {
+   "file": "src/main/java/com/gachaman/overlay/RevealOverlay.java",
+   "line": 1209,
+   "kind": "bug",
+   "summary": "`CeremonyPlayer.draw` returns a boolean documented as 'false when the art could not be loaded, so the caller can fall back rather than draw nothing' — and all four call sites in this file (L1209, L1239, L1241, L1273) discard it. There is no fallback path left: the hand-drawn chest that used to be it is gone, and the chest-back-*/chest-body-* PNGs still in resources are referenced only by the src/test authoring tool ChestArt (L1227), never by src/main.",
+   "why_safe": "0 chars in this file — reported as a stale contract, not a saving. Verified by grep across src/main and src/test: no caller anywhere reads the return, and no other chest-drawing code exists. Consequence if the ceremony art ever fails to load: the intro still paints its title, flash and 'Space to skip' over an empty screen where the chest should be, for the full ChestStrain.totalMs (up to 7s on ORNATE). Either honour the return with a fallback or make the method void and correct the javadoc — do NOT silently make it void while leaving the promise in the doc.",
+   "chars_saved": 0
+  }
+ ],
+ "src/main/java/com/gachaman/party/PartyRollService.java": [
+  {
+   "file": "src/main/java/com/gachaman/party/PartyRollService.java",
+   "line": 678,
+   "kind": "terser",
+   "summary": "All 8 @Subscribe handlers (L678, 747, 946, 976, 1178, 1440, 1589, 1664) open with the identical 4-line preamble: `if (msg == null || isSelfEcho(msg.getMemberId())) { return; } clientThread.invokeLater(() -> {`. All 8 message types extend PartyMemberMessage (verified: PartyRollPropose/Response/Cancel/Start/Vote/Resolve, PartyKills, PartyComplete), which declares getMemberId(). Collapse to `private void handle(@Nullable PartyMemberMessage msg, Runnable body) { if (msg != null && !isSelfEcho(msg.getMemberId())) { clientThread.invokeLater(body); } }` and make each handler `handle(msg, () -> { ... });`. Measured: 92 chars of preamble per site x 8 = 736, replaced by 22 per site plus a 152-char helper -> ~408 chars saved, plus 24 fewer physical lines.",
+   "why_safe": "Behaviour identical: same null check, same self-echo check, both still evaluated on the EventBus thread before deferring, same body deferred to clientThread.invokeLater. The @Subscribe method signatures are UNCHANGED — RuneLite's EventBus dispatches on the concrete parameter type, so only method bodies move; no reflection surface is touched.",
+   "chars_saved": 408
+  },
+  {
+   "file": "src/main/java/com/gachaman/party/PartyRollService.java",
+   "line": 1056,
+   "kind": "dedupe",
+   "summary": "executeRoll re-copies every generated offer through the full 9-arg TaskOffer constructor purely to flip partyRoll to true (L1058-1060); TaskService.demotePartyOffers (TaskService L404-407) does the identical copy to flip it back to false. TaskOffer (model/TaskOffer.java) is a plain @Value with no @With. Add `@With` to TaskOffer (5 chars; `import lombok.*;` is already there) and both sites become `offers.add(offer.withPartyRoll(true))` / `personal.add(offer.withPartyRoll(false))`. ~225 chars here plus ~225 in TaskService = ~450 across the budget, for 5 chars of annotation.",
+   "why_safe": "Lombok's generated wither is exactly this copy constructor (returning `this` when the flag already matches, which is safe for an immutable @Value). Persistence is unaffected: StateCodec serialises GachaState wholesale with field-based Gson (StateCodec L25/L77, no TaskOffer-specific adapter), and @With adds methods, not fields. The 8 other generated withers cost zero SOURCE tokens.",
+   "chars_saved": 225
+  },
+  {
+   "file": "src/main/java/com/gachaman/party/PartyRollService.java",
+   "line": 758,
+   "kind": "dedupe",
+   "summary": "onPartyRollResponseMessage builds the SAME 9-arg `new Stance(msg.getResponse(), msg.getSeedCandidate(), msg.isMembers(), msg.getCombatLevel(), msg.getSlayerLevel(), msg.getAllowedStyle(), msg.getRollProtocol(), msg.getCompletedQuests(), msg.getAccountKey())` twice — once for the inbox branch (L758-761) and once for the committed branch (L767-769). Hoist it to a single `Stance heard = ...;` above the `if (!proposalLive || ...)` guard and use `heard` in both puts. ~180 chars. IMPORTANT: hoist the Stance construction ONLY — do NOT hoist the rememberPartner call with it, because it currently runs only when `entry != null`, and moving it would newly cache account keys for proposals this client does not track.",
+   "why_safe": "Stance is an immutable @Value; construction has no side effects, so building it before the branch (and discarding it when neither branch fires) is observationally identical. Both call sites already pass byte-identical arguments from the same msg.",
+   "chars_saved": 180
+  },
+  {
+   "file": "src/main/java/com/gachaman/party/PartyRollService.java",
+   "line": 2485,
+   "kind": "dedupe",
+   "summary": "memberName() re-implements liveDisplayName() (L1804) with its own try/catch around partyService.getMemberById plus a null-display-name check, then adds the \"A party member\" fallback. Rewrite as: `String name = liveDisplayName(memberId); return name == null ? \"A party member\" : name;` — ~120 chars and one try/catch gone. (Measured alternative rejected: adding a shared safeMember() helper for all three of avatarOf/liveDisplayName/memberName nets only ~73, worse than this.)",
+   "why_safe": "liveDisplayName already returns null for all three failure modes memberName handles (exception, absent member, null display name), so the mapping is exact. liveDisplayName's javadoc — \"deliberately distinct from memberName(), whose 'A party member' fallback ... must NEVER be persisted\" — stays true: the raw-null contract is untouched, only the fallback moves into its single consumer.",
+   "chars_saved": 120
+  },
+  {
+   "file": "src/main/java/com/gachaman/party/PartyRollService.java",
+   "line": 859,
+   "kind": "dead-code",
+   "summary": "committedProposalTicksLeft() has no callers in src/main or src/test (verified with grep -a, including OverviewTab). It is superseded: the panel renders the committed group's countdown from PendingProposal.ticksLeft, which describeCommitted already fills via the same displayTicksLeft(proposalExpiresAtTick, self == proposerId) call (OverviewTab L269 -> PartyRollService.ticksToSeconds(offer.getTicksLeft())). ~120 chars.",
+   "why_safe": "No caller, no reflection in this plugin, not an @Subscribe or Lombok-generated binding — dropping it cannot change any displayed number, because the number the panel actually shows comes from describeCommitted's own displayTicksLeft call, which stays.",
+   "chars_saved": 120
+  },
+  {
+   "file": "src/main/java/com/gachaman/party/PartyRollService.java",
+   "line": 740,
+   "kind": "dedupe",
+   "summary": "excuse() (L740-743) and sendResponse() (L2390-2393) each spell out the same 10-arg PartyRollResponseMessage from the same local Stance, differing only in which proposal id they quote. Extract `private void sendStance(long id, int response, Stance mine) { safeSend(new PartyRollResponseMessage(id, response, mine.getSeedCandidate(), ... mine.getAccountKey())); }` and call it with entry.proposalId / proposalId. ~110 chars and 6 fewer lines. Scope the helper to the MESSAGE SEND only — the fuller merge (also folding in the stance bookkeeping) is rejected because excuse() stores under safeMemberIdOrZero() unguarded while sendResponse() guards on `local != null`, and unifying those changes what happens when the client is not in a party.",
+   "why_safe": "Pure extraction of an identical expression: same message class, same argument order, same safeSend wrapper, same call order relative to the surrounding stance bookkeeping, which stays where it is at each site.",
+   "chars_saved": 110
+  },
+  {
+   "file": "src/main/java/com/gachaman/party/PartyRollService.java",
+   "line": 921,
+   "kind": "dead-code",
+   "summary": "isPartyRollLive() has no callers anywhere in src/main or src/test (verified with `grep -arn` across src, which is what it takes here — see the OverviewTab NUL-byte finding). CAVEAT, and the reason this is a report rather than a recommendation: its javadoc says \"The Charter Office refuses to sell into all three\", and the string \"Charter\" appears NOWHERE else in the repo. So this may be a guard whose wiring was lost (a missing feature) rather than junk — the owner should decide whether to wire it or drop it, not have it silently deleted. ~110 chars if dropped.",
+   "why_safe": "Removal alone would change no behaviour today, since nothing calls it and the plugin uses no reflection (CLAUDE.md) and no @Subscribe/Lombok binding touches it. But because its javadoc describes an enforcement that does not exist elsewhere, treat the finding as 'confirm intent first'.",
+   "chars_saved": 110
+  },
+  {
+   "file": "src/main/java/com/gachaman/party/PartyRollService.java",
+   "line": 866,
+   "kind": "dead-code",
+   "summary": "voteTicksLeft() has no callers in src/main or src/test (verified with grep -a, including OverviewTab). Same story as committedProposalTicksLeft: the vote countdown reaches the panel through PendingProposal.ticksLeft, which describeCommitted fills with displayTicksLeft(voteExpiresAtTick, self == proposerId) when votingLive. ~110 chars.",
+   "why_safe": "No caller, no reflection, not an @Subscribe or Lombok binding. The voting countdown the player sees is produced by describeCommitted's branch at L551-553, which is untouched.",
+   "chars_saved": 110
+  },
+  {
+   "file": "src/main/java/com/gachaman/party/PartyRollService.java",
+   "line": 1287,
+   "kind": "dedupe",
+   "summary": "voteView() walks votes.entrySet() twice — once to fill `voters` (L1287-1294) and again to fill `labels` (L1296-1302). Merge into the first loop, placing the label lines after the existing bounds `continue`. ~100 chars and 5 fewer lines.",
+   "why_safe": "Identical output. The first loop's guard is `index < 0 || index >= voters.size()` and voters.size() == partyOffers.size(); voteLabelFor -> offerLabel applies the same bounds and returns null outside them, so every entry the merged loop skips is exactly an entry the second loop would have produced no label for. Entries with a null vote value map to index -1 under both.",
+   "chars_saved": 100
+  },
+  {
+   "file": "src/main/java/com/gachaman/party/PartyRollService.java",
+   "line": 1151,
+   "kind": "dedupe",
+   "summary": "voteLocal (L1151-1154) and onPartyRollVoteMessage (L1193-1196) print the same vote line, differing only in the leading name. Extract `private void chatVote(String who, int index, boolean ante) { chat(who + \" voted: \" + describeOffer(partyOffers.get(index)) + \" (\" + votesFor(index) + \" of \" + majorityThreshold(participants.size()) + \" needed)\" + anteSuffix(ante)); }` and call chatVote(\"You\", offerIndex, wantsAnte) / chatVote(memberName(msg.getMemberId()), index, msg.isAnte()). ~60 chars.",
+   "why_safe": "Byte-identical output: \"You voted: \" is \"You\" + \" voted: \", and both sites already evaluate describeOffer/votesFor/majorityThreshold/anteSuffix in this order at this point in their flow (after the vote and ante have been recorded).",
+   "chars_saved": 60
+  },
+  {
+   "file": "src/main/java/com/gachaman/party/PartyRollService.java",
+   "line": 1963,
+   "kind": "terser",
+   "summary": "The fragment `(int) (Tuning.PARTY_CARRY_MULT * 100) + \"% completion pay.\"` is spelled out three times — the carry-clause line (L1963), the pre-resume-id fallback (L2091) and the resurrection notice (L2109). Hoist to `private static final String CARRY_PAY = (int) (Tuning.PARTY_CARRY_MULT * 100) + \"% completion pay.\";` and use `+ CARRY_PAY` at all three. ~40 chars.",
+   "why_safe": "Tuning.PARTY_CARRY_MULT is a compile-time-stable constant, so the string is the same at every site; the three chat messages keep their existing leading text verbatim and print exactly what they print today.",
+   "chars_saved": 40
+  },
+  {
+   "file": "src/main/java/com/gachaman/party/PartyRollService.java",
+   "line": 142,
+   "kind": "terser",
+   "summary": "Four annotations are written fully qualified as `@lombok.Value` (L142 ProposalMember, L165 PendingProposal, L1232 Voter, L1241 VoteView) even though the file already has `import lombok.*;` (L12) and uses the bare `@Value` on Stance at L96. 4 x 7 chars = 28. This is the exact inline-fully-qualified-name waste CLAUDE.md calls out (commit ca280de).",
+   "why_safe": "`Value` is unambiguous in this file's import set — proven by L96 compiling with the bare form — so the four qualified uses resolve to the same annotation. Not a collision-resolver import: the Inject/Singleton, List, Point, InterfaceID/InventoryID and Timer cases named in CLAUDE.md are untouched.",
+   "chars_saved": 28
+  },
+  {
+   "file": "src/main/java/com/gachaman/party/PartyRollService.java",
+   "line": 580,
+   "kind": "bug",
+   "summary": "Patron's Mark is never credited for the HOST. joinProposal() calls resetAll() (L580), which clears partnerKeyCache (L2017) — wiping the host's account key that onPartyRollProposeMessage had just recorded via rememberPartner (L704). No later message from the host carries an accountKey (Start carries participantIds, Vote carries offerIndex+ante, Resolve carries memberIds+mode+ante; only Propose and Response carry the key, and a host never sends a Response to its own proposal), so the key is never re-learned. At completion creditPatrons (L1713) hits `if (key == null) continue` and silently skips the host. This is the DEFAULT path, not a corner case: onPartyRollProposeMessage no longer sets proposalLive, so joinProposal is the only way a non-host becomes committed. Note the asymmetry — the host does earn marks for everyone (their Responses carry keys), and names survive because applyResolve re-snapshots them via rememberNames; only keys are lost. Fix: after `stances.putAll(entry.stances)` (L587) re-seed rememberPartner from each stance's accountKey, or have creditPatrons fall back to stances.get(id).getAccountKey().",
+   "why_safe": "Fix is additive — it restores documented intent (Stance.accountKey and partnerKeyCache exist precisely to survive to completion). No feature, message, config or chat line is removed; it only makes an already-shipped cosmetic ledger record the partner it is currently dropping.",
+   "chars_saved": 0
+  },
+  {
+   "file": "src/main/java/com/gachaman/party/PartyRollService.java",
+   "line": 1020,
+   "kind": "bug",
+   "summary": "A host who declines their own live proposal (::gachaparty no after propose) still gets the party board dealt to them. decline() -> sendResponse(DECLINE) -> evaluateProposal(): the host is still proposerId, so it broadcasts Start and then runs executeRoll(agreed) locally even though it is not in `agreed`. executeRoll calls taskService.presentPartyOffers (TaskService L375), which persists pendingOffers and submits the TASK_OFFERS ceremony — a full reveal for a roll they just sat out. They cannot vote (voteLocal L1140 requires participants.contains(self)), and at resolve they fall into applyResolve's `!memberIds.contains(self)` branch (L1470) -> cancelVoting -> demotePartyOffers, leaving them holding four PERSONAL offers they must now decide (rolls cannot be undone), which makes localBusy() true. onPartyRollStartMessage has exactly this guard at L987 (\"The party roll started with N members (you sat out)\"); the host path lacks it.",
+   "why_safe": "Fix is additive: an early return in executeRoll (or in evaluateProposal, after safeSend of the Start message) when `agreed` does not contain the local member, mirroring the guard that already exists at L987. The party's roll still starts and still binds the other members — only the local side effect on a member who declined is dropped, which is the documented behaviour of the message path.",
+   "chars_saved": 0
+  },
+  {
+   "file": "src/main/java/com/gachaman/party/PartyRollService.java",
+   "line": 1226,
+   "kind": "bug",
+   "summary": "Cross-thread reads of this service's mutable state from the Swing EDT. voteView()'s javadoc asserts \"Both this and every mutation of votes run on the client thread, so the snapshot is never torn\" — that is false for the panel: GachamanPanel.refresh() defers to SwingUtilities.invokeLater (GachamanPanel L236-246), so PartyTab L165 (voteViewSupplier.get()) and OverviewTab L240/281/352/374/378/381 (proposalGroups, isProposalLive, canCancelRoll, canForceStart, agreedCount) all run on the EDT while the client thread mutates votes/stances/inbox/participants/partyOffers. The tightest demonstrable failure: onGameTick's inbox sweep calls it.remove() on `inbox` every tick (L1844-1852) while proposalGroups() -> describe() iterates inbox.values() and entry.stances on the EDT, and refreshPanel fires every 2 ticks — a ConcurrentModificationException on the EDT aborts the panel rebuild. describe() additionally reads config and localBusy() (state) off-thread. Fix shape: build the immutable snapshot on the client thread (it is already all @Value objects) and have the panel read a volatile reference.",
+   "why_safe": "Fix is additive and preserves every panel element: the same PendingProposal/VoteView objects are published, just produced on the thread that owns the maps. Nothing user-facing is removed — in particular the panel must keep reading the vote picture; only where the snapshot is built moves.",
+   "chars_saved": 0
+  },
+  {
+   "file": "src/main/java/com/gachaman/party/PartyRollService.java",
+   "line": 550,
+   "kind": "bug",
+   "summary": "describeCommitted() passes the host's DECLARED sizing rule — PartySizing.fromWire(hostSizingMode).toString() — while PendingProposal.sizingLabel's own javadoc (L170) says the field is \"The rule this roll would ACTUALLY use — see effectiveSizingLabel\", and describe() (the not-yet-joined card, L648) does use effectiveSizingLabel. So a member who has JOINED sees \"Sizing: Weakest Man\" on the card (rendered at OverviewTab L266) for a roll that a protocol-1 member has already forced down to Fighting Weight. Lower severity than 1-3 because the binding moment is honest: executeRoll chats sizingRuleLabel(protocols, hostSizingMode) plus the dedicated Weakest-Man-fallback line before any vote is cast — this is a stale card during the proposal phase, not a lie at the decision point. Fix: widen effectiveSizingLabel to take (Collection<Stance>, String sizingMode) and call it from both describers.",
+   "why_safe": "Fix is additive and behaviour-restoring: it makes one existing label agree with its documented meaning and with the sibling card. Nothing is removed, and effectiveSizingLabel is already the shipped rendering for the same field on the other code path (it also stays correct when the local stance is already in the map, since the gate is a minimum over protocols).",
+   "chars_saved": 0
+  },
+  {
+   "file": "src/main/java/com/gachaman/party/PartyRollService.java",
+   "line": 879,
+   "kind": "bug",
+   "summary": "agreedCount() counts every AGREE in `stances`, including members who have since LEFT the RuneLite party, while evaluateProposal() counts only members still on the roster (L803-812). A host whose agreeing partner disconnects therefore sees \"Start Roll Now (2 agreed)\" (OverviewTab L381), and clicking it runs evaluateProposal(true) which finds agreed.size() < 2 with neither `deadline` nor `allAnswered` true — so it returns at L817-822 with NO chat line and no state change. The button silently does nothing. Fix: count against rosterIds() in agreedCount (one intersection), so the button's number and the start rule read the same roster.",
+   "why_safe": "Fix is additive and removes no feature: the button, its label and forceStart's behaviour all stay: agreedCount merely stops counting members the roll would never have included anyway, so the displayed number and the guard become the same number that evaluateProposal already uses.",
+   "chars_saved": 0
+  }
+ ],
+ "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/GachamanPlugin.java": [
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/GachamanPlugin.java",
+   "line": 367,
+   "kind": "dedupe",
+   "summary": "The nine wsClient.registerMessage(...) calls (367-375) and their nine unregisterMessage twins (444-452) are the same list written twice. Replace with one constant plus two loops: `private static final List<Class<? extends PartyMemberMessage>> PARTY_MESSAGES = Arrays.asList(PartyRollProposeMessage.class, ... GachaPresenceMessage.class);` then `for (var message : PARTY_MESSAGES) { wsClient.registerMessage(message); }` in startUp and the unregister twin in shutDown. Costs one new import, `net.runelite.client.party.messages.*`. Measured: 1046 chars now, ~575 after (incl. the import).",
+   "why_safe": "Same calls in the same order, so registration order is untouched. Verified against the jar (client-1.12.35): WSClient.registerMessage/unregisterMessage take Class<? extends WebsocketMessage>, and all nine classes extend PartyMemberMessage, which satisfies that bound. The new wildcard import is collision-free: net.runelite.client.party.messages contains only PartyChatMessage, PartyMemberMessage, PartyMessage, UserSync, WebsocketMessage, LocationUpdate, StatusUpdate, TilePing — none of which collides with com.gachaman.party.* or any other simple name this file uses.",
+   "chars_saved": 471
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/GachamanPlugin.java",
+   "line": 353,
+   "kind": "dedupe",
+   "summary": "The eleven eventBus.register(...) calls (353-363) and their eleven unregister twins (454-464) are the same list twice. Add `private List<Object> busSubscribers() { return Arrays.asList(styleTracker, killTracker, graduationService, milestoneService, bossKcService, safeModeService, equipBlockService, combatBlockService, loadoutTabButton, partyRollService, partyPresenceService); }` and loop over it in both methods. Measured: 870 chars now, ~434 after.",
+   "why_safe": "EventBus.register/unregister take Object (verified with javap against client-1.12.35), and iterating the list preserves the exact registration order, so subscriber ordering for equal priorities is unchanged. The list must be built by a method (not a field initialiser) because these are @Inject fields, populated after construction; both call sites run after injection.",
+   "chars_saved": 436
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/GachamanPlugin.java",
+   "line": 895,
+   "kind": "dead-code",
+   "summary": "onOverlayMenuClicked (lines 890-900) is unreachable. Its only branch tests `event.getOverlay() == loadoutButtonOverlay`, but loadoutButtonOverlay is never added to the OverlayManager — the add block at 338-344 omits it, and a repo-wide grep shows `OverlayManager` is referenced in no other file. An unmanaged Overlay is never rendered and never contributes a RUNELITE_OVERLAY menu entry, so this handler cannot fire. LoadoutTabButton is the live replacement (a real widget child on the equipment interface with its own native 'Toggle' op), which is why nothing is missing on screen. Deleting the handler (~349 chars incl. its trailing `return;`) is the behaviour-identical route.",
+   "why_safe": "Deleting an unreachable @Subscribe changes nothing the player sees. IMPORTANT: registering the overlay instead is NOT behaviour-neutral — LoadoutTabButton already draws a button in the same top-right corner of the worn-equipment panel, so adding the overlay would produce a second, duplicate button. Also keep the `loadoutButtonOverlay` @Inject field: the ::gachabutton debug command reads it (line 1021). Side effects worth knowing, both outside this file and both harmless: LoadoutInputListener's button hit test (it tests buttonOverlay.getBounds(), permanently 0x0) can never fire, and ::gachabutton will always report 'render NEVER called'.",
+   "chars_saved": 349
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/GachamanPlugin.java",
+   "line": 338,
+   "kind": "dedupe",
+   "summary": "The seven overlayManager.add(...) calls (338-344) and their seven remove twins (472-478) are the same list twice. Add `private List<Overlay> overlays() { return Arrays.asList(revealOverlay, killJuiceOverlay, forbiddenItemOverlay, slotLockOverlay, taskNpcHighlightOverlay, taskProgressOverlay, loadoutOverlay); }` and loop in both methods. Measured: 597 chars now, ~348 after.",
+   "why_safe": "Identical calls in identical order. `Overlay` is already in scope via the existing `net.runelite.client.ui.overlay.*` import, and every one of the seven is provably an Overlay because `overlayManager.add(x)` (signature `add(Overlay)`, verified with javap) already compiles for each. Note loadoutButtonOverlay is deliberately NOT in this list — it is not added today and must not be added (see the LoadoutButtonOverlay finding).",
+   "chars_saved": 249
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/GachamanPlugin.java",
+   "line": 1066,
+   "kind": "terser",
+   "summary": "The 10-line private static joinArgs(String[], int) helper (1066-1075) hand-rolls a StringBuilder join. It has exactly one caller, `joinArgs(args, 1)` at line 1057. Delete it and write `String.join(\" \", Arrays.copyOfRange(args, 1, args.length)).trim()` — the same idiom the file already uses twice for the whole argument array (lines 927, 941). 272 chars of helper for a 48-char-longer call site.",
+   "why_safe": "Output is identical for every input, including empty and whitespace-only arguments: joinArgs suppresses the separator only while the accumulator is still empty (a leading run of empty args), and String.join's leading separators are then removed by the same .trim() joinArgs itself applies. Traced [\"\",\"b\",\"\",\"c\"] and [\" \",\"b\"] by hand — both forms give the same string. java.util.Arrays is already imported via java.util.*.",
+   "chars_saved": 224
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/GachamanPlugin.java",
+   "line": 1119,
+   "kind": "dedupe",
+   "summary": "clientThreadInvokeCreateButton() and clientThreadInvokeRemoveButton() (1119-1125) are one-line wrappers whose names are longer than their bodies, each called exactly once (lines 364 and 465). Inline them: `clientThread.invokeLater(loadoutTabButton::create);` in startUp and `...::remove);` in shutDown. 104 chars of declaration each, against 18 chars of extra call site each.",
+   "why_safe": "Pure inlining of a private single-caller method; the expression is identical. Both are private, so a repo-wide grep (they appear nowhere outside this file) is conclusive — no reflection or Lombok involved.",
+   "chars_saved": 172
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/GachamanPlugin.java",
+   "line": 1127,
+   "kind": "dedupe",
+   "summary": "debugChat(String) (1127-1129) is a pure pass-through to debugChatAlways(String) — byte-identical behaviour, two names. Keep one method. The saving only exists in the direction that keeps the SHORTER name: delete the wrapper and rename debugChatAlways to debugChat at its 12 remaining call sites (11 direct + the one inside chatPing) — 74 chars of wrapper plus 6 chars per site. Going the other way (renaming the 17 debugChat sites to debugChatAlways) is a net loss of ~28 chars, so do not do that.",
+   "why_safe": "Both methods already queue exactly the same QueuedMessage, so no chat line changes text, colour or suppressibility. The suppressible/never-suppressed distinction the javadoc draws lives entirely in chatPing() (the only method that consults config.chatPings()) — debugChat vs debugChatAlways is documentary, not functional. Naming is the owner's call: if 'debugChat' on the enforcement path reads wrong, any single short name works and the saving is the same. Both methods are private; grep confirms no external callers.",
+   "chars_saved": 146
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/GachamanPlugin.java",
+   "line": 234,
+   "kind": "terser",
+   "summary": "ordinal(int) (234-249) spends 16 lines on a 4-branch switch. Collapse the body to two lines: `int m = n % 100 >= 11 && n % 100 <= 13 ? 0 : n % 10;` then `return n + (m == 1 ? \"st\" : m == 2 ? \"nd\" : m == 3 ? \"rd\" : \"th\");`. Measured: 278 chars now, 166 after. (I also costed the suffix-array version — it is only ~26 chars better than today, not worth it.)",
+   "why_safe": "Same output for every int, negatives included: the sentinel 0 can never equal 1/2/3 so the 11/12/13 band still yields \"th\", and a negative n%10 falls through to \"th\" exactly as the old switch default did. The explaining javadoc above it is free and stays.",
+   "chars_saved": 112
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/GachamanPlugin.java",
+   "line": 927,
+   "kind": "dedupe",
+   "summary": "`String npc = String.join(\" \", event.getArguments()).trim();` is written identically twice, in the ::gachaunlock block (927) and the ::gacharelock block (941). Hoist one copy above both ifs (after the ::gachaparty block returns).",
+   "why_safe": "event.getArguments() is a pure accessor and String.join/trim have no side effects, so computing it once for every command that reaches that point is unobservable — the ::gachaparty path already returned before it, and the debug switch below simply ignores the variable.",
+   "chars_saved": 61
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/GachamanPlugin.java",
+   "line": 1009,
+   "kind": "dedupe",
+   "summary": "Two 'print the first N lines, then a \"… and X more\" tail' blocks: ::gachacosmetics at 1009-1016 and setCardWear at 1110-1116. One helper serves both, with the tail prefix as a parameter so neither chat line changes: `private void debugList(List<String> lines, int limit, String tailPrefix)`, called as `debugList(suspects, 25, \"\")` and `debugList(names, 5, \"  \")`. Measured: 429 chars of call sites now, 66 after, helper costs 309.",
+   "why_safe": "Every emitted string stays byte-identical, including the two-space indent that only setCardWear's tail carries — that is exactly why the prefix must be a parameter rather than unified. The loop forms are equivalent: the cosmetics version's `if (++shown > 25)` prints exactly 25 entries then the tail, which is what min(size, 25) plus a size>shown tail produces, and the tail still prints last in both. Do NOT collapse the two tail strings into one literal — that would silently reformat a chat line.",
+   "chars_saved": 54
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/GachamanPlugin.java",
+   "line": 947,
+   "kind": "dedupe",
+   "summary": "In the ::gacharelock block, `gachamanPanel.refresh();` is the last statement of both the if branch (947) and the else branch (954). Hoist it to a single call after the if/else.",
+   "why_safe": "Both branches already end with it and both fall through to the same `return;`, so ordering relative to the debugChatAlways call above it is preserved in both paths.",
+   "chars_saved": 29
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/GachamanPlugin.java",
+   "line": 1060,
+   "kind": "dead-code",
+   "summary": "The `default: break;` at the end of the debug-command switch (1060-1061) does nothing a missing default would not do.",
+   "why_safe": "A switch with no matching case and no default simply falls out; there is no code after the switch in onCommandExecuted, so control flow is identical. The build applies no checkstyle (build.gradle declares only the java plugin), so no MissingSwitchDefault rule is at stake.",
+   "chars_saved": 23
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/GachamanPlugin.java",
+   "line": 18,
+   "kind": "dead-code",
+   "summary": "`import javax.inject.*;` (line 18) is redundant. The only two javax.inject types this file uses, Inject and Singleton, are already single-type imported at lines 5-6 precisely to beat com.google.inject.*; the rest of javax.inject (Named, Provider, Qualifier, Scope) is unused here.",
+   "why_safe": "Single-type imports outrank on-demand imports, so the wildcard already resolves nothing — removing it cannot change which class any name binds to. This does NOT touch the two explicit imports at lines 5-6, which are the deliberate collision resolvers CLAUDE.md protects.",
+   "chars_saved": 23
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/GachamanPlugin.java",
+   "line": 1201,
+   "kind": "bug",
+   "summary": "healStaleCardIds' dedupe rule is order-dependent and fails in the common case. The guard is `if (!seen.add(key) && next != card) continue;` — the `next != card` conjunct means the drop only fires when the STALE (remapped) copy is seen AFTER the healthy one. Owned cards are stored in acquisition order, so the stale copy (minted under the older card DB) almost always comes FIRST: it remaps, wins the `seen.add`, and is kept; the genuine copy that follows fails `next != card` and is kept too. Result: two live copies of the same (card, variant) — exactly what the method's javadoc promises cannot happen. Minimal fix that keeps the 'only stale copies are ever dropped' rule: pre-seed `seen` in a first pass with the keys of every card that does NOT need remapping, then leave the second-pass guard as is. Do not simply delete the `next != card` conjunct — that would start deleting pre-existing non-remapped duplicates too.",
+   "why_safe": "Pure bug report, no token claim. Verified by tracing both orderings against the code at lines 1185-1205 and against CardDatabase.card()/cardForItem(). The order dependence is real: with owned = [stale A -> X, healthy B == X] both survive; with [B, A] the stale one is dropped as intended.",
+   "chars_saved": 0
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/GachamanPlugin.java",
+   "line": 428,
+   "kind": "bug",
+   "summary": "shutDown teardown asymmetry: `gachamanPanel.setVoteViewSupplier(partyRollService::voteView)` is installed in startUp (line 313) but never cleared in shutDown, while the supplier installed on the very next line, `revealOverlay.setPartyVoteSupplier(...)`, is nulled at line 428. It is the only one of the ~9 hooks in that block with no teardown.",
+   "why_safe": "Pure hygiene report, no token claim, and honestly scoped: RuneLite reuses the same plugin instance and injector across a disable/enable cycle, so the panel keeps a reference to a still-live singleton; the panel is stopped and off the toolbar meanwhile, and startUp reinstalls the identical supplier. So nothing observable breaks today — but the asymmetry is a trap for the next person editing that block, and adding the null-out would be a behaviour change (the panel would lose its vote view while disabled), so it needs the owner's decision rather than a silent fix.",
+   "chars_saved": 0
+  },
+  {
+   "file": "C:/Users/amrof/Documents/RunelitePlugins/Gachaman/src/main/java/com/gachaman/GachamanPlugin.java",
+   "line": 970,
+   "kind": "bug",
+   "summary": "Locale-sensitive case folding on user-typed input: `Tuning.Chest.valueOf(args[0].toUpperCase())` in ::gachachest. Tuning.Chest has a GILDED member, and in a Turkish/Azeri locale \"gilded\".toUpperCase() yields \"GİLDED\" (dotted capital I), so valueOf throws IllegalArgumentException and the command dies. Same class of defect at line 961, `switch (command.toLowerCase())`, for any command typed with capitals (\"::GachaGive\" folds to \"gachagıve\"). Fix is toUpperCase(Locale.ROOT) / toLowerCase(Locale.ROOT) — which the file already does correctly in setCardWear (line 1092), so this is an inconsistency rather than an unknown idiom.",
+   "why_safe": "Pure bug report, and the fix COSTS about 14 chars per site rather than saving any — flagged because it is a real (if narrow) defect, not for the budget. Both sites are behind config.debugCommands(), so the blast radius is developer-only. Locale is imported already (java.util.*).",
+   "chars_saved": 0
+  }
+ ]
+}

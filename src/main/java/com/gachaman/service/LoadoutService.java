@@ -62,6 +62,12 @@ public class LoadoutService {
 			loadout.put(slot.name(), ownedCardUuid);
 			return s.withLoadout(loadout);
 		});
+		// Straight to disk, not into the debounce. A loadout change is a
+		// deliberate, fiddly decision the player just spent time on — swapping a
+		// card between slots, re-equipping around a new pull — and it is the
+		// single change they are most likely to notice missing. It is also rare
+		// enough that an immediate write costs nothing measurable.
+		stateService.checkpoint();
 		if (assignHook != null) {
 			try {
 				assignHook.accept(slot, owned);
@@ -86,6 +92,10 @@ public class LoadoutService {
 			loadout.remove(slot.name());
 			return s.withLoadout(loadout);
 		});
+		// clearing a slot is a loadout change like any other, and a clear that
+		// silently came back after a crash would be just as confusing as an
+		// assignment that vanished
+		stateService.checkpoint();
 	}
 
 	/** The owned card currently assigned to a slot, or null. */

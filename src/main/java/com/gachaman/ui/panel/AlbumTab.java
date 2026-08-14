@@ -55,6 +55,12 @@ public class AlbumTab extends JPanel {
 	private static final int BATCH_MAX = 24;
 	private static final String UNKNOWN_NAME = "???";
 	private static final Color PLACEHOLDER = new Color(38, 36, 32);
+	/** Wiki badge in each owned card's top-right corner. */
+	private static final int WIKI_BADGE = 13;
+	private static final Color WIKI_BADGE_BG = new Color(0, 0, 0, 165);
+	private static final Color WIKI_BADGE_FG = new Color(240, 200, 90);
+	private static final Font WIKI_BADGE_FONT = new Font(Font.SANS_SERIF, Font.BOLD, 10);
+
 	/** Corner arc of the card face (matches CardRenderer's w/7 round rect). */
 	private static final float CELL_ARC = THUMB_W / 7f;
 	private static final int EFFECT_TICK_MS = 33;
@@ -622,6 +628,28 @@ public class AlbumTab extends JPanel {
 		GridPanel() {
 			setOpaque(false);
 			setToolTipText("");
+			addMouseListener(new MouseAdapter() {
+				@Override
+				public void mouseClicked(MouseEvent e) {
+					Entry entry = entryAt(e.getX(), e.getY());
+					// owned only: an undiscovered card shows "???" and has no
+					// name to look up, so its badge is never drawn either
+					if (entry != null && entry.owned && onWikiBadge(e.getX(), e.getY())) {
+						LinkBrowser.browse("https://oldschool.runescape.wiki/w/"
+							+ entry.card.getName().replace(' ', '_'));
+					}
+				}
+			});
+			addMouseMotionListener(new MouseMotionAdapter() {
+				@Override
+				public void mouseMoved(MouseEvent e) {
+					Entry entry = entryAt(e.getX(), e.getY());
+					boolean onBadge = entry != null && entry.owned
+						&& onWikiBadge(e.getX(), e.getY());
+					setCursor(Cursor.getPredefinedCursor(
+						onBadge ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
+				}
+			});
 		}
 
 		private void tickEffects() {
@@ -713,6 +741,9 @@ public class AlbumTab extends JPanel {
 							g2.drawImage(thumb, x, y, null);
 							if (hasLiveEffect(entry)) {
 								paintLiveEffect(g2, x, y, entry, now);
+							}
+							if (entry.owned) {
+								paintWikiBadge(g2, x, y);
 							}
 						}
 						else {
@@ -954,21 +985,64 @@ public class AlbumTab extends JPanel {
 			return img;
 		}
 
+		/**
+		 * The "w" badge in a card's top-right corner, drawn only on cards the
+		 * player owns — an undiscovered card has no name to look up yet.
+		 */
+		private void paintWikiBadge(Graphics2D g2, int x, int y) {
+			int bx = x + THUMB_W - WIKI_BADGE - 3;
+			int by = y + 3;
+			g2.setColor(WIKI_BADGE_BG);
+			g2.fillOval(bx, by, WIKI_BADGE, WIKI_BADGE);
+			g2.setColor(WIKI_BADGE_FG);
+			g2.setFont(WIKI_BADGE_FONT);
+			FontMetrics fm = g2.getFontMetrics();
+			String glyph = "w";
+			g2.drawString(glyph, bx + (WIKI_BADGE - fm.stringWidth(glyph)) / 2,
+				by + (WIKI_BADGE + fm.getAscent()) / 2 - 1);
+		}
+
+		/** Cell the point falls in, or null when it is past the last card. */
+		private Entry entryAt(int px, int py) {
+			if (entries.isEmpty()) {
+				return null;
+			}
+			int c = cols();
+			int cellW = Math.max(1, getWidth() / c);
+			int col = px / cellW;
+			int row = Math.max(0, (py - GAP) / (THUMB_H + GAP));
+			int index = row * c + col;
+			if (col >= c || index < 0 || index >= entries.size()) {
+				return null;
+			}
+			return entries.get(index);
+		}
+
+		/** True when the point is inside that cell's wiki badge. */
+		private boolean onWikiBadge(int px, int py) {
+			int c = cols();
+			int cellW = Math.max(1, getWidth() / c);
+			int rowH = THUMB_H + GAP;
+			// back to the cell's own origin, the same way paintComponent lays it out
+			int x = (px / cellW) * cellW + (cellW - THUMB_W) / 2;
+			int y = GAP + Math.max(0, (py - GAP) / rowH) * rowH;
+			int bx = x + THUMB_W - WIKI_BADGE - 3;
+			int by = y + 3;
+			return px >= bx && px <= bx + WIKI_BADGE && py >= by && py <= by + WIKI_BADGE;
+		}
+
 		@Override
 		public String getToolTipText(MouseEvent event) {
 			if (event == null || entries.isEmpty()) {
 				return null;
 			}
-			int c = cols();
-			int cellW = Math.max(1, getWidth() / c);
-			int rowH = THUMB_H + GAP;
-			int col = event.getX() / cellW;
-			int row = Math.max(0, (event.getY() - GAP) / rowH);
-			int index = row * c + col;
-			if (col >= c || index < 0 || index >= entries.size()) {
+			Entry entry = entryAt(event.getX(), event.getY());
+			if (entry == null) {
 				return null;
 			}
-			Entry entry = entries.get(index);
+			if (entry.owned && onWikiBadge(event.getX(), event.getY())) {
+				return "Open the OSRS wiki page for " + entry.card.getName();
+			}
 			if (!entry.owned) {
 				return "Undiscovered card";
 			}

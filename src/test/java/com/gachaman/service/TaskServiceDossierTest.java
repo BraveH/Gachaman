@@ -62,7 +62,7 @@ public class TaskServiceDossierTest
 		taskService = new TaskService(null, stateService, creditSink, complianceService,
 			styleService, ceremonyBus, new GachaRng(1L), monsterTable,
 			// null Client already means these tests never reach rollOffers()
-			null);
+			null, null);
 		taskService.addListener(new TaskService.Listener()
 		{
 			@Override

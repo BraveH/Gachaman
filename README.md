@@ -37,10 +37,10 @@ Install it, tick the box, log in. The plugin reads your item cache and builds a 
 combat-relevant equipable item in the game — derived from the live cache, so nothing with stats
 is missed, and cosmetic-only gear gets no card at all and stays freely wearable.
 
-If you're starting a fresh account, **stepping off Tutorial Island strips everything it handed
-you** — none of it is card-unlocked, so keeping it would mean wearing gear you could never
-re-equip. Your starter cards and their auto-assigned loadout are waiting for you. If you installed
-the plugin on an existing account, this never happens.
+If you're starting a fresh account, **everything Tutorial Island hands you is card-unlocked from the
+start** — the bronze kit, the shortbow and arrows, the wooden shield. The island force-equips that
+gear, so locking it would strand you in items you could never put back on. Nothing is ever taken off
+you. Your starter cards and their auto-assigned loadout are waiting alongside it.
 
 Then a free **First Colours** chest opens, and you're in.
 
@@ -112,12 +112,17 @@ deck on your next roll.
 
 Every on-task kill pays Gacha Coins; the final kill pays a completion bonus. Stacked on top:
 
-- **Side bets** — optional riders like *"land a 20+ hit"* or *"a kill without taking damage"*. Some
-  are **sealed**, and only revealed the moment you accidentally satisfy them.
-- **Rhythm Combo** — every 5 on-task kills earn a stack, and each stack multiplies the contract's
-  base per-kill GC by a further quarter: **x1.25** at one stack up to **x2.5** at six, so a maxed
-  chain runs 30 kills deep. How long a kill takes never matters, and combat level does not affect
-  it; the chain only breaks after ~30 seconds with no attacks at all.
+- **Milestone contracts** — every **5th** contract you finish pays **×1.5** its completion reward,
+  every 10th **×2.5**, every 50th **×5**, every 100th **×10** and every 250th **×15**. Highest
+  matching tier only — they never stack, so the 100th pays ×10, not ×19.
+- **Side bets** — optional riders like *"land a 20+ hit"* or *"a kill without taking damage"*. The
+  hit threshold is sized to your **calculated max hit** in the style you're locked into, so it's
+  always something you can physically land.
+- **Rhythm Combo** — every 5 on-task kills earn a stack, worth a further **+25%** on the contract's
+  base per-kill GC: **+25%** at one stack up to **+150%** at six, so a maxed chain runs 30 kills
+  deep. It adds to the punching-up bonus rather than multiplying with it. How long a kill takes
+  never matters, and combat level does not affect it; the chain only breaks after ~30 seconds with
+  no attacks at all.
 - **Bestiary discovery** — the first on-task kill of each new species pays a bonus, with codex
   milestones at 50 / 100 / 150 species.
 
@@ -461,11 +466,8 @@ Overview tab, marked as a manual override, so you can always see what you left o
   every restriction — the gamemode is a contract with yourself.
 - **Menu modification.** The plugin removes Wield/Wear/Equip/Hold menu entries and consumes clicks on
   card-locked equipment.
-- **One automated action.** Stepping off Tutorial Island fires the game's own "Remove" option on each
-  worn item, once per account, to clear gear no card has unlocked yet (one item per tick; it stops if
-  your inventory is full, and resumes on your next login until everything is off). Accounts that
-  install the plugin after the tutorial are never stripped. **Apart from that single one-shot, the
-  plugin issues no actions on your behalf.**
+- **No automated actions.** The plugin never issues a click, a menu action or an input on your
+  behalf, anywhere, for any reason. Everything it does is drawing, blocking and bookkeeping.
 - **Party features are trust-based**, like all client-side party plugins. Everything on the Party page
   is self-reported by that member's own client; it is drawn, never trusted by a rule. Remote values
   are clamped to sane ranges before they're shown.

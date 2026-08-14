@@ -92,20 +92,6 @@ public class GachaState {
 	 * established account on its next login.
 	 */
 	boolean firstColoursChestOwed;
-	/**
-	 * The Tutorial Island clean-slate strip has been settled. Set on leaving the
-	 * island (after stripping), and set immediately for any save that first
-	 * loads already past the tutorial — installing the plugin later must never
-	 * retroactively undress an established account.
-	 */
-	boolean tutorialStripDone;
-	/**
-	 * The strip was started but has not finished taking everything off — a logout
-	 * or a full inventory interrupted it. Only a save that genuinely stepped off
-	 * the island ever sets this, so resuming on the next login cannot undress an
-	 * account that installed the plugin later.
-	 */
-	boolean tutorialStripPending;
 	/** Fortune timeline: chronological audit of rolls/pulls/equips (capped). */
 	List<TimelineEvent> timeline;
 	/**
@@ -180,8 +166,6 @@ public class GachaState {
 			.freeExtenders(0)
 			.starterVouchersGranted(false)
 			.firstColoursChestOwed(false)
-			.tutorialStripDone(false)
-			.tutorialStripPending(false)
 			.timeline(new ArrayList<>())
 			.patrons(new HashMap<>())
 			.contractLog(new ArrayList<>())

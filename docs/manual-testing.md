@@ -36,10 +36,12 @@ Run `./gradlew run` to launch a dev client with the plugin loaded.
     commits its cards; an accepted contract still accepts). Nothing is consumed unless it
     is actually on screen — log out mid-ceremony, or with the loadout board open, and the
     login and welcome screens must stay fully clickable.
-11. Tutorial Island exit strips all worn gear one item per tick, chats the reason, and
-    never repeats on later logins (nor on an account that installed the plugin later).
-    Interrupt it — log out mid-strip, or step off with a full inventory — and the
-    remaining pieces should come off on the next login, then stop for good.
+11. Tutorial Island exit takes nothing off. Step ashore still wearing the bronze sword and
+    wooden shield, unequip them, and both must go straight back on — their cards are
+    granted with the starters. The album should list the island's kit (bronze axe,
+    pickaxe, dagger, sword, shortbow, wooden shield, bronze arrow) alongside the
+    Training cards. Check the client log for "Starter card not found in DB" — an item
+    renamed by Jagex is skipped silently in game and only shows up there.
 12. Party page: rows appear for every member, go quiet ~1 minute after a client stops
     reporting, and come back on its next heartbeat; the whole tab hides with **Party
     contracts** off. Sizing: with the host on **Fighting Weight** a mixed-level party's

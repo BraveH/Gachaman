@@ -386,4 +386,31 @@ public class StateCodecTest
 		Assert.assertNull(codec.decode(""));
 		Assert.assertNull(codec.decode("not-base64!!"));
 	}
+
+	@Test
+	public void savedAtStampsEveryBlobAndOrdersThem() throws Exception
+	{
+		// the stamp is what lets StateStore.load prefer the NEWER of the config
+		// copy and the disk copy. Without it a client killed before RuneLite
+		// flushed its config silently rolled the player back to an older save.
+		StateCodec codec = new StateCodec(new com.google.gson.Gson());
+		String first = codec.encode(GachaState.fresh(50));
+		Thread.sleep(5);
+		String second = codec.encode(GachaState.fresh(50));
+
+		Assert.assertTrue("blobs must be stamped", codec.savedAt(first) > 0);
+		Assert.assertTrue("later save must stamp later",
+			codec.savedAt(second) > codec.savedAt(first));
+	}
+
+	@Test
+	public void savedAtIsZeroForAnythingItCannotRead()
+	{
+		// pre-stamp saves and junk both sort oldest, so a stamped copy wins and
+		// an unstamped pair falls back to the old config-first behaviour
+		StateCodec codec = new StateCodec(new com.google.gson.Gson());
+		Assert.assertEquals(0, codec.savedAt(null));
+		Assert.assertEquals(0, codec.savedAt(""));
+		Assert.assertEquals(0, codec.savedAt("not base64 gzip at all"));
+	}
 }

@@ -56,7 +56,7 @@ public class TaskServiceChargeTest
 		taskService = new TaskService(null, stateService, creditSink, complianceService,
 			styleService, ceremonyBus, new GachaRng(1L), monsterTable,
 			// null Client already means these tests never reach rollOffers()
-			null);
+			null, null);
 	}
 
 	private void seed(long gc, int compactors, int extenders, boolean withTask)

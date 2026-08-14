@@ -11,12 +11,44 @@ public final class Tuning {
 	private Tuning() {
 	}
 
+	/**
+	 * An enum-keyed table built POSITIONALLY from {@code values()}: the Nth
+	 * value belongs to the Nth constant, and a null value means that constant
+	 * is deliberately absent from the table (a Rusty chest rolls no deeds).
+	 *
+	 * <p>Spelling every key out cost about twenty characters apiece, and the
+	 * Plugin Hub's token budget is the binding constraint on this plugin — see
+	 * CLAUDE.md. The declaration order IS the mapping. That is safe here and
+	 * only here: these enums are closed sets the gamemode defines itself, and
+	 * reordering one is already a save-breaking change (the persisted state
+	 * stores their NAMES, so a reorder is invisible to Gson but would silently
+	 * re-point every table below). Do not use this for anything whose order is
+	 * outside this repo's control.
+	 *
+	 * <p>Too FEW values throws ArrayIndexOutOfBounds at class-init, which is the
+	 * right moment and needs no hand-written check to say so. Too many is caught
+	 * by TuningTableTest, which is free — tests are not counted.
+	 */
+	@SafeVarargs
+	private static <K extends Enum<K>, V> Map<K, V> table(K[] keys, V... values) {
+		Map<K, V> map = new EnumMap<>(keys[0].getDeclaringClass());
+		for (int i = 0; i < values.length; i++) {
+			if (values[i] != null) {
+				map.put(keys[i], values[i]);
+			}
+		}
+		return map;
+	}
+
 	// --- Task rewards (GC) ---
-	public static final Map<TaskDifficulty, Integer> PER_KILL_GC = new EnumMap<>(Map.of(
-		TaskDifficulty.EASY, 8,
-		TaskDifficulty.MEDIUM, 16,
-		TaskDifficulty.HARD, 32,
-		TaskDifficulty.INSANE, 64));
+	/**
+	 * Kill income is deliberately a trickle next to {@link #COMPLETION_GC}:
+	 * kill COUNT already scales 20 -> 100 across the ladder, so a steep per-kill
+	 * ladder on top of that compounds into the runaway this replaced. Finishing
+	 * the contract is what pays.
+	 */
+	public static final Map<TaskDifficulty, Integer> PER_KILL_GC =
+		table(TaskDifficulty.values(), 4, 8, 16, 28);
 
 	/**
 	 * Per-kill GC scales with the combat-level DIFFERENCE between the slain
@@ -37,23 +69,24 @@ public final class Tuning {
 	 */
 	public static final double KILL_RATIO_LINEAR = 1.5;
 	public static final double KILL_RATIO_QUAD = 0.75;
-	public static final double KILL_DIFF_CAP = 5.0;
-
 	/**
-	 * Early-game compensation: kills are slower at low combat level, so kill
-	 * GC gets a bonus that tapers linearly from +150% at cb 3 to nothing at
-	 * cb 70+.
+	 * Was 5.0. A 5x ceiling on punching up was the other half of the runaway:
+	 * against the retired low-level bonus it compounded to 12x on the base
+	 * before the combo was even counted.
 	 */
-	public static final int LOWLEVEL_CEILING = 70;
-	public static final double LOWLEVEL_MAX_BONUS = 1.5;
+	public static final double KILL_DIFF_CAP = 2.5;
 
-	public static double lowLevelMultiplier(int playerCb) {
-		if (playerCb >= LOWLEVEL_CEILING) {
-			return 1.0;
-		}
-		double fraction = (double) (LOWLEVEL_CEILING - playerCb) / (LOWLEVEL_CEILING - 3);
-		return 1.0 + LOWLEVEL_MAX_BONUS * Math.min(1.0, Math.max(0.0, fraction));
-	}
+	/*
+	 * There is deliberately no low-level compensation multiplier here any more.
+	 * It paid up to +150% at combat 3 on the theory that low-level kills are
+	 * slower — but the contract generator already caps monsters to a fraction
+	 * of the player's combat level, so time-to-kill is roughly FLAT across the
+	 * whole range (~90s at combat 12 against ~85s at combat 70: a low-level
+	 * player kills a 25 HP monster slowly, a high-level one kills a 150 HP
+	 * monster fast, and it comes out even). Paying 2.5x for a slowdown the
+	 * content scaling already absorbs made the early game the richest part of
+	 * the gamemode, which is backwards.
+	 */
 
 	/**
 	 * Rhythm Combo: every five compliant on-task kills earn a stack, and each
@@ -102,11 +135,43 @@ public final class Tuning {
 		return Math.max(KILL_DIFF_FLOOR, 1.0 + (diff + KILL_DIFF_GRACE) * KILL_DIFF_UNDER_RATE);
 	}
 
-	public static final Map<TaskDifficulty, Integer> COMPLETION_GC = new EnumMap<>(Map.of(
-		TaskDifficulty.EASY, 250,
-		TaskDifficulty.MEDIUM, 550,
-		TaskDifficulty.HARD, 950,
-		TaskDifficulty.INSANE, 1500));
+	public static final Map<TaskDifficulty, Integer> COMPLETION_GC =
+		table(TaskDifficulty.values(), 400, 900, 1900, 3600);
+
+	/**
+	 * Milestone completions, in the shape Slayer points use: every Nth finished
+	 * contract pays a multiple of its completion reward. HIGHEST matching tier
+	 * wins — they do not stack, so the 100th contract pays x10 and not
+	 * 1.5 + 2.5 + 5 + 10.
+	 *
+	 * <p>Descending so the scan takes the first match. Kept as a pair of arrays
+	 * rather than a map because order IS the rule here.
+	 *
+	 * <p>Tuned for a ~30% lift on completion income averaged over 100
+	 * contracts, not for the raw size of the peaks: across any 100 contracts
+	 * 80 pay flat, 10 pay x1.5, 8 pay x2.5, and one each pay x5 and x10. The
+	 * peaks are meant to be an event; the average is meant to stay modest, or
+	 * the milestone ladder quietly becomes the economy.
+	 */
+	public static final int[] COMPLETION_MILESTONES = {250, 100, 50, 10, 5};
+	public static final double[] COMPLETION_MILESTONE_MULT = {15.0, 10.0, 5.0, 2.5, 1.5};
+
+	/**
+	 * Reward multiple for the Nth completed contract, 1.0 when N is not a
+	 * milestone. N is the count INCLUDING this completion, so the tenth
+	 * contract a player ever finishes is the one that pays x2.5.
+	 */
+	public static double completionMilestoneMult(int taskNumber) {
+		if (taskNumber <= 0) {
+			return 1.0;
+		}
+		for (int i = 0; i < COMPLETION_MILESTONES.length; i++) {
+			if (taskNumber % COMPLETION_MILESTONES[i] == 0) {
+				return COMPLETION_MILESTONE_MULT[i];
+			}
+		}
+		return 1.0;
+	}
 
 	// --- Style cycle ---
 	/** Style re-rolls after exactly this many completed tasks (charge-weighted). */
@@ -135,24 +200,16 @@ public final class Tuning {
 		RUSTY, BATTERED, GILDED, ORNATE
 	}
 
-	public static final Map<Chest, Integer> CHEST_PRICE_GC = new EnumMap<>(Map.of(
-		Chest.RUSTY, 150,
-		Chest.BATTERED, 500,
-		Chest.GILDED, 800,
-		Chest.ORNATE, 1000));
+	public static final Map<Chest, Integer> CHEST_PRICE_GC =
+		table(Chest.values(), 150, 500, 800, 1000);
 
-	public static final Map<Chest, Integer> CHEST_CARDS = new EnumMap<>(Map.of(
-		Chest.RUSTY, 1,
-		Chest.BATTERED, 1,
-		Chest.GILDED, 2,
-		Chest.ORNATE, 3));
+	public static final Map<Chest, Integer> CHEST_CARDS =
+		table(Chest.values(), 1, 1, 2, 3);
 
 	/** Rarity odds per chest, percent, order C/U/R/E/L. Common absorbs renormalization. */
-	public static final Map<Chest, double[]> CHEST_ODDS = new EnumMap<>(Map.of(
-		Chest.RUSTY, new double[]{100, 0, 0, 0, 0},
-		Chest.BATTERED, new double[]{62, 24, 9.5, 3.5, 1},
-		Chest.GILDED, new double[]{55, 26, 12, 5, 2},
-		Chest.ORNATE, new double[]{48, 26, 15, 7.5, 3.5}));
+	public static final Map<Chest, double[]> CHEST_ODDS = table(Chest.values(),
+		new double[]{100, 0, 0, 0, 0}, new double[]{62, 24, 9.5, 3.5, 1},
+		new double[]{55, 26, 12, 5, 2}, new double[]{48, 26, 15, 7.5, 3.5});
 
 	/**
 	 * The Rusty chest is the starter tier: buyable 3 times ever, COMMON cards
@@ -189,8 +246,14 @@ public final class Tuning {
 	 * (it is deliberate aspirational slack, see ROLL_TIER_HEADROOM), and at 1 there is
 	 * no lean at all. Safe to retune with immediate feedback: the Shop tab's Chest Odds
 	 * panel prints the real resulting percentages, derived from this same constant.
+	 *
+	 * <p>Was 0.35, which drew usable gear only ~3x as often as gear the player
+	 * could not yet touch. At 0.15 it is nearly 7x: with chests now costing a
+	 * real fraction of income, a pull the account cannot equip reads as a wasted
+	 * chest rather than as aspirational. The headroom band is still alive — that
+	 * is the point of it — just clearly the minority outcome.
 	 */
-	public static final double HOUSE_LEAN_HEADROOM_WEIGHT = 0.35;
+	public static final double HOUSE_LEAN_HEADROOM_WEIGHT = 0.15;
 
 	public static int maxRankForLevel(int level) {
 		int rank = 1;
@@ -222,10 +285,8 @@ public final class Tuning {
 	public static final double JACKPOT_CHANCE = 1.0 / 100;
 
 	// --- Deeds ---
-	public static final Map<Chest, Double> DEED_CHANCE = new EnumMap<>(Map.of(
-		Chest.BATTERED, 1.0 / 25,
-		Chest.GILDED, 1.0 / 18,
-		Chest.ORNATE, 1.0 / 12));
+	public static final Map<Chest, Double> DEED_CHANCE =
+		table(Chest.values(), null, 1.0 / 25, 1.0 / 18, 1.0 / 12);
 
 	public static final int[] DEED_TASK_MILESTONES = {10, 25, 45, 70, 100, 140, 190, 250, 320};
 	public static final int DEED_SATURATED_GC = 2000;
@@ -253,20 +314,12 @@ public final class Tuning {
 	}
 
 	// --- Duplicates (NORMAL variant only) ---
-	public static final Map<Rarity, Integer> DUPLICATE_GC = new EnumMap<>(Map.of(
-		Rarity.COMMON, 25,
-		Rarity.UNCOMMON, 60,
-		Rarity.RARE, 150,
-		Rarity.EPIC, 400,
-		Rarity.LEGENDARY, 1000));
+	public static final Map<Rarity, Integer> DUPLICATE_GC =
+		table(Rarity.values(), 25, 60, 150, 400, 1000);
 
 	// --- Weekly shop ---
-	public static final Map<Rarity, Integer> SHOP_PRICE_GC = new EnumMap<>(Map.of(
-		Rarity.COMMON, 800,
-		Rarity.UNCOMMON, 1500,
-		Rarity.RARE, 4000,
-		Rarity.EPIC, 9000,
-		Rarity.LEGENDARY, 20000));
+	public static final Map<Rarity, Integer> SHOP_PRICE_GC =
+		table(Rarity.values(), 800, 1500, 4000, 9000, 20000);
 
 	// --- Reroll tokens ---
 	public static final int TOKEN_CB_INTERVAL = 10;

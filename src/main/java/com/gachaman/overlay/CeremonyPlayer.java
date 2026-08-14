@@ -137,11 +137,11 @@ class CeremonyPlayer {
 		List<Integer> at = offsets.get(frame);
 		int dx = cx + (int) Math.round(at.get(0) * sx);
 		int dy = cy + (int) Math.round(at.get(1) * sy);
-		java.awt.Composite old = null;
+		Composite old = null;
 		if (alpha < 0.999f) {
 			old = g.getComposite();
-			g.setComposite(java.awt.AlphaComposite.getInstance(
-				java.awt.AlphaComposite.SRC_OVER, Math.max(0f, alpha)));
+			g.setComposite(AlphaComposite.getInstance(
+				AlphaComposite.SRC_OVER, Math.max(0f, alpha)));
 		}
 		// index carries the AUTHORED size, which is not the stored size: a frame
 		// whose decoded bytes would pass the Plugin Hub's 1 MiB image limit is

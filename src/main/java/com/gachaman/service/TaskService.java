@@ -38,6 +38,10 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		int fragmentsEarned;     // Deed Fragments granted by THIS completion
 		int fragmentsTotal;      // running fragment count after this completion
 		boolean fragmentDeedForged; // this completion forged the fragment deed
+		/** Lifetime contract number this completion was, counting from 1. */
+		int taskNumber;
+		/** Slayer-style milestone multiple this completion paid; 1.0 = ordinary. */
+		double completionMilestoneMult;
 	}
 
 	@Value
@@ -152,6 +156,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	private final GachaRng rng;
 	private final MonsterTable monsterTable;
 	private final QuestUnlockService questUnlockService;
+	private final MaxHitService maxHitService;
 
 	private final List<Listener> listeners = new ArrayList<>();
 	/** Optional hook the plugin wires for the party layer. */
@@ -342,7 +347,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		int cb = playerCombatLevel();
 		List<TaskOffer> offers = TaskGenerator.generateOffers(
 			monsterTable.getMonsters(), cb, client.getRealSkillLevel(Skill.SLAYER),
-			localIsMembers(), questUnlockService.completedQuests(), state.getTaint() > 0, rng);
+			localIsMembers(), questUnlockService.completedQuests(), state.getTaint() > 0,
+			maxHitService.estimateFor(state.getAllowedStyle()), rng);
 		antePercentArmed = 0; // a new board is a new decision
 		stateService.mutate(s -> s.withPendingOffers(offers));
 		ceremonyBus.submit(CeremonyBus.Type.TASK_OFFERS, offers);
@@ -672,7 +678,15 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	@Override
 	public void onAttack(AttackStyle style, int tick) {
 		if (comboIdleAnchorTick >= 0 && tick - comboIdleAnchorTick <= Tuning.COMBO_IDLE_RESET_TICKS) {
-			comboIdleAnchorTick = tick;
+			// max, not assignment: this tick comes from StyleTracker's counter
+			// while kills anchor with KillTracker's, and the meter reads back
+			// with KillTracker's again. Those three agree today only because
+			// both services increment on the same GameTick and are registered
+			// together — a coincidence, not a guarantee. Taking the later of the
+			// two means a swing can only ever EXTEND a chain, never cut it short,
+			// so any future skew degrades to a slightly generous timer instead
+			// of a chain that stops resetting while the player is still fighting.
+			comboIdleAnchorTick = Math.max(comboIdleAnchorTick, tick);
 		}
 	}
 
@@ -725,21 +739,19 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			// award BEFORE working off taint: with taint > 0 this kill's income
 			// (and its side bets) must still be halved — the debt clears after
 			if (task.getPerKillGc() > 0) {
-				// the rhythm combo re-bases the contract's per-kill rate: at
-				// three stacks an 8 GC contract simply pays 14 a kill, and
-				// everything below scales off THAT. Kept a separate step from
-				// the multiplier chain because it is the one a player is meant
-				// to be able to do in their head off the pip count
-				double base = task.getPerKillGc() * Tuning.comboMultiplier(stacks);
-				// then scaled by how the NPC compares to YOUR combat level
-				// (trivial mobs pay dust, peers pay a bonus, stronger pays much
-				// more), plus the early-game bonus compensating slower kill
-				// speeds, halved when an ironman's kill was assisted
+				// The rhythm combo and the combat-level scaling ADD their
+				// bonuses rather than compounding. Multiplied, a low-level
+				// player punching up stacked 2.5 x 5.0 x 2.5 into a 31x kill and
+				// the early game paid better per hour than the late game. Added,
+				// the pair tops out near 4x and the ladder stays legible: six
+				// stacks is "+150%", a big level gap is "+150%", together +300%.
 				int playerCb = playerCombatLevel();
-				double mult = Tuning.killCbMultiplier(playerCb, kill.getNpcCombatLevel())
-					* Tuning.lowLevelMultiplier(playerCb)
-					* (assistedPenalty ? Tuning.ASSISTED_KILL_MULT : 1.0);
-				long scaled = Math.round(base * mult);
+				double bonus = (Tuning.killCbMultiplier(playerCb, kill.getNpcCombatLevel()) - 1.0)
+					+ (Tuning.comboMultiplier(stacks) - 1.0);
+				// the assist penalty stays multiplicative: it is a halving of
+				// whatever was earned, not a bonus competing with the others
+				double mult = (1.0 + bonus) * (assistedPenalty ? Tuning.ASSISTED_KILL_MULT : 1.0);
+				long scaled = Math.round(task.getPerKillGc() * mult);
 				awarded = creditSink.award(scaled, new CreditSink.GcContext(
 					CreditSink.Source.KILL, kill.getNpcName(), tagsFor(kill.getNpcName())));
 			}
@@ -991,6 +1003,15 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			completionMult *= Tuning.DOUBLE_DOCKET_MULT;
 		}
 
+		// Milestone contracts (every 5th/10th/50th/100th/250th) multiply the
+		// completion reward, Slayer-point style. Stacks multiplicatively with
+		// the party and Double Docket chain above for the same reason the
+		// docket does: a milestone should be worth the same PROPORTION of a
+		// shared or aligned contract as of a plain one.
+		int taskNumber = state.getTotalTasksCompleted() + 1;
+		double milestoneMult = Tuning.completionMilestoneMult(taskNumber);
+		completionMult *= milestoneMult;
+
 		// Redemption clears taint BEFORE the award so its own completion
 		// reward is not halved by the debt it just paid off.
 		boolean redemptionCleared = false;
@@ -1039,7 +1060,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 
 		final PersonalBest pbFinal = updatedPb;
 		final String monsterName = task.getMonsterName();
-		int newTotal = state.getTotalTasksCompleted() + 1;
+		int newTotal = taskNumber; // same count the milestone multiple was read from
 
 		// deed milestone?
 		int milestone = 0;
@@ -1148,7 +1169,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 
 		TaskCompletionSummary summary = new TaskCompletionSummary(task, completionAwarded,
 			sideBetsHit, duration, newFastest, newHaul, redemptionCleared, cycleTriggered, milestone,
-			fragmentsEarned, fragmentsTotal, forgedNow);
+			fragmentsEarned, fragmentsTotal, forgedNow, taskNumber, milestoneMult);
 		ceremonyBus.submit(CeremonyBus.Type.TASK_COMPLETE, summary);
 		for (Listener listener : listeners) {
 			listener.onTaskCompleted(summary);
@@ -1167,6 +1188,11 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			styleService.roll(lastKillTick);
 		}
 		resetCombo(); // rhythm does not carry across contracts
+		// A completion banks the reward, the deed, the fragments and the style
+		// roll in one moment. Losing that to a crash in the debounce window is
+		// the single worst thing this save can drop, and completions are rare
+		// enough that an immediate write costs nothing.
+		stateService.checkpoint();
 	}
 
 	// --- Party carry clause ---

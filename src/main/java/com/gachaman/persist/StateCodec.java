@@ -26,8 +26,33 @@ public class StateCodec {
 		JsonObject envelope = new JsonObject();
 		envelope.addProperty("version", GachaState.SCHEMA_VERSION);
 		envelope.addProperty("sha256", sha256(payload));
+		// stamped so a loader can tell two surviving copies apart; see savedAt
+		envelope.addProperty("savedAtMs", System.currentTimeMillis());
 		envelope.addProperty("payload", payload);
 		return base64Gzip(envelope.toString());
+	}
+
+	/**
+	 * When this blob was written, or 0 if it predates the stamp or cannot be
+	 * read. Lets {@code StateStore} pick the NEWER of the config copy and the
+	 * disk copy instead of always trusting config — a client that dies without
+	 * a clean shutdown leaves config behind whatever the plugin last wrote to
+	 * disk, and blindly preferring config silently rolls the player back.
+	 *
+	 * <p>Deliberately does not verify the hash: this only orders two candidates,
+	 * and whichever wins is still decoded (and so still verified) properly.
+	 */
+	public long savedAt(String blob) {
+		if (blob == null || blob.isEmpty()) {
+			return 0;
+		}
+		try {
+			JsonObject envelope = gson.fromJson(gunzipBase64(blob), JsonObject.class);
+			return envelope.has("savedAtMs") ? envelope.get("savedAtMs").getAsLong() : 0;
+		}
+		catch (Exception e) {
+			return 0;
+		}
 	}
 
 	/** @return decoded state, or null if the blob is missing/corrupt/tampered. */

@@ -97,19 +97,43 @@ public class RollMathTest
 		}
 	}
 
+	/**
+	 * The low-level compensation multiplier is gone on purpose (see Tuning).
+	 * What replaces its test is the property it was violating: a kill must not
+	 * pay more just because the player is low level. Combat level now reaches
+	 * the payout ONLY through the npc-vs-player ratio, so a player and a
+	 * monster in the same relative position pay the same at every level.
+	 */
 	@Test
-	public void lowLevelMultiplierTapers()
+	public void payoutDependsOnTheGapNotOnBeingLowLevel()
 	{
-		Assert.assertEquals(1.0 + Tuning.LOWLEVEL_MAX_BONUS, Tuning.lowLevelMultiplier(3), 1e-9);
-		Assert.assertEquals(1.0, Tuning.lowLevelMultiplier(Tuning.LOWLEVEL_CEILING), 1e-9);
-		Assert.assertEquals(1.0, Tuning.lowLevelMultiplier(126), 1e-9);
-		double prev = Double.MAX_VALUE;
+		// same ratio (npc = 1.35x player) at four very different levels
+		double at12 = Tuning.killCbMultiplier(12, 16);
+		double at30 = Tuning.killCbMultiplier(30, 40);
+		double at70 = Tuning.killCbMultiplier(70, 94);
+		double at100 = Tuning.killCbMultiplier(100, 135);
+		Assert.assertEquals(at12, at30, 0.05);
+		Assert.assertEquals(at12, at70, 0.05);
+		Assert.assertEquals(at12, at100, 0.05);
+	}
+
+	@Test
+	public void combinedKillBonusIsBoundedAndAdditive()
+	{
+		// the runaway this replaced: killCb x combo compounded. Added, the pair
+		// cannot exceed the sum of their two ceilings.
+		double maxKillCb = Tuning.KILL_DIFF_CAP - 1.0;
+		double maxCombo = Tuning.comboMultiplier(Tuning.COMBO_MAX_STACKS) - 1.0;
+		double ceiling = 1.0 + maxKillCb + maxCombo;
+		Assert.assertTrue("combined ceiling should stay under 5x", ceiling < 5.0);
 		for (int cb = 3; cb <= 126; cb++)
 		{
-			double mult = Tuning.lowLevelMultiplier(cb);
-			Assert.assertTrue("must never increase with level (cb " + cb + ")", mult <= prev);
-			Assert.assertTrue(mult >= 1.0);
-			prev = mult;
+			for (int npc = 1; npc <= 200; npc += 7)
+			{
+				double bonus = (Tuning.killCbMultiplier(cb, npc) - 1.0)
+					+ (Tuning.comboMultiplier(Tuning.COMBO_MAX_STACKS) - 1.0);
+				Assert.assertTrue("cb " + cb + " vs npc " + npc, 1.0 + bonus <= ceiling + 1e-9);
+			}
 		}
 	}
 

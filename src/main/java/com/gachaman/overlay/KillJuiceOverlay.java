@@ -8,6 +8,7 @@ import java.awt.*;
 import javax.inject.*;
 import lombok.extern.slf4j.*;
 import net.runelite.api.*;
+import net.runelite.api.coords.*;
 import net.runelite.client.ui.overlay.*;
 
 /**
@@ -16,9 +17,14 @@ import net.runelite.client.ui.overlay.*;
  * burst on the final kill. Task progress itself lives in the movable
  * {@link TaskProgressOverlay} panel. The overlay is the
  * {@link TaskService.Listener} the plugin registers
- * ({@code taskService.addListener(killJuiceOverlay)}). Render allocates
- * nothing: floating texts live in a preallocated ring buffer and burst
- * particles are pure functions of elapsed time + seed.
+ * ({@code taskService.addListener(killJuiceOverlay)}).
+ *
+ * <p>Notes are pinned to the world, not the screen: each one keeps the
+ * {@link LocalPoint} the NPC died on and is re-projected every frame, so the
+ * number sits over the corpse while the camera turns, zooms and pans. Floating
+ * texts live in a preallocated ring buffer and burst particles are pure
+ * functions of elapsed time + seed; the only per-frame allocation is the
+ * projected Point per ACTIVE note, which is almost always none or one.
  */
 @Slf4j
 @Singleton
@@ -45,8 +51,16 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener {
 		boolean active;
 		int kind;
 		long startMs;
-		int x;
-		int y;
+		/**
+		 * The world spot this note is pinned to, re-projected every frame so the
+		 * number stays over the corpse while the camera turns. Null only when the
+		 * kill arrived without a death location, in which case the note falls
+		 * back to the screen anchor below.
+		 */
+		LocalPoint world;
+		int plane;
+		int screenX;
+		int screenY;
 		String text;
 		int seed;
 	}
@@ -74,41 +88,25 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener {
 		if (feedback == null) {
 			return;
 		}
-		// capture the canvas point NOW, while the death location is fresh
-		Point canvas = null;
-		if (feedback.getDeathLocation() != null) {
-			try {
-				canvas = Perspective.localToCanvas(client, feedback.getDeathLocation(),
-					client.getTopLevelWorldView().getPlane());
-			}
-			catch (Exception e) {
-				canvas = null;
-			}
-		}
-		int x;
-		int y;
-		if (canvas != null) {
-			x = canvas.getX();
-			y = canvas.getY();
-		}
-		else {
-			x = client.getCanvasWidth() / 2;
-			y = client.getCanvasHeight() / 2;
-		}
+		// keep the WORLD point, not a canvas point: projecting once at spawn
+		// pinned the number to a screen pixel, so it slid off the corpse the
+		// moment the camera moved. Projection happens per frame in drawNotes.
+		LocalPoint world = feedback.getDeathLocation();
+		int plane = client.getTopLevelWorldView().getPlane();
 		long now = System.currentTimeMillis();
 
 		if (!feedback.isOnTask()) {
-			spawn(KIND_OFF_TASK, x, y, "x", now);
+			spawn(KIND_OFF_TASK, world, plane, "x", now);
 			return;
 		}
 		if (feedback.isTainted()) {
-			spawn(KIND_TAINTED, x, y, "TAINTED +1 taint", now);
+			spawn(KIND_TAINTED, world, plane, "TAINTED +1 taint", now);
 		}
 		else if (feedback.getGcAwarded() > 0) {
-			spawn(KIND_GC, x, y, "+" + feedback.getGcAwarded() + " GC", now);
+			spawn(KIND_GC, world, plane, "+" + feedback.getGcAwarded() + " GC", now);
 		}
 		if (feedback.isFinalKill()) {
-			spawn(KIND_BURST, x, y, null, now);
+			spawn(KIND_BURST, world, plane, null, now);
 		}
 	}
 
@@ -120,16 +118,19 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener {
 	}
 
 
-	private synchronized void spawn(int kind, int x, int y, String text, long now) {
+	private synchronized void spawn(int kind, LocalPoint world, int plane, String text, long now) {
 		Note note = notes[noteCursor];
 		noteCursor = (noteCursor + 1) % notes.length;
 		note.active = true;
 		note.kind = kind;
 		note.startMs = now;
-		note.x = x;
-		note.y = y;
+		note.world = world;
+		note.plane = plane;
+		// only consulted when there is no world point to project
+		note.screenX = client.getCanvasWidth() / 2;
+		note.screenY = client.getCanvasHeight() / 2;
 		note.text = text;
-		note.seed = (int) (now & 0x7FFF) * 31 + x;
+		note.seed = (int) (now & 0x7FFF) * 31 + (world == null ? 0 : world.getX());
 	}
 
 	// --- render (zero allocation) ---
@@ -155,13 +156,31 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener {
 				note.active = false;
 				continue;
 			}
+			// re-project every frame: this is what keeps the number over the
+			// spot the NPC died on rather than over a fixed screen pixel
+			int anchorX = note.screenX;
+			int anchorY = note.screenY;
+			if (note.world != null) {
+				Point p = null;
+				try {
+					p = Perspective.localToCanvas(client, note.world, note.plane);
+				}
+				catch (Exception e) {
+					p = null;
+				}
+				if (p == null) {
+					continue; // the spot is off-scene or behind the camera this frame
+				}
+				anchorX = p.getX();
+				anchorY = p.getY();
+			}
 			if (note.kind == KIND_BURST) {
-				drawBurst(g, note, el);
+				drawBurst(g, note, el, anchorX, anchorY);
 				continue;
 			}
 			float u = el / (float) life;
 			float alpha = u < 0.6f ? 1f : 1f - (u - 0.6f) / 0.4f;
-			int y = note.y - (int) (RISE_PX * easeOut(u));
+			int y = anchorY - (int) (RISE_PX * easeOut(u));
 
 			Font font;
 			Color color;
@@ -179,7 +198,7 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener {
 			}
 			g.setFont(font);
 			FontMetrics fm = g.getFontMetrics();
-			int x = note.x - fm.stringWidth(note.text) / 2;
+			int x = anchorX - fm.stringWidth(note.text) / 2;
 			g.setColor(Paint.withAlpha(Color.BLACK, alpha * 0.8f));
 			g.drawString(note.text, x + 1, y + 1);
 			g.setColor(Paint.withAlpha(color, alpha));
@@ -187,7 +206,7 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener {
 		}
 	}
 
-	private void drawBurst(Graphics2D g, Note note, long el) {
+	private void drawBurst(Graphics2D g, Note note, long el, int anchorX, int anchorY) {
 		float u = el / (float) BURST_MS;
 		double ts = el / 1000.0;
 		for (int p = 0; p < 14; p++) {
@@ -196,8 +215,8 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener {
 			float h3 = Paint.hash01(note.seed + p * 3 + 2);
 			double ang = h1 * Math.PI * 2;
 			double speed = 40 + h2 * 150;
-			int px = note.x + (int) (Math.cos(ang) * speed * ts);
-			int py = note.y + (int) (Math.sin(ang) * speed * ts * 0.8 + 240 * ts * ts);
+			int px = anchorX + (int) (Math.cos(ang) * speed * ts);
+			int py = anchorY + (int) (Math.sin(ang) * speed * ts * 0.8 + 240 * ts * ts);
 			int size = 2 + (int) (h3 * 2);
 			g.setColor(Paint.withAlpha(p % 3 == 0 ? Color.WHITE : GC_GOLD, 1f - u));
 			g.fillRect(px, py, size, size);
@@ -206,7 +225,7 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener {
 		int r = (int) (10 + 34 * easeOut(u));
 		g.setColor(Paint.withAlpha(GC_GOLD, (1f - u) * 0.7f));
 		g.setStroke(STROKE_2);
-		g.drawOval(note.x - r, note.y - r, r * 2, r * 2);
+		g.drawOval(anchorX - r, anchorY - r, r * 2, r * 2);
 	}
 
 	private static final BasicStroke STROKE_2 = new BasicStroke(2f);

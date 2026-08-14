@@ -1,6 +1,7 @@
 package com.gachaman;
 
 import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.gameval.InventoryID;
 import javax.inject.Singleton;
 import javax.inject.Inject;
 import com.gachaman.data.*;
@@ -116,8 +117,6 @@ public class GachamanPlugin extends Plugin {
 	private SafeModeService safeModeService;
 
 	@Inject
-	private UnequipService unequipService;
-	@Inject
 	private PartyRollService partyRollService;
 	@Inject
 	private PartyPresenceService partyPresenceService;
@@ -141,6 +140,8 @@ public class GachamanPlugin extends Plugin {
 	private KillJuiceOverlay killJuiceOverlay;
 	@Inject
 	private ForbiddenItemOverlay forbiddenItemOverlay;
+	@Inject
+	private SlotLockOverlay slotLockOverlay;
 	@Inject
 	private TaskNpcHighlightOverlay taskNpcHighlightOverlay;
 	@Inject
@@ -216,9 +217,36 @@ public class GachamanPlugin extends Plugin {
 
 		@Override
 		public void onTaskCompleted(TaskService.TaskCompletionSummary summary) {
+			// never suppressible: a contract that paid ten times the usual
+			// completion should say so, or it reads as a payout bug
+			double mult = summary.getCompletionMilestoneMult();
+			if (mult > 1.0) {
+				debugChatAlways("<col=ff9040>Milestone contract!</col> Your "
+					+ ordinal(summary.getTaskNumber()) + " completion paid <col=ff9040>x"
+					+ (mult == Math.rint(mult) ? String.valueOf((int) mult) : String.valueOf(mult))
+					+ "</col> its usual reward.");
+			}
 		}
 
 	};
+
+	/** 1st, 2nd, 3rd, 4th... including the 11th/12th/13th exceptions. */
+	private static String ordinal(int n) {
+		int mod100 = n % 100;
+		if (mod100 >= 11 && mod100 <= 13) {
+			return n + "th";
+		}
+		switch (n % 10) {
+			case 1:
+				return n + "st";
+			case 2:
+				return n + "nd";
+			case 3:
+				return n + "rd";
+			default:
+				return n + "th";
+		}
+	}
 
 	@Provides
 	GachamanConfig provideConfig(ConfigManager configManager) {
@@ -310,6 +338,7 @@ public class GachamanPlugin extends Plugin {
 		overlayManager.add(revealOverlay);
 		overlayManager.add(killJuiceOverlay);
 		overlayManager.add(forbiddenItemOverlay);
+		overlayManager.add(slotLockOverlay);
 		overlayManager.add(taskNpcHighlightOverlay);
 		overlayManager.add(taskProgressOverlay);
 		overlayManager.add(loadoutOverlay);
@@ -443,6 +472,7 @@ public class GachamanPlugin extends Plugin {
 		overlayManager.remove(revealOverlay);
 		overlayManager.remove(killJuiceOverlay);
 		overlayManager.remove(forbiddenItemOverlay);
+		overlayManager.remove(slotLockOverlay);
 		overlayManager.remove(taskNpcHighlightOverlay);
 		overlayManager.remove(taskProgressOverlay);
 		overlayManager.remove(loadoutOverlay);
@@ -479,7 +509,6 @@ public class GachamanPlugin extends Plugin {
 			// the old one into the next login
 			partyPresenceService.reset();
 			// a half-finished strip must not resume against the next character
-			unequipService.cancel();
 		}
 		if (event.getGameState() != GameState.LOGGED_IN) {
 			// the board's hit test outlives the frames that drew it
@@ -530,38 +559,69 @@ public class GachamanPlugin extends Plugin {
 			ceremonyBus.drain();
 			wasOnTutorial = TutorialGate.onTutorial(client);
 			if (!wasOnTutorial) {
-				// already ashore: settle the strip without performing it, so
-				// installing the plugin later never undresses an existing account
-				stateService.mutate(s -> s.isTutorialStripDone() ? s : s.withTutorialStripDone(true));
-				// ...unless this save DID step off the island and the strip was cut
-				// short by that logout; finish the job it started
-				if (stateService.get() != null && stateService.get().isTutorialStripPending()) {
-					unequipService.arm();
-				}
 				beginJourneyIfFresh();
 			}
 			return;
 		}
 
-		// Tutorial Island exit: the locks switch on — strip the tutorial's gear
-		// (no card unlocks it yet), then style roll, then tasks
+		// Tutorial Island exit: the locks switch on. Nothing is taken off — the
+		// island's own gear is card-granted in grantStarterCards, so what the
+		// player walks ashore wearing is exactly what they may keep wearing
 		if (wasOnTutorial && stateService.isLoaded()
 			&& !TutorialGate.onTutorial(client)) {
 			wasOnTutorial = false;
-			var state = stateService.get();
-			if (state != null && !state.isTutorialStripDone()) {
-				stateService.mutate(s -> s.withTutorialStripDone(true).withTutorialStripPending(true));
-				unequipService.arm();
-				// never suppressible: gear vanishing without a reason reads as item loss
-				debugChatAlways("Welcome to Gachaman. Your tutorial gear is being removed —"
-					+ " equipment is locked behind cards from here on.");
-			}
 			beginJourneyIfFresh();
+			cardDatabase.onReady(this::assignWornGear);
 		}
+	}
 
-		if (unequipService.isArmed() && !unequipService.tick() && unequipService.isStripComplete()) {
-			// everything is off; stop resuming this on every future login
-			stateService.mutate(s -> s.isTutorialStripPending() ? s.withTutorialStripPending(false) : s);
+	/**
+	 * Put the cards for what the player is ACTUALLY wearing into the loadout,
+	 * once, as they step off the island.
+	 *
+	 * <p>Granting the island's cards is not enough on its own: under the
+	 * default one-card-per-slot rule a card only permits its items once it is
+	 * assigned to a slot, so a player who walks ashore swinging a bronze sword
+	 * whose card sits unassigned in the album could take it off and never put
+	 * it back — the exact trap the strip was there to avoid.
+	 *
+	 * <p>Overwrites whatever autoAssignStarter put there, deliberately: what is
+	 * on their back beats what a default chose for them. Slots they have no
+	 * deed for are skipped, since assigning into one permits nothing.
+	 *
+	 * <p>Needs no "already ran" flag of its own. wasOnTutorial is only ever set
+	 * by a login that happens ON the island, and the exit branch clears it, so
+	 * this fires once for the one transition a character can never repeat. The
+	 * onReady queue is no second path either: it is drained and cleared once,
+	 * and the DB latches ready for the rest of the session.
+	 */
+	private void assignWornGear() {
+		var state = stateService.get();
+		ItemContainer worn = client.getItemContainer(InventoryID.WORN);
+		if (state == null || worn == null) {
+			return;
+		}
+		// snapshot: assign() mutates through the service, so the loadout read
+		// here goes stale — `assigned` is tracked by hand below. The owned-card
+		// list does not, since assigning never mints or removes a card.
+		Set<String> assigned = new HashSet<>(state.getLoadout().values());
+		for (Item item : worn.getItems()) {
+			if (item == null || item.getId() <= 0) {
+				continue;
+			}
+			CardDefinition card = cardDatabase.cardForItem(item.getId());
+			// no card = cosmetic or untracked; no deed = the slot permits nothing
+			if (card == null || !permissionService.isSlotDeeded(card.getSlot())) {
+				continue;
+			}
+			for (OwnedCard owned : state.getOwnedCards()) {
+				if (!owned.isHologram() && owned.getCardId() == card.getCardId()
+					&& !assigned.contains(owned.getUuid())
+					&& loadoutService.assign(card.getSlot(), owned.getUuid())) {
+					assigned.add(owned.getUuid());
+					break;
+				}
+			}
 		}
 	}
 
@@ -641,9 +701,16 @@ public class GachamanPlugin extends Plugin {
 		}
 
 		// every save owns the starter cards (idempotent: grants only what's
-		// missing; names absent from the card DB are skipped with a log line)
+		// missing; names absent from the card DB are skipped with a log line).
+		// The Tutorial Island set is in here because the island force-equips it:
+		// walking ashore in gear no card unlocks would strand a fresh account in
+		// items it could never put back on, so the island's own kit is granted
+		// rather than taken away. Names are item names — a rename resolves to
+		// null and is skipped, so the worst case is a missing card, not a crash
 		List<String> starters = new ArrayList<>(Arrays.asList(
-			"Training sword", "Training shield", "Training bow", "Training arrows"));
+			"Training sword", "Training shield", "Training bow", "Training arrows",
+			"Bronze axe", "Bronze pickaxe", "Bronze dagger", "Bronze sword",
+			"Shortbow", "Wooden shield", "Bronze arrow"));
 		starters.addAll(ironmanGear.cardNames(accountType));
 		Set<Integer> ownedIds = new HashSet<>();
 		for (OwnedCard owned : state.getOwnedCards()) {

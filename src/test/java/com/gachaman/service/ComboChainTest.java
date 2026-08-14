@@ -21,7 +21,7 @@ public class ComboChainTest
 
 	private TaskService service()
 	{
-		return new TaskService(null, null, null, null, null, null, null, null, null);
+		return new TaskService(null, null, null, null, null, null, null, null, null, null);
 	}
 
 	/** Fight from `from` until `until`, landing an attack every other tick. */

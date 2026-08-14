@@ -1048,7 +1048,11 @@ public class PartyRollService implements TaskService.Listener {
 		// cannot reach is a contract nobody in the party can finish.
 		Set<String> quests = agreedQuests(questSets, protocols);
 		List<TaskOffer> raw = TaskGenerator.generateOffers(monsterTable.getMonsters(),
-			cb, slayer, members, quests, false, new GachaRng(anchor.getSeedCandidate()));
+			// bestHitSeen is deliberately 0, NOT the local player's: every client
+			// in the party must generate byte-identical offers from the shared
+			// seed, and the biggest hit each has landed differs per client. A
+			// party board therefore always deals the floor BIG_HIT
+			cb, slayer, members, quests, false, 0, new GachaRng(anchor.getSeedCandidate()));
 		List<TaskOffer> offers = new ArrayList<>(raw.size());
 		for (TaskOffer offer : raw) {
 			offers.add(new TaskOffer(offer.getDifficulty(), offer.getMonsterName(),

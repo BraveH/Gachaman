@@ -59,7 +59,7 @@ public class TaskServicePartyOfferTest
 		taskService = new TaskService(null, stateService, creditSink, complianceService,
 			styleService, ceremonyBus, new GachaRng(1L), monsterTable,
 			// null Client already means these tests never reach rollOffers()
-			null);
+			null, null);
 	}
 
 	private static List<TaskOffer> fourOffers(boolean partyRoll)

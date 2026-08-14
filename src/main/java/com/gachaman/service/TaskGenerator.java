@@ -4,6 +4,7 @@ import com.gachaman.*;
 import com.gachaman.data.*;
 import com.gachaman.model.*;
 import java.util.*;
+import javax.annotation.*;
 import java.util.stream.*;
 import net.runelite.api.*;
 
@@ -25,7 +26,15 @@ public final class TaskGenerator {
 	/** Quest gating disabled — see the {@code completedQuests} overload. */
 	public static List<TaskOffer> generateOffers(List<MonsterTable.Monster> pool, int playerCb,
 		int playerSlayerLevel, boolean membersWorld, boolean tainted, GachaRng rng) {
-		return generateOffers(pool, playerCb, playerSlayerLevel, membersWorld, null, tainted, rng);
+		return generateOffers(pool, playerCb, playerSlayerLevel, membersWorld, null, tainted, 0, rng);
+	}
+
+	/** Quest-gated roll with no max-hit estimate: BIG_HIT falls to its floor. */
+	public static List<TaskOffer> generateOffers(List<MonsterTable.Monster> pool, int playerCb,
+		int playerSlayerLevel, boolean membersWorld,
+		@Nullable Set<String> completedQuests, boolean tainted, GachaRng rng) {
+		return generateOffers(pool, playerCb, playerSlayerLevel, membersWorld,
+			completedQuests, tainted, 0, rng);
 	}
 
 	/**
@@ -35,10 +44,13 @@ public final class TaskGenerator {
 	 *                        falls back to so every client still deals one board.
 	 *                        An EMPTY set is not the same thing: it means a player
 	 *                        who has finished nothing, and gates accordingly.
+	 * @param maxHit          the player's calculated max hit in their locked
+	 *                        style, sizing the BIG_HIT side bet. 0 = unknown.
 	 */
 	public static List<TaskOffer> generateOffers(List<MonsterTable.Monster> pool, int playerCb,
 		int playerSlayerLevel, boolean membersWorld,
-		@javax.annotation.Nullable Set<String> completedQuests, boolean tainted, GachaRng rng) {
+		@Nullable Set<String> completedQuests, boolean tainted,
+		int maxHit, GachaRng rng) {
 		// slayer-task-only monsters are unfulfillable contracts (a Gachaman
 		// task is not a slayer task); slayer-level-gated ones need the level;
 		// quest-locked ones cannot be reached or damaged at all
@@ -51,13 +63,13 @@ public final class TaskGenerator {
 		// no monster may appear on more than one offer in the same roll
 		Set<String> usedMonsters = new HashSet<>();
 		for (TaskDifficulty difficulty : TaskDifficulty.values()) {
-			TaskOffer offer = generate(pool, playerCb, membersWorld, difficulty, false, usedMonsters, rng);
+			TaskOffer offer = generate(pool, playerCb, membersWorld, difficulty, false, usedMonsters, maxHit, rng);
 			usedMonsters.add(offer.getMonsterName());
 			offers.add(offer);
 		}
 		if (tainted) {
 			TaskOffer redemption = generate(pool, playerCb, membersWorld, TaskDifficulty.MEDIUM,
-				true, usedMonsters, rng);
+				true, usedMonsters, maxHit, rng);
 			offers.add(redemption);
 		}
 		return offers;
@@ -72,7 +84,7 @@ public final class TaskGenerator {
 	 * different orders must still agree monster for monster.
 	 */
 	static boolean questsSatisfied(MonsterTable.Monster monster,
-		@javax.annotation.Nullable Set<String> completedQuests) {
+		@Nullable Set<String> completedQuests) {
 		List<String> required = monster.getQuests();
 		if (required == null || required.isEmpty()) {
 			return true;
@@ -83,7 +95,7 @@ public final class TaskGenerator {
 
 	static TaskOffer generate(List<MonsterTable.Monster> pool, int playerCb, boolean membersWorld,
 		TaskDifficulty difficulty, boolean redemption,
-		Set<String> excludeMonsters, GachaRng rng) {
+		Set<String> excludeMonsters, int maxHit, GachaRng rng) {
 		List<MonsterTable.Monster> eligible = eligibleMonsters(pool, playerCb, membersWorld, difficulty);
 		List<MonsterTable.Monster> distinct = eligible.stream()
 			.filter(m -> !excludeMonsters.contains(m.getName()))
@@ -98,7 +110,7 @@ public final class TaskGenerator {
 		int perKill = redemption ? 0 : Tuning.PER_KILL_GC.get(difficulty);
 		int completion = Tuning.COMPLETION_GC.get(difficulty);
 
-		List<SideBet> sideBets = redemption ? List.of() : rollSideBets(playerCb, completion, rng);
+		List<SideBet> sideBets = redemption ? List.of() : rollSideBets(maxHit, completion, rng);
 		return new TaskOffer(difficulty, monster.getName(), monster.getCombatLevel(),
 			kills, perKill, completion, sideBets, redemption, false);
 	}
@@ -131,7 +143,36 @@ public final class TaskGenerator {
 			.collect(Collectors.toList());
 	}
 
-	static List<SideBet> rollSideBets(int playerCb, int completionGc, GachaRng rng) {
+	/**
+	 * "Land a hit of N+", sized to the max hit this player could actually land
+	 * in the style they are locked into — see {@link MaxHitService}.
+	 *
+	 * <p>Combat level was the wrong basis and produced impossible bets: the old
+	 * {@code max(5, 5 + cb/8)} floored every player under combat 24 at 5, while
+	 * a bronze-armed account around combat 12 maxes about 3. The bet could not
+	 * be won at all in the band it was most likely to be dealt in.
+	 *
+	 * <p>Asks for {@value #BIG_HIT_FRACTION_PCT}% of that ceiling rather than
+	 * the ceiling itself: a max hit is the rarest single roll on the damage
+	 * curve, so a bet demanding it exactly would be technically possible and
+	 * practically dead. The estimate is already conservative (no prayer, no
+	 * boosts, no void), so the two margins compound in the player's favour.
+	 *
+	 * <p>Zero means the ceiling could not be read — logged out, no style rolled
+	 * yet, an unreadable equipment container — and yields the floor.
+	 */
+	static final int BIG_HIT_FRACTION_PCT = 70;
+
+	static int bigHitThreshold(int maxHit) {
+		if (maxHit <= 0) {
+			return 2; // unknown — a guess, and deliberately a low one
+		}
+		// never above what the player can physically hit: a floor that can
+		// outrun the real ceiling is the same bug in smaller print
+		return Math.max(1, Math.min(40, maxHit * BIG_HIT_FRACTION_PCT / 100));
+	}
+
+	static List<SideBet> rollSideBets(int maxHit, int completionGc, GachaRng rng) {
 		int count = rng.chance(0.5) ? 2 : 1;
 		List<SideBet> bets = new ArrayList<>(count);
 		for (int i = 0; i < count; i++) {
@@ -140,7 +181,7 @@ public final class TaskGenerator {
 			int window = 0;
 			switch (kind) {
 				case BIG_HIT:
-					threshold = Math.max(5, Math.min(40, 5 + playerCb / 8));
+					threshold = bigHitThreshold(maxHit);
 					break;
 				case SPEED_KILLS:
 					threshold = 3;
