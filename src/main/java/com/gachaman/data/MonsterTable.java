@@ -26,6 +26,20 @@ public class MonsterTable {
 		 */
 		boolean noGuaranteedDrop;
 		/**
+		 * Melee cannot physically reach it, so a contract on it is UNWINNABLE for
+		 * a player the wheel has locked to melee — not merely slow or resisted.
+		 *
+		 * <p>The bar for this flag is reach, never damage. A monster that resists
+		 * melee, has high melee defence, or is simply a bad idea to melee does NOT
+		 * belong here; a false positive silently deletes a monster from every
+		 * melee player's contract pool, which is its own bug. Zalcano is the
+		 * instructive near-miss: it is immune to conventional combat ENTIRELY, so
+		 * ranged and magic fare no better and the flag would say something untrue.
+		 * Ducks are the other one — they swim, but they also walk ashore, and a
+		 * melee player can hit them there.
+		 */
+		boolean meleeUnreachable;
+		/**
 		 * Quests that must ALL be FINISHED before this monster can be reached or
 		 * damaged — {@link Quest} constant names, never ordinals.
 		 * Empty (the common case) means anyone may fight it.
@@ -88,7 +102,7 @@ public class MonsterTable {
 			: Collections.unmodifiableList(new ArrayList<>(quests));
 		return new Monster(monster.getName(), monster.getCombatLevel(), monster.getTags(),
 			monster.isMembers(), monster.getSlayerLevel(), monster.isSlayerTaskOnly(),
-			monster.isNoGuaranteedDrop(), safe);
+			monster.isNoGuaranteedDrop(), monster.isMeleeUnreachable(), safe);
 	}
 
 }

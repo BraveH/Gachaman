@@ -806,6 +806,25 @@ public class PartyRollService implements TaskService.Listener {
 	 * sat out cannot actually drag the rule down) and never optimistic, which is
 	 * the direction a label a player votes on should fail in.
 	 */
+	/**
+	 * Is ANY member who agreed to this roll locked to melee?
+	 *
+	 * <p>Reads the stances rather than {@link #partyStyles}, which is not built
+	 * until after the roll executes — and every client holds the same stances, so
+	 * every client answers this identically and the shared seed still deals one
+	 * board. A member whose build predates the style broadcast answers null and
+	 * counts as NOT melee; see the call site for what that leaves open.
+	 */
+	private boolean anyAgreedIsMelee(Collection<Long> agreed) {
+		for (long id : agreed) {
+			Stance stance = stances.get(id);
+			if (stance != null && AttackStyle.MELEE == parseStyle(stance.getAllowedStyle())) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	static String effectiveSizingLabel(Collection<Stance> heard, @Nullable String sizingMode) {
 		List<Integer> protocols = new ArrayList<>(heard.size() + 1);
 		for (Stance stance : heard) {
@@ -1298,7 +1317,17 @@ public class PartyRollService implements TaskService.Listener {
 			// in the party must generate byte-identical offers from the shared
 			// seed, and the biggest hit each has landed differs per client. A
 			// party board therefore always deals the floor BIG_HIT
-			cb, slayer, members, quests, false, 0, new GachaRng(anchor.getSeedCandidate()));
+			cb, slayer, members, quests, false, 0,
+			// ANY agreed member locked to melee strips the unreachable monsters, so
+			// every member of a shared contract can actually fight it. Deterministic
+			// across clients for the same reason the seed is: every client hears
+			// every Stance, so all of them compute this from the same answers.
+			//
+			// A member on a build too old to broadcast allowedStyle reads as null
+			// and so does NOT trigger the exclusion. That is the owner's chosen
+			// rule; the residual is that a mixed-version party can still deal a
+			// contract such a member cannot fight.
+			anyAgreedIsMelee(agreed), new GachaRng(anchor.getSeedCandidate()));
 		List<TaskOffer> offers = new ArrayList<>(raw.size());
 		for (TaskOffer offer : raw) {
 			// the generator deals plain contracts; the only thing that makes them

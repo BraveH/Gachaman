@@ -109,9 +109,9 @@ public class TaskGeneratorTest
 		GachaRng rng = new GachaRng(77L);
 		List<MonsterTable.Monster> pool = new java.util.ArrayList<>(monsters);
 		pool.add(new MonsterTable.Monster("Taskonly Boss", 90, List.of("boss"), true, 0, true,
-			false, List.of()));
-		pool.add(new MonsterTable.Monster("Highslayer Fiend", 90, List.of("slayer"), true, 85,
 			false, false, List.of()));
+		pool.add(new MonsterTable.Monster("Highslayer Fiend", 90, List.of("slayer"), true, 85,
+			false, false, false, List.of()));
 		for (int i = 0; i < 300; i++)
 		{
 			// slayer level 1: neither may ever appear

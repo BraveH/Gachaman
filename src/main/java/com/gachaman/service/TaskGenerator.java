@@ -26,7 +26,7 @@ public final class TaskGenerator {
 	/** Quest gating disabled — see the {@code completedQuests} overload. */
 	public static List<TaskOffer> generateOffers(List<MonsterTable.Monster> pool, int playerCb,
 		int playerSlayerLevel, boolean membersWorld, boolean tainted, GachaRng rng) {
-		return generateOffers(pool, playerCb, playerSlayerLevel, membersWorld, null, tainted, 0, rng);
+		return generateOffers(pool, playerCb, playerSlayerLevel, membersWorld, null, tainted, 0, false, rng);
 	}
 
 	/** Quest-gated roll with no max-hit estimate: BIG_HIT falls to its floor. */
@@ -34,7 +34,7 @@ public final class TaskGenerator {
 		int playerSlayerLevel, boolean membersWorld,
 		@Nullable Set<String> completedQuests, boolean tainted, GachaRng rng) {
 		return generateOffers(pool, playerCb, playerSlayerLevel, membersWorld,
-			completedQuests, tainted, 0, rng);
+			completedQuests, tainted, 0, false, rng);
 	}
 
 	/**
@@ -46,11 +46,14 @@ public final class TaskGenerator {
 	 *                        who has finished nothing, and gates accordingly.
 	 * @param maxHit          the player's calculated max hit in their locked
 	 *                        style, sizing the BIG_HIT side bet. 0 = unknown.
+	 * @param anyoneLockedToMelee true when the local player — or, in a party, ANY
+	 *                        agreed member — is locked to melee, which removes
+	 *                        every melee-unreachable monster from the pool.
 	 */
 	public static List<TaskOffer> generateOffers(List<MonsterTable.Monster> pool, int playerCb,
 		int playerSlayerLevel, boolean membersWorld,
 		@Nullable Set<String> completedQuests, boolean tainted,
-		int maxHit, GachaRng rng) {
+		int maxHit, boolean anyoneLockedToMelee, GachaRng rng) {
 		// slayer-task-only monsters are unfulfillable contracts (a Gachaman
 		// task is not a slayer task); slayer-level-gated ones need the level;
 		// quest-locked ones cannot be reached or damaged at all
@@ -58,6 +61,15 @@ public final class TaskGenerator {
 			.filter(m -> !m.isSlayerTaskOnly())
 			.filter(m -> m.getSlayerLevel() <= playerSlayerLevel)
 			.filter(m -> questsSatisfied(m, completedQuests))
+			// A monster melee cannot reach is an UNWINNABLE contract for a player
+			// the wheel has locked to melee, so it is gated exactly like the slayer
+			// level and the quest locks above rather than merely discouraged.
+			//
+			// In a party this is ANY agreed member, not the local player: a shared
+			// contract pools everyone's kills, so one melee member who cannot touch
+			// the target is a member who cannot help and cannot build a combo. It
+			// costs the party some variety, which is the trade the owner chose.
+			.filter(m -> !anyoneLockedToMelee || !m.isMeleeUnreachable())
 			.collect(Collectors.toList());
 		List<TaskOffer> offers = new ArrayList<>(5);
 		// no monster may appear on more than one offer in the same roll

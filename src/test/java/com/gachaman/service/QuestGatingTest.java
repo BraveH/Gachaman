@@ -37,7 +37,7 @@ public class QuestGatingTest
 
 	private static MonsterTable.Monster monster(String name, int cb, String... quests)
 	{
-		return new MonsterTable.Monster(name, cb, List.of("starter"), false, 0, false, false,
+		return new MonsterTable.Monster(name, cb, List.of("starter"), false, 0, false, false, false,
 			List.of(quests));
 	}
 

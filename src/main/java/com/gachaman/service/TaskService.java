@@ -391,7 +391,10 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		List<TaskOffer> offers = TaskGenerator.generateOffers(
 			monsterTable.getMonsters(), playerCombatLevel(), lvl(Skill.SLAYER),
 			localIsMembers(), questUnlockService.completedQuests(), state.getTaint() > 0,
-			maxHitService.estimateFor(state.getAllowedStyle()), rng);
+			maxHitService.estimateFor(state.getAllowedStyle()),
+			// solo: the wheel has locked THIS player, and their style is always
+			// known, so a melee-unreachable contract can never be dealt here
+			AttackStyle.MELEE.name().equals(state.getAllowedStyle()), rng);
 		installOffers(offers);
 		return offers;
 	}
