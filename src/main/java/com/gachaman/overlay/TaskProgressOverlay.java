@@ -127,12 +127,19 @@ public class TaskProgressOverlay extends OverlayPanel {
 
 		// shared (party) contracts pool everyone's kills into the quota
 		int pooledKills = task.getKillsDone() + (task.isParty() ? task.getPartyOtherKills() : 0);
+		// One left: the same signal the NPC highlighter paints on the targets
+		// themselves, mirrored here because that overlay is config-toggled and a
+		// player with highlighting off would otherwise get no warning at all.
+		boolean lastOne = task.getKillsRequired() - pooledKills == 1;
 		if (pooledKills != progressKills || task.getKillsRequired() != progressRequired
 			|| task.isHalfKillPending() != progressHalf) {
 			progressKills = pooledKills;
 			progressRequired = task.getKillsRequired();
 			progressHalf = task.isHalfKillPending();
-			progressLabel = progressKills + (progressHalf ? ".5" : "") + "/" + progressRequired;
+			// a constant when it fires, so the no-allocation-per-frame rule this
+			// cache exists for still holds, and the counter resumes after it
+			progressLabel = lastOne ? "1 LEFT"
+				: progressKills + (progressHalf ? ".5" : "") + "/" + progressRequired;
 		}
 		if (difficulty != barColorDifficulty) {
 			barColorDifficulty = difficulty;
@@ -144,7 +151,10 @@ public class TaskProgressOverlay extends OverlayPanel {
 				* 100.0 / task.getKillsRequired());
 		progressBar.setValue(pct);
 		progressBar.setCenterLabel(progressLabel);
-		progressBar.setForegroundColor(barColor);
+		// the pulse is recomputed per frame rather than cached, which is the one
+		// place the difficulty-keyed barColor cache is deliberately bypassed
+		progressBar.setForegroundColor(lastOne
+			? TaskNpcHighlightOverlay.finalTargetGold() : barColor);
 		panelComponent.getChildren().add(progressBar);
 
 		// rhythm combo meter (transient — lives in TaskService, KillTracker ticks)
