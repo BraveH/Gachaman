@@ -335,4 +335,50 @@ public class PartySizingChoiceTest
 		Assert.assertEquals("MAGIC", propose.getAllowedStyle());
 		Assert.assertEquals(PartyRollService.ROLL_PROTOCOL, propose.getRollProtocol());
 	}
+
+	private static PartyRollService.Stance answered(int response, int protocol)
+	{
+		return new PartyRollService.Stance(response, 1L, true, 70, 55,
+			"MELEE", protocol, Collections.emptyList(), null);
+	}
+
+	/**
+	 * Regression: the card and the chat line must name ONE rule.
+	 *
+	 * <p>executeRoll builds its protocol list from `agreed` and nothing else, so
+	 * a member who says no cannot change the rule the roll uses. The label used
+	 * to count every answer it had heard, which let one declining old build print
+	 * "Fighting Weight (a member's build cannot read the host's rule)" on the
+	 * card while the roll beside it really did use Weakest Man.
+	 */
+	@Test
+	public void aMemberWhoDeclinedCannotDragTheLabelDown()
+	{
+		java.util.List<PartyRollService.Stance> mixed = Arrays.asList(
+			answered(PartyRollResponseMessage.AGREE, PartyRollService.ROLL_PROTOCOL),
+			answered(PartyRollResponseMessage.DECLINE, 0));
+		Assert.assertEquals("Weakest Man",
+			PartyRollService.effectiveSizingLabel(mixed, "WEAKEST_MAN"));
+	}
+
+	@Test
+	public void aBusyMemberIsIgnoredTheSameWay()
+	{
+		java.util.List<PartyRollService.Stance> mixed = Arrays.asList(
+			answered(PartyRollResponseMessage.AGREE, PartyRollService.ROLL_PROTOCOL),
+			answered(PartyRollResponseMessage.BUSY, 0));
+		Assert.assertEquals("Weakest Man",
+			PartyRollService.effectiveSizingLabel(mixed, "WEAKEST_MAN"));
+	}
+
+	/** But an old build that AGREES still binds the whole party, as before. */
+	@Test
+	public void anOldBuildThatAgreesStillBindsEveryone()
+	{
+		java.util.List<PartyRollService.Stance> mixed = Arrays.asList(
+			answered(PartyRollResponseMessage.AGREE, PartyRollService.ROLL_PROTOCOL),
+			answered(PartyRollResponseMessage.AGREE, 0));
+		Assert.assertNotEquals("Weakest Man",
+			PartyRollService.effectiveSizingLabel(mixed, "WEAKEST_MAN"));
+	}
 }

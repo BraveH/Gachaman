@@ -344,11 +344,22 @@ public class PartyRollService implements TaskService.Listener {
 		boolean canForceStart;
 		boolean canCancel;
 		int agreed;
+		/**
+		 * This client is committed to a party roll — hosting, joined, or with a
+		 * vote running. Published rather than read live because the sidebar asks
+		 * from the EDT, and it exists at all because a host who declines their
+		 * OWN proposal now stays vote authority without being dealt a board: that
+		 * leaves a live vote with an EMPTY offer list, a combination that used to
+		 * be unreachable and that the Contract section reads as "nothing going on,
+		 * offer them Roll Contracts". Rolling a personal board there gets those
+		 * scrolls force-closed when the party vote settles.
+		 */
+		boolean committed;
 	}
 
 	/** Nothing live. Shared, so a quiet client republishes no garbage at all. */
 	private static final View IDLE = new View(Collections.emptyList(), null,
-		false, false, false, 0);
+		false, false, false, 0, false);
 
 	/**
 	 * Published from the client thread, read from the EDT and from the overlay's
@@ -371,7 +382,8 @@ public class PartyRollService implements TaskService.Listener {
 				// only the host's start button reads it, and only while a proposal
 				// is collecting answers — so an inbox-only client, which publishes
 				// on every tick like everyone else, never builds a roster for it
-				proposalLive ? agreedNow() : 0)
+				proposalLive ? agreedNow() : 0,
+				spokenFor(proposalLive, votingLive, taskLive))
 			: IDLE;
 	}
 
@@ -552,6 +564,16 @@ public class PartyRollService implements TaskService.Listener {
 	 */
 	public boolean isCommittedElsewhere() {
 		return spokenFor(proposalLive, votingLive, taskLive);
+	}
+
+	/**
+	 * The same answer off the published snapshot, for the sidebar.
+	 *
+	 * <p>{@link #isCommittedElsewhere()} reads the live fields and so is only
+	 * safe on the client thread; the Contract section asks from the EDT.
+	 */
+	public boolean committedSnapshot() {
+		return view.isCommitted();
 	}
 
 	/**
@@ -787,7 +809,15 @@ public class PartyRollService implements TaskService.Listener {
 	static String effectiveSizingLabel(Collection<Stance> heard, @Nullable String sizingMode) {
 		List<Integer> protocols = new ArrayList<>(heard.size() + 1);
 		for (Stance stance : heard) {
-			protocols.add(stance.getRollProtocol());
+			// AGREE only, because executeRoll builds its own protocol list from
+			// `agreed` and nothing else. Counting every answer let a member who
+			// DECLINED still drag the label down: one old build saying no printed
+			// "Fighting Weight (a member's build cannot read the host's rule)" on
+			// the card while the roll it describes really did use Weakest Man and
+			// said so in chat. The card and the chat line must name one rule.
+			if (stance.getResponse() == PartyRollResponseMessage.AGREE) {
+				protocols.add(stance.getRollProtocol());
+			}
 		}
 		// this client is in it, or would be joining it; harmless when its own
 		// stance is already in the map, since the gate is a minimum over protocols

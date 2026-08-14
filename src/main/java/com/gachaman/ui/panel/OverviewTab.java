@@ -477,7 +477,12 @@ public class OverviewTab extends JPanel {
 			// the whole point of a card is that answering it is the cheaper move
 			addProposalCards(section);
 			JButton roll = button("Roll Contracts");
-			roll.setEnabled(taskService.canRollOffers());
+			// canRollOffers() only knows about THIS client's contract state, and a
+			// host who declined their own proposal is left in a live party vote
+			// holding no offers — which reads here as "nothing going on". Rolling a
+			// personal board in that window gets its scrolls force-closed the moment
+			// the party vote settles, so the party's claim on this client counts too.
+			roll.setEnabled(taskService.canRollOffers() && !partyRollService.committedSnapshot());
 			roll.addActionListener(e -> clientThread.invokeLater(taskService::rollOffers));
 			section.add(roll);
 			if (inPartySupplier.getAsBoolean()) {
