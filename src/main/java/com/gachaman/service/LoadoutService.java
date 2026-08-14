@@ -68,14 +68,7 @@ public class LoadoutService {
 		// single change they are most likely to notice missing. It is also rare
 		// enough that an immediate write costs nothing measurable.
 		stateService.checkpoint();
-		if (assignHook != null) {
-			try {
-				assignHook.accept(slot, owned);
-			}
-			catch (Exception e) {
-				log.warn("assign hook failed", e);
-			}
-		}
+		Listeners.fireHook(assignHook, h -> h.accept(slot, owned), "assign hook failed");
 		return true;
 	}
 

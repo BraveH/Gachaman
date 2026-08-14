@@ -473,15 +473,72 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		}
 	}
 
-	private static JScrollPane wrapScroll(JComponent inner) {
+	/**
+	 * The one scroll pane recipe this plugin's panels use: vertical-as-needed,
+	 * horizontal NEVER, no border of its own, a real unit increment and a
+	 * viewport painted to match its content, finished with the stone scrollbar.
+	 *
+	 * <p>Horizontal NEVER is the load-bearing part and the reason the width
+	 * constants above exist: a child wider than the viewport is not scrolled to,
+	 * it is clipped. Every wrapper in the sidebar wants exactly this, so the two
+	 * things they legitimately disagree about — how far one wheel notch travels
+	 * and what colour shows through under short content — are the parameters,
+	 * and nothing else is.
+	 *
+	 * <p>LoadoutTab's picker pane is deliberately NOT routed through here, and
+	 * its missing setUnitIncrement is the reason rather than an oversight.
+	 * JScrollPane's own scrollbar only returns a fixed increment once someone
+	 * has SET one; until then, if the view implements Scrollable, it asks the
+	 * view instead — and that picker's view is a JList, which answers with its
+	 * row height. So the picker already scrolls a whole row per notch, tuned to
+	 * whatever its renderer measures. Handing it a flat 16 would break that
+	 * alignment, and the viewport background it also does without would repaint
+	 * a backdrop it currently lets show through. Both are visible changes.
+	 *
+	 * <p>The tabs that DO come through here pass an explicit increment, which
+	 * sets that flag and wins over any Scrollable view underneath — AlbumTab's
+	 * grid is Scrollable too, and its THUMB_H / 3 took precedence before this
+	 * helper existed exactly as it does now.
+	 */
+	static JScrollPane scrollPane(JComponent inner, int unitIncrement, Color viewportBackground) {
 		JScrollPane scroll = new JScrollPane(inner,
 			ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
 			ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 		scroll.setBorder(null);
-		scroll.getVerticalScrollBar().setUnitIncrement(16);
-		scroll.getViewport().setBackground(ColorScheme.DARK_GRAY_COLOR);
+		scroll.getVerticalScrollBar().setUnitIncrement(unitIncrement);
+		scroll.getViewport().setBackground(viewportBackground);
 		styleScrollbar(scroll);
 		return scroll;
+	}
+
+	/**
+	 * Configures an HTML list pane and returns it already scroll-wrapped — the
+	 * whole BorderLayout.CENTER of the Dossier, Patrons and Timeline tabs, which
+	 * carried this as three byte-identical copies.
+	 *
+	 * <p>The configuring and the wrapping are fused on purpose rather than split
+	 * into a "style the pane" half and a "wrap it" half. No caller has ever
+	 * wanted one without the other, and splitting them puts the pane's setup
+	 * back at the call sites — which is where the ordering constraint below gets
+	 * broken, because at a call site it looks like six independent setters.
+	 *
+	 * <p>HONOR_DISPLAY_PROPERTIES must be set BEFORE setFont. The property is
+	 * what makes the pane obey setFont/setForeground at all; a font set while it
+	 * is still false is read back by the HTML view as the default serif face,
+	 * and the tab renders in black Times instead of the RuneScape small font.
+	 */
+	static JScrollPane htmlListScroll(JEditorPane list) {
+		list.setEditable(false);
+		list.setContentType("text/html");
+		list.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
+		list.setFont(FontManager.getRunescapeSmallFont());
+		list.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		list.setBorder(new EmptyBorder(6, 6, 6, 6));
+		return scrollPane(list, 16, ColorScheme.DARKER_GRAY_COLOR);
+	}
+
+	private static JScrollPane wrapScroll(JComponent inner) {
+		return scrollPane(inner, 16, ColorScheme.DARK_GRAY_COLOR);
 	}
 
 	/**
@@ -597,6 +654,64 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 * which is the same 8px, so one number covers every caller.
 	 */
 	static final int SECTION_WIDTH = VIEWPORT_WIDTH - 16;
+
+	/**
+	 * Hard cap on a section's width: the sidebar is fixed-width and no tab's
+	 * scroll pane scrolls horizontally, so a child whose preferred width exceeds
+	 * the viewport is not scrolled to — it is clipped at the right edge. Capping
+	 * both the preferred and the maximum width means no child can push its
+	 * section past the cap, whatever it asks for.
+	 *
+	 * <p>One class for all three callers. Shop, Help and Party each carried a
+	 * private copy; Help's and Party's were byte-identical to each other and
+	 * Shop's differed only in baking its cap in as a constant instead of taking
+	 * it as a field. The two-arg form covers both: Shop hands over the
+	 * compile-time {@code CONTENT_WIDTH}, Help and Party hand over the width
+	 * they measured from the live viewport, and the arithmetic each one sees is
+	 * unchanged.
+	 */
+	static final class WidthCap extends JPanel {
+		private final int cap;
+
+		WidthCap(JComponent inner, int cap) {
+			super(new BorderLayout());
+			this.cap = cap;
+			setOpaque(false);
+			setAlignmentX(Component.LEFT_ALIGNMENT);
+			add(inner, BorderLayout.CENTER);
+		}
+
+		@Override
+		public Dimension getPreferredSize() {
+			Dimension d = super.getPreferredSize();
+			return new Dimension(Math.min(d.width, cap), d.height);
+		}
+
+		@Override
+		public Dimension getMaximumSize() {
+			return new Dimension(cap, getPreferredSize().height);
+		}
+	}
+
+	/**
+	 * The big GC readout, in a section of its own — the balance every page that
+	 * shows money at all opens with.
+	 *
+	 * <p>Shared because the Overview and the Shop are the two halves of one
+	 * story: Overview is where the number is earned, Shop is where it is spent,
+	 * and a player who sees a different face or a different orange on the two
+	 * pages reads them as two different numbers. Overview appends its lifetime
+	 * and reroll-token lines to the returned panel; the shop stops here.
+	 */
+	static JPanel balanceSection(GachaState state) {
+		JPanel section = section(null);
+		JLabel gc = new JLabel(QuantityFormatter.formatNumber(state.getGc()) + " GC");
+		gc.setFont(FontManager.getRunescapeBoldFont().deriveFont(26f));
+		gc.setForeground(ColorScheme.BRAND_ORANGE);
+		gc.setAlignmentX(Component.LEFT_ALIGNMENT);
+		section.add(gc);
+		return section;
+	}
 
 	/**
 	 * A width-constrained, word-wrapping HTML block sized for a direct child of

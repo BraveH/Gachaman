@@ -99,7 +99,8 @@ public class ShopTab extends JPanel {
 			return;
 		}
 
-		addSection(buildBalanceSection(state));
+		// same big GC readout as the Overview tab — the shop is where it is spent
+		addSection(balanceSection(state));
 		addSection(buildChestSection(state));
 		addSection(buildOddsSection(state));
 		addSection(buildSlotChestSection(state));
@@ -113,36 +114,13 @@ public class ShopTab extends JPanel {
 		repaint();
 	}
 
+	// GachamanPanel.WidthCap, reached unqualified through the static import at the
+	// top. This tab's cap is the compile-time CONTENT_WIDTH rather than a measured
+	// viewport, which is the only way its (deleted) private copy differed from the
+	// shared class — so it passes the constant and the cap arithmetic is the same.
 	private void addSection(JPanel section) {
-		add(new WidthCap(section));
+		add(new WidthCap(section, CONTENT_WIDTH));
 		add(Box.createVerticalStrut(6));
-	}
-
-	/**
-	 * Hard cap on a section's width. RuneLite side panels are fixed-width and
-	 * the tab's scroll pane never scrolls horizontally, so a child whose
-	 * preferred width exceeds the viewport would simply be clipped at the
-	 * right edge. Capping both the preferred and maximum width here means no
-	 * child can ever push a section past CONTENT_WIDTH.
-	 */
-	private static final class WidthCap extends JPanel {
-		WidthCap(JComponent inner) {
-			super(new BorderLayout());
-			setOpaque(false);
-			setAlignmentX(Component.LEFT_ALIGNMENT);
-			add(inner, BorderLayout.CENTER);
-		}
-
-		@Override
-		public Dimension getPreferredSize() {
-			Dimension d = super.getPreferredSize();
-			return new Dimension(Math.min(d.width, CONTENT_WIDTH), d.height);
-		}
-
-		@Override
-		public Dimension getMaximumSize() {
-			return new Dimension(CONTENT_WIDTH, getPreferredSize().height);
-		}
 	}
 
 	/**
@@ -202,17 +180,6 @@ public class ShopTab extends JPanel {
 		JButton button = button(text);
 		button.setMaximumSize(new Dimension(SECTION_INNER_WIDTH, button.getPreferredSize().height));
 		return button;
-	}
-
-	/** Same big GC readout as the Overview tab — the shop is where it is spent. */
-	private static JPanel buildBalanceSection(GachaState state) {
-		JPanel section = section(null);
-		JLabel gc = new JLabel(formatNumber(state.getGc()) + " GC");
-		gc.setFont(FontManager.getRunescapeBoldFont().deriveFont(26f));
-		gc.setForeground(BRAND_ORANGE);
-		gc.setAlignmentX(Component.LEFT_ALIGNMENT);
-		section.add(gc);
-		return section;
 	}
 
 	// --- Chests ---
@@ -1081,9 +1048,9 @@ public class ShopTab extends JPanel {
 		// anyway: the sprites are inside the jar or they are not, there is no
 		// runtime condition in between, and ShopIconBakeTest loads all eight
 		// through this very method, so a packaging slip fails the build instead of
-		// reaching a paintComponent. (ScrollPainter's loader swallows failures and
-		// skips the draw instead — it wants that, because it also runs against art
-		// it can do without. A chest tile without its chest is not that.)
+		// reaching a paintComponent. (The ceremonies' ArtCache swallows failures
+		// and skips the draw instead — it wants that, because it also runs against
+		// art it can do without. A chest tile without its chest is not that.)
 		return CHEST_ICONS.computeIfAbsent(
 			tier.name().toLowerCase(Locale.ROOT) + (lit ? "-lit" : "-dim"),
 			key -> ImageUtil.loadImageResource(ShopTab.class,

@@ -88,7 +88,7 @@ public class HelpTab extends JPanel {
 	}
 
 	private void addSection(JPanel section, int width) {
-		add(new WidthCap(section, width));
+		add(new GachamanPanel.WidthCap(section, width));
 		add(Box.createVerticalStrut(6));
 	}
 
@@ -286,34 +286,6 @@ public class HelpTab extends JPanel {
 		label.setForeground(color);
 		label.setIconTextGap(4);
 		return label;
-	}
-
-	/**
-	 * Hard cap on a section's width: the sidebar is fixed-width and the
-	 * scroll pane never scrolls horizontally, so no child may push a section
-	 * past the measured viewport width.
-	 */
-	private static final class WidthCap extends JPanel {
-		private final int cap;
-
-		WidthCap(JComponent inner, int cap) {
-			super(new BorderLayout());
-			this.cap = cap;
-			setOpaque(false);
-			setAlignmentX(Component.LEFT_ALIGNMENT);
-			add(inner, BorderLayout.CENTER);
-		}
-
-		@Override
-		public Dimension getPreferredSize() {
-			Dimension d = super.getPreferredSize();
-			return new Dimension(Math.min(d.width, cap), d.height);
-		}
-
-		@Override
-		public Dimension getMaximumSize() {
-			return new Dimension(cap, getPreferredSize().height);
-		}
 	}
 
 	// --- Procedural illustrations ---

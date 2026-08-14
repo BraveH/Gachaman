@@ -195,14 +195,10 @@ public class AlbumTab extends JPanel {
 
 		add(north, BorderLayout.NORTH);
 
-		JScrollPane scroll = new JScrollPane(grid,
-			ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
-			ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-		scroll.setBorder(null);
-		scroll.getVerticalScrollBar().setUnitIncrement(THUMB_H / 3);
-		scroll.getViewport().setBackground(ColorScheme.DARK_GRAY_COLOR);
-		GachamanPanel.styleScrollbar(scroll);
-		add(scroll, BorderLayout.CENTER);
+		// a third of a thumbnail per notch, not the sidebar's flat 16: the grid
+		// scrolls in rows of cards, so the increment has to follow the card size
+		add(GachamanPanel.scrollPane(grid, THUMB_H / 3, ColorScheme.DARK_GRAY_COLOR),
+			BorderLayout.CENTER);
 
 		slotFilter.addActionListener(e -> applyFilters());
 		rarityFilter.addActionListener(e -> applyFilters());

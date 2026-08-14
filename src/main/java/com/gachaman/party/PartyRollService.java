@@ -65,6 +65,17 @@ public class PartyRollService implements TaskService.Listener {
 	private static final int NON_HOST_GRACE_TICKS = 25;
 
 	/**
+	 * The tail of every carry-clause notice: what a contract pays once the party
+	 * behind it is gone. Three chat lines end on it — the watchdog's conversion,
+	 * the pre-resume-id fallback and the resurrection notice — and they must all
+	 * quote {@link Tuning#PARTY_CARRY_MULT}, so the rate is spelled out once and
+	 * cannot drift between them. Each line keeps its own leading sentence; this
+	 * begins at the digit, so the sites read "... continues solo at " + CARRY_PAY.
+	 */
+	private static final String CARRY_PAY =
+		(int) (Tuning.PARTY_CARRY_MULT * 100) + "% completion pay.";
+
+	/**
 	 * Roll-rule version. Bumped ONLY when a change would make two clients
 	 * generate different offers from the same seed — here, sizing by the
 	 * party's average rather than its lowest combat level. The mixed-version
@@ -142,7 +153,7 @@ public class PartyRollService implements TaskService.Listener {
 	private final Map<Long, Inbox> inbox = new LinkedHashMap<>();
 
 	/** One member's line on a proposal card. */
-	@lombok.Value
+	@Value
 	public static class ProposalMember {
 		String name;
 		int combatLevel;
@@ -165,7 +176,7 @@ public class PartyRollService implements TaskService.Listener {
 	 * three independent rolls — so this is always a LIST, and the client's own
 	 * group is one of them rather than a special case rendered elsewhere.
 	 */
-	@lombok.Value
+	@Value
 	public static class PendingProposal {
 		long proposalId;
 		String hostName;
@@ -792,10 +803,7 @@ public class PartyRollService implements TaskService.Listener {
 
 	@Subscribe
 	public void onPartyRollProposeMessage(PartyRollProposeMessage msg) {
-		if (msg == null || isSelfEcho(msg.getMemberId())) {
-			return;
-		}
-		clientThread.invokeLater(() -> {
+		fromPeer(msg, () -> {
 			// Recorded, never dropped. This used to return early whenever anything
 			// was already live, which silently binned a second member's roll — the
 			// proposer waited out their whole TTL for an answer nobody's client had
@@ -853,7 +861,24 @@ public class PartyRollService implements TaskService.Listener {
 		entry.answered = true;
 		Stance mine = localStance(response);
 		entry.stances.put(safeMemberIdOrZero(), mine);
-		safeSend(new PartyRollResponseMessage(entry.proposalId, response, mine.getSeedCandidate(),
+		sendStance(entry.proposalId, response, mine);
+	}
+
+	/**
+	 * Put this client's answer on the wire, for ONE proposal id.
+	 *
+	 * <p>The two callers quote different ids — {@link #excuse} answers an inbox
+	 * entry, {@link #sendResponse} the committed proposal — and are otherwise the
+	 * same ten fields, so the message is spelled out here alone.
+	 *
+	 * <p>Deliberately the SEND and nothing else. The stance bookkeeping around it
+	 * stays at each call site because the two guard it differently: excuse()
+	 * records under {@link #safeMemberIdOrZero()} unconditionally, sendResponse()
+	 * only when there is a local member at all, and folding those together would
+	 * change what happens to a client that is not in a party.
+	 */
+	private void sendStance(long id, int response, Stance mine) {
+		safeSend(new PartyRollResponseMessage(id, response, mine.getSeedCandidate(),
 			mine.isMembers(), mine.getCombatLevel(), mine.getSlayerLevel(),
 			mine.getAllowedStyle(), mine.getRollProtocol(), mine.getCompletedQuests(),
 			mine.getAccountKey()));
@@ -861,28 +886,32 @@ public class PartyRollService implements TaskService.Listener {
 
 	@Subscribe
 	public void onPartyRollResponseMessage(PartyRollResponseMessage msg) {
-		if (msg == null || isSelfEcho(msg.getMemberId())) {
-			return;
-		}
-		clientThread.invokeLater(() -> {
+		fromPeer(msg, () -> {
+			// One answer, read once: the two branches below record the IDENTICAL
+			// stance and differ only in which map it lands in. Built before the
+			// guard rather than inside each arm — a @Value has no side effects, so
+			// a message that reaches neither map simply discards it.
+			//
+			// The rememberPartner calls stay where they are, one per branch: the
+			// inbox arm only runs when the entry exists, and hoisting it would
+			// start caching account keys for proposals this client does not track.
+			Stance heard = new Stance(msg.getResponse(), msg.getSeedCandidate(),
+				msg.isMembers(), msg.getCombatLevel(), msg.getSlayerLevel(),
+				msg.getAllowedStyle(), msg.getRollProtocol(), msg.getCompletedQuests(),
+				msg.getAccountKey());
 			if (!proposalLive || msg.getProposalId() != proposalId) {
 				// not the committed one — but it may well be a card on screen, and
 				// a card with no roster on it is the thing the player is trying to
 				// judge. Route it to the inbox instead of dropping it.
 				Inbox entry = inbox.get(msg.getProposalId());
 				if (entry != null) {
-					entry.stances.put(msg.getMemberId(), new Stance(msg.getResponse(),
-						msg.getSeedCandidate(), msg.isMembers(), msg.getCombatLevel(),
-						msg.getSlayerLevel(), msg.getAllowedStyle(), msg.getRollProtocol(),
-						msg.getCompletedQuests(), msg.getAccountKey()));
+					entry.stances.put(msg.getMemberId(), heard);
 					rememberPartner(msg.getMemberId(), msg.getAccountKey());
 					refreshPanel();
 				}
 				return;
 			}
-			stances.put(msg.getMemberId(), new Stance(msg.getResponse(), msg.getSeedCandidate(),
-				msg.isMembers(), msg.getCombatLevel(), msg.getSlayerLevel(), msg.getAllowedStyle(),
-				msg.getRollProtocol(), msg.getCompletedQuests(), msg.getAccountKey()));
+			stances.put(msg.getMemberId(), heard);
 			rememberPartner(msg.getMemberId(), msg.getAccountKey());
 			if (msg.getResponse() == PartyRollResponseMessage.DECLINE) {
 				chat(memberName(msg.getMemberId()) + " sits this party roll out.");
@@ -965,26 +994,12 @@ public class PartyRollService implements TaskService.Listener {
 		return Math.max(0, deadline - client.getTickCount());
 	}
 
-	/**
-	 * Ticks left on the proposal this client is committed to, or 0.
-	 *
-	 * <p>Read live rather than snapshotted with the rest of the status, because
-	 * it is the one number on the panel that changes without any event to hang a
-	 * refresh on — see the redraw in {@link #onGameTick}.
-	 */
-	public int committedProposalTicksLeft() {
-		return proposalLive
-			? displayTicksLeft(proposalExpiresAtTick, safeMemberIdOrZero() == proposerId)
-			: 0;
-	}
-
-	/** Ticks left to vote, or 0 when no vote is running. */
-	public int voteTicksLeft() {
-		return votingLive
-			? displayTicksLeft(voteExpiresAtTick, safeMemberIdOrZero() == proposerId)
-			: 0;
-	}
-
+	// The proposal and vote countdowns used to have live accessors of their own
+	// here. Both are gone, and nothing on screen lost a number: every countdown
+	// the panel draws now comes off PendingProposal.ticksLeft, which
+	// describeCommitted fills with the same displayTicksLeft() call for whichever
+	// phase is running, and OverviewTab renders through ticksToSeconds(). One
+	// clock, published with the card it belongs to, cannot disagree with it.
 
 	/** Is a proposal collecting answers? Panel-facing, from the snapshot. */
 	public boolean isProposalLive() {
@@ -1107,10 +1122,7 @@ public class PartyRollService implements TaskService.Listener {
 
 	@Subscribe
 	public void onPartyRollCancelMessage(PartyRollCancelMessage msg) {
-		if (msg == null || isSelfEcho(msg.getMemberId())) {
-			return;
-		}
-		clientThread.invokeLater(() -> {
+		fromPeer(msg, () -> {
 			// A cancel for a proposal this client only ever HEARD about used to be
 			// dropped here, because the guard compared against the committed one.
 			// The card then sat there offering Join on a roll nobody was collecting
@@ -1137,10 +1149,7 @@ public class PartyRollService implements TaskService.Listener {
 
 	@Subscribe
 	public void onPartyRollStartMessage(PartyRollStartMessage msg) {
-		if (msg == null || isSelfEcho(msg.getMemberId())) {
-			return;
-		}
-		clientThread.invokeLater(() -> {
+		fromPeer(msg, () -> {
 			if (!proposalLive || msg.getProposalId() != proposalId
 				|| msg.getMemberId() != proposerId || msg.getParticipantIds() == null) {
 				return;
@@ -1262,9 +1271,9 @@ public class PartyRollService implements TaskService.Listener {
 			cb, slayer, members, quests, false, 0, new GachaRng(anchor.getSeedCandidate()));
 		List<TaskOffer> offers = new ArrayList<>(raw.size());
 		for (TaskOffer offer : raw) {
-			offers.add(new TaskOffer(offer.getDifficulty(), offer.getMonsterName(),
-				offer.getMonsterCombatLevel(), offer.getKillsRequired(), offer.getPerKillGc(),
-				offer.getCompletionGc(), offer.getSideBets(), offer.isRedemption(), true));
+			// the generator deals plain contracts; the only thing that makes them
+			// the PARTY's is this flag, which turns a click into a vote
+			offers.add(offer.withPartyRoll(true));
 		}
 		if (rolling && !taskService.presentPartyOffers(offers)) {
 			// local slot occupied after all (race) — sit out quietly
@@ -1382,10 +1391,7 @@ public class PartyRollService implements TaskService.Listener {
 				&& taskService.anteArmed() && taskService.previewAnteStake() > 0;
 			anteVotes.put(self, wantsAnte);
 			safeSend(new PartyRollVoteMessage(proposalId, offerIndex, wantsAnte));
-			chat("You voted: " + describeOffer(partyOffers.get(offerIndex))
-				+ " (" + votesFor(offerIndex) + " of "
-				+ majorityThreshold(participants.size()) + " needed)"
-				+ anteSuffix(wantsAnte));
+			chatVote("You", offerIndex, wantsAnte);
 			evaluateVotes();
 			publishView(); // your own vote shows on the scrolls at once, as before
 		});
@@ -1394,6 +1400,22 @@ public class PartyRollService implements TaskService.Listener {
 	/** One short, sober note on a vote line: the Ante needs EVERY member. */
 	private String anteSuffix(boolean wantsAnte) {
 		return wantsAnte ? " — Ante: yes" : "";
+	}
+
+	/**
+	 * One vote, announced identically whoever cast it: the contract backed, the
+	 * tally so far against the bar it has to clear, and whether that voter
+	 * staked. "You" is just a name here — the local click and a peer's message
+	 * print the same sentence, which is what makes a party's chat logs line up.
+	 *
+	 * <p>Called only after the vote and the Ante have been recorded, at both
+	 * sites, because {@link #votesFor} counts the map as it stands.
+	 */
+	private void chatVote(String who, int index, boolean ante) {
+		chat(who + " voted: " + describeOffer(partyOffers.get(index))
+			+ " (" + votesFor(index) + " of "
+			+ majorityThreshold(participants.size()) + " needed)"
+			+ anteSuffix(ante));
 	}
 
 	/**
@@ -1412,10 +1434,7 @@ public class PartyRollService implements TaskService.Listener {
 
 	@Subscribe
 	public void onPartyRollVoteMessage(PartyRollVoteMessage msg) {
-		if (msg == null || isSelfEcho(msg.getMemberId())) {
-			return;
-		}
-		clientThread.invokeLater(() -> {
+		fromPeer(msg, () -> {
 			if (!votingLive || msg.getProposalId() != proposalId
 				|| !participants.contains(msg.getMemberId())) {
 				return;
@@ -1426,10 +1445,7 @@ public class PartyRollService implements TaskService.Listener {
 			}
 			votes.put(msg.getMemberId(), index);
 			anteVotes.put(msg.getMemberId(), msg.isAnte());
-			chat(memberName(msg.getMemberId()) + " voted: " + describeOffer(partyOffers.get(index))
-				+ " (" + votesFor(index) + " of "
-				+ majorityThreshold(participants.size()) + " needed)"
-				+ anteSuffix(msg.isAnte()));
+			chatVote(memberName(msg.getMemberId()), index, msg.isAnte());
 			evaluateVotes();
 			// a vote lands on the scrolls the moment it arrives, as it always has:
 			// neither vote path pokes the panel, so without this the offer cards
@@ -1459,17 +1475,8 @@ public class PartyRollService implements TaskService.Listener {
 		return counts;
 	}
 
-	/**
-	 * The live vote picture, for the offer scrolls and the party page.
-	 *
-	 * <p>Read by the overlay while it paints, so it is a SNAPSHOT: the counts
-	 * array is freshly allocated by {@link #tally()} and the rest are values, so
-	 * a caller cannot hold a window onto this service's mutable state. Both this
-	 * and every mutation of {@link #votes} run on the client thread, so the
-	 * snapshot is never torn.
-	 */
 	/** One name on a contract: who backed it, ready to draw. */
-	@lombok.Value
+	@Value
 	public static class Voter {
 		String name;
 		/** The party avatar, or null for a member who has none. */
@@ -1478,16 +1485,23 @@ public class PartyRollService implements TaskService.Listener {
 		boolean self;
 	}
 
-	@lombok.Value
+	/**
+	 * The live vote picture, for the offer scrolls and the party page.
+	 *
+	 * <p>Read by the overlay while it paints, so it is a SNAPSHOT: both the map
+	 * and the lists are built fresh by {@link #buildVoteView()}, so a caller
+	 * cannot hold a window onto this service's mutable state. That build and
+	 * every mutation of {@link #votes} run on the client thread, so the snapshot
+	 * is never torn.
+	 *
+	 * <p>Only what somebody draws is carried. A tally, the majority threshold and
+	 * a member-id-to-offer-index map were all published here too and read by
+	 * nobody: the resolve path tallies {@link #votes} itself, the chat notice
+	 * computes its own threshold, and the panel wants the contract's NAME, which
+	 * is what {@link #labelByMember} holds.
+	 */
+	@Value
 	public static class VoteView {
-		/** Votes per offer index, in offer order. */
-		int[] counts;
-		/** Votes that settle it for everyone. */
-		int needed;
-		/** Offer index this client voted for, or -1 if it has not voted yet. */
-		int myVote;
-		/** Member id -> offer index, for the panel's per-member column. */
-		Map<Long, Integer> byMember;
 		/**
 		 * Member id -> the contract they backed, named. The panel shows this
 		 * rather than the index: "vote 2" means nothing beside a player's name
@@ -1520,8 +1534,8 @@ public class PartyRollService implements TaskService.Listener {
 
 	/**
 	 * The vote picture off the live maps. CLIENT THREAD ONLY — it walks
-	 * {@link #votes} twice and reads the party roster, which is why the panel and
-	 * the offer scrolls both take the published copy instead.
+	 * {@link #votes} and reads the party roster, which is why the panel and the
+	 * offer scrolls both take the published copy instead.
 	 */
 	@Nullable
 	private VoteView buildVoteView() {
@@ -1529,11 +1543,16 @@ public class PartyRollService implements TaskService.Listener {
 			return null;
 		}
 		long self = safeMemberIdOrZero();
-		Integer mine = votes.get(self);
 		List<List<Voter>> voters = new ArrayList<>(partyOffers.size());
 		for (int i = 0; i < partyOffers.size(); i++) {
 			voters.add(new ArrayList<>());
 		}
+		Map<Long, String> labels = new HashMap<>();
+		// Faces and labels in ONE pass. The bounds check above the label lines is
+		// the one the labels already obeyed: voters is sized from partyOffers, and
+		// voteLabelFor -> offerLabel refuses the same out-of-range index by
+		// returning null, so every entry this continue skips is an entry that
+		// would have produced no label anyway.
 		for (Map.Entry<Long, Integer> entry : votes.entrySet()) {
 			int index = entry.getValue() == null ? -1 : entry.getValue();
 			if (index < 0 || index >= voters.size()) {
@@ -1541,17 +1560,12 @@ public class PartyRollService implements TaskService.Listener {
 			}
 			voters.get(index).add(new Voter(memberName(entry.getKey()),
 				avatarOf(entry.getKey()), entry.getKey() == self));
-		}
-		Map<Long, String> labels = new HashMap<>();
-		for (Map.Entry<Long, Integer> entry : votes.entrySet()) {
-			String label = entry.getValue() == null
-				? null : voteLabelFor(entry.getKey(), entry.getValue());
+			String label = voteLabelFor(entry.getKey(), index);
 			if (label != null) {
 				labels.put(entry.getKey(), label);
 			}
 		}
-		return new VoteView(tally(), majorityThreshold(participants.size()),
-			mine == null ? -1 : mine, new HashMap<>(votes), labels, voters);
+		return new VoteView(labels, voters);
 	}
 
 	/** A member's party avatar, or null — absent member, no avatar, or no party. */
@@ -1688,10 +1702,7 @@ public class PartyRollService implements TaskService.Listener {
 
 	@Subscribe
 	public void onPartyRollResolveMessage(PartyRollResolveMessage msg) {
-		if (msg == null || isSelfEcho(msg.getMemberId())) {
-			return;
-		}
-		clientThread.invokeLater(() -> {
+		fromPeer(msg, () -> {
 			// only the proposal's host may settle it, and only once
 			if (!votingLive || msg.getProposalId() != proposalId
 				|| msg.getMemberId() != proposerId || msg.getMemberIds() == null
@@ -1837,10 +1848,7 @@ public class PartyRollService implements TaskService.Listener {
 
 	@Subscribe
 	public void onPartyKillsMessage(PartyKillsMessage msg) {
-		if (msg == null || isSelfEcho(msg.getMemberId())) {
-			return;
-		}
-		clientThread.invokeLater(() -> {
+		fromPeer(msg, () -> {
 			if (!onContract(msg.getMemberId(), msg.getProposalId())) {
 				return;
 			}
@@ -1912,10 +1920,7 @@ public class PartyRollService implements TaskService.Listener {
 
 	@Subscribe
 	public void onPartyCompleteMessage(PartyCompleteMessage msg) {
-		if (msg == null || isSelfEcho(msg.getMemberId())) {
-			return;
-		}
-		clientThread.invokeLater(() -> {
+		fromPeer(msg, () -> {
 			if (onContract(msg.getMemberId(), msg.getProposalId())) {
 				chat(memberName(msg.getMemberId()) + "'s client completed the party contract.");
 				taskService.forcePartyComplete();
@@ -2068,9 +2073,10 @@ public class PartyRollService implements TaskService.Listener {
 	}
 
 	/**
-	 * The roster's raw display name, or null. Deliberately distinct from
-	 * memberName(), whose "A party member" fallback is right for a chat line
-	 * and must NEVER be persisted as though it were a partner.
+	 * The roster's raw display name, or null. This is the form the LEDGER paths
+	 * take (rememberNames, creditPatrons), and the null must survive: memberName()
+	 * wraps this one to add its "A party member" fallback, which is right for a
+	 * chat line and must NEVER be persisted as though it were a partner.
 	 */
 	@Nullable
 	private String liveDisplayName(long memberId) {
@@ -2240,7 +2246,7 @@ public class PartyRollService implements TaskService.Listener {
 				chat((everyoneGone
 					? "Your party has left. Carry clause: the contract continues solo at "
 					: "Your party has gone quiet. Carry clause: the contract continues solo at ")
-					+ (int) (Tuning.PARTY_CARRY_MULT * 100) + "% completion pay.");
+					+ CARRY_PAY);
 			}
 			resetAll();
 		}
@@ -2376,8 +2382,7 @@ public class PartyRollService implements TaskService.Listener {
 			// the carry clause would have reached had it been able to run.
 			taskService.convertPartyToSolo();
 			chat("Your shared contract predates party resume and cannot be rejoined."
-				+ " Carry clause: it continues solo at "
-				+ (int) (Tuning.PARTY_CARRY_MULT * 100) + "% completion pay.");
+				+ " Carry clause: it continues solo at " + CARRY_PAY);
 			refreshPanel();
 			return;
 		}
@@ -2394,8 +2399,7 @@ public class PartyRollService implements TaskService.Listener {
 		// has to out-report it — which its next broadcast does, since every client
 		// sends its own running total rather than a delta.
 		chat("Your shared contract is still running. Waiting for the party to check in"
-			+ " — if nobody does, the carry clause continues it solo at "
-			+ (int) (Tuning.PARTY_CARRY_MULT * 100) + "% completion pay.");
+			+ " — if nobody does, the carry clause continues it solo at " + CARRY_PAY);
 		refreshPanel();
 	}
 
@@ -2676,10 +2680,7 @@ public class PartyRollService implements TaskService.Listener {
 		if (local != null) {
 			stances.put(local.getMemberId(), mine);
 		}
-		safeSend(new PartyRollResponseMessage(proposalId, response, mine.getSeedCandidate(),
-			mine.isMembers(), mine.getCombatLevel(), mine.getSlayerLevel(),
-			mine.getAllowedStyle(), mine.getRollProtocol(), mine.getCompletedQuests(),
-			mine.getAccountKey()));
+		sendStance(proposalId, response, mine);
 	}
 
 	private Stance localStance(int response) {
@@ -2771,15 +2772,15 @@ public class PartyRollService implements TaskService.Listener {
 		return ante != null && ante ? label + "  +ante" : label;
 	}
 
+	/**
+	 * A member's name for a CHAT line or a card, with a fallback that is always
+	 * printable. {@link #liveDisplayName} answers the same question and returns
+	 * raw null for all three failure modes this one covers — no party, no such
+	 * member, no display name — so the fallback is the only thing added here.
+	 */
 	private String memberName(long memberId) {
-		try {
-			PartyMember member = partyService.getMemberById(memberId);
-			return member != null && member.getDisplayName() != null
-				? member.getDisplayName() : "A party member";
-		}
-		catch (Exception e) {
-			return "A party member";
-		}
+		String name = liveDisplayName(memberId);
+		return name == null ? "A party member" : name;
 	}
 
 	@Nullable
@@ -2800,6 +2801,26 @@ public class PartyRollService implements TaskService.Listener {
 	private boolean isSelfEcho(long memberId) {
 		PartyMember local = safeLocalMember();
 		return local == null || memberId == local.getMemberId();
+	}
+
+	/**
+	 * The two steps every peer message takes before its body may run: drop this
+	 * client's own echo, and hop off the EventBus thread onto the client thread,
+	 * which is the sole writer of every map this service keeps (see {@link View}).
+	 *
+	 * <p>Written once rather than at the top of each of the eight peer-message
+	 * handlers, which differ only in what they do AFTER those two steps. The
+	 * handlers themselves keep their signatures — RuneLite's EventBus dispatches
+	 * on the concrete parameter type, so only the bodies moved in here.
+	 *
+	 * <p>The null guard is carried over exactly as the eight handlers spelled it,
+	 * deliberately unexamined: whether the bus can deliver one is the bus's
+	 * business, and this refactor is not the place to find out.
+	 */
+	private void fromPeer(@Nullable PartyMemberMessage msg, Runnable body) {
+		if (msg != null && !isSelfEcho(msg.getMemberId())) {
+			clientThread.invokeLater(body);
+		}
 	}
 
 	private boolean safeSend(PartyMemberMessage msg) {

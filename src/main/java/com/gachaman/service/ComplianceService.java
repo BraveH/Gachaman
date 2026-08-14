@@ -5,7 +5,6 @@ import com.gachaman.model.*;
 import java.util.*;
 import javax.inject.*;
 import lombok.*;
-import lombok.extern.slf4j.*;
 import net.runelite.api.*;
 import net.runelite.client.util.*;
 
@@ -15,7 +14,6 @@ import net.runelite.client.util.*;
  * forbidden attack costs GC; kills finished while violating pay zero and add
  * taint (halving all income until worked off).
  */
-@Slf4j
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class ComplianceService implements StyleTracker.AttackListener {
@@ -78,7 +76,20 @@ public class ComplianceService implements StyleTracker.AttackListener {
 	@Getter
 	private int styleChangedTick = -1;
 
-	private List<Listener> listeners = new ArrayList<>();
+	/**
+	 * The six fan-outs below used to iterate this list directly, without the
+	 * defensive copy every other service in the package takes; routing them
+	 * through {@link Listeners#fire} gives them one.
+	 *
+	 * <p>That widens what is legal rather than changing what happens. Registering
+	 * or dropping a listener from inside a compliance callback used to throw
+	 * ConcurrentModificationException straight out of onAttack; now it does not.
+	 * Nothing did it: the only callers of addListener/removeListener in the whole
+	 * of src/main are GachamanPlugin's startUp and shutDown, which is a fact
+	 * about call sites and so cannot be invalidated by a change inside any
+	 * listener.
+	 */
+	private final List<Listener> listeners = new ArrayList<>();
 	private int currentTick;
 
 	public void addListener(Listener listener) {
@@ -160,14 +171,8 @@ public class ComplianceService implements StyleTracker.AttackListener {
 		while (recentForbiddenAttacks.size() > 32) {
 			recentForbiddenAttacks.removeFirst();
 		}
-		for (Listener listener : listeners) {
-			try {
-				listener.onForbiddenAttack(style, allowed, deducted);
-			}
-			catch (Exception e) {
-				log.warn("compliance listener failed", e);
-			}
-		}
+		Listeners.fire(listeners, l -> l.onForbiddenAttack(style, allowed, deducted),
+			"compliance listener failed");
 	}
 
 	/**
@@ -208,26 +213,16 @@ public class ComplianceService implements StyleTracker.AttackListener {
 		}
 		lastForbiddenAttackTick = latestRemaining;
 		lastCompliantAttackTick = Math.max(lastCompliantAttackTick, judgedTick);
-		for (Listener listener : listeners) {
-			try {
-				listener.onForbiddenPardoned(judgedTick, refunded);
-			}
-			catch (Exception e) {
-				log.warn("compliance listener failed", e);
-			}
-		}
+		Listeners.fire(listeners, l -> l.onForbiddenPardoned(judgedTick, refunded),
+			"compliance listener failed");
 		// value-based, not null-based: @With returns the same instance when the
 		// value is unchanged and mutate hands that straight back, so a non-null
 		// state is no proof that any taint actually came off
 		if (afterRollback != null && afterRollback.getTaint() < standingTaint) {
-			for (Listener listener : listeners) {
-				try {
-					listener.onTaintRolledBack(lifted, afterRollback.getTaint());
-				}
-				catch (Exception e) {
-					log.warn("compliance listener failed", e);
-				}
-			}
+			// a second fan-out takes a second copy, so a listener registered by the
+			// pardon notice above is seen here exactly as it was when hand-written
+			Listeners.fire(listeners, l -> l.onTaintRolledBack(lifted, afterRollback.getTaint()),
+				"compliance listener failed");
 		}
 	}
 
@@ -254,14 +249,8 @@ public class ComplianceService implements StyleTracker.AttackListener {
 					break;
 				}
 			}
-			for (Listener listener : listeners) {
-				try {
-					listener.onTaintAdded(state.getTaint());
-				}
-				catch (Exception e) {
-					log.warn("compliance listener failed", e);
-				}
-			}
+			Listeners.fire(listeners, l -> l.onTaintAdded(state.getTaint()),
+				"compliance listener failed");
 		}
 	}
 
@@ -287,14 +276,8 @@ public class ComplianceService implements StyleTracker.AttackListener {
 					break;
 				}
 			}
-			for (Listener listener : listeners) {
-				try {
-					listener.onTaintCleared(1, next.getTaint());
-				}
-				catch (Exception e) {
-					log.warn("compliance listener failed", e);
-				}
-			}
+			Listeners.fire(listeners, l -> l.onTaintCleared(1, next.getTaint()),
+				"compliance listener failed");
 		}
 	}
 
@@ -311,14 +294,8 @@ public class ComplianceService implements StyleTracker.AttackListener {
 		for (ForbiddenAttack attack : recentForbiddenAttacks) {
 			attack.taintPoints = 0;
 		}
-		for (Listener listener : listeners) {
-			try {
-				listener.onTaintCleared(cleared, 0);
-			}
-			catch (Exception e) {
-				log.warn("compliance listener failed", e);
-			}
-		}
+		Listeners.fire(listeners, l -> l.onTaintCleared(cleared, 0),
+			"compliance listener failed");
 	}
 
 	/**

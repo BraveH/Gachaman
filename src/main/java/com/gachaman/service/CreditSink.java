@@ -107,14 +107,8 @@ public class CreditSink {
 			return new AwardResult(0, next);
 		}
 		if (amount > 0) {
-			for (Listener listener : new ArrayList<>(listeners)) {
-				try {
-					listener.onGcAwarded(amount, context, next.getGc());
-				}
-				catch (Exception e) {
-					log.warn("GC listener failed", e);
-				}
-			}
+			Listeners.fire(listeners, l -> l.onGcAwarded(amount, context, next.getGc()),
+				"GC listener failed");
 		}
 		return new AwardResult(amount, next);
 	}
@@ -144,14 +138,7 @@ public class CreditSink {
 			.withGc(s.getGc() + amount)
 			.withLifetimeGcEarned(s.getLifetimeGcEarned() + amount));
 		long balance = newState == null ? 0 : newState.getGc();
-		for (Listener listener : new ArrayList<>(listeners)) {
-			try {
-				listener.onGcAwarded(amount, context, balance);
-			}
-			catch (Exception e) {
-				log.warn("GC listener failed", e);
-			}
-		}
+		Listeners.fire(listeners, l -> l.onGcAwarded(amount, context, balance), "GC listener failed");
 		return amount;
 	}
 

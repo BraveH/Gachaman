@@ -2,9 +2,6 @@ package com.gachaman.overlay;
 
 import java.awt.*;
 import java.awt.geom.*;
-import java.io.*;
-import java.util.*;
-import javax.imageio.*;
 
 /**
  * Draws the chrome of the unrolling contract scrolls used by the TASK_OFFERS
@@ -36,7 +33,6 @@ final class ScrollPainter {
 	private static final Color VIGNETTE_CLEAR = new Color(120, 96, 60, 0);
 	/** Wood fibre running the length of a roller. */
 	private static final Color GRAIN = new Color(52, 34, 14, 55);
-	/** Cross-section of a sheet bowed between two rods. */
 	/** Handling stain along the sheet's top and bottom edges. */
 	private static final Color AGE = new Color(112, 84, 46, 46);
 	private static final Color AGE_CLEAR = new Color(112, 84, 46, 0);
@@ -47,32 +43,6 @@ final class ScrollPainter {
 
 	private ScrollPainter() {
 	}
-
-	/** Tier-tinted highlight color for a roller crown (precompute, not per-frame). */
-	/** Tier-independent parchment texture, authored by com.gachaman.tools.ScrollArt. */
-	private static final java.util.function.Supplier<Image> TEXTURE =
-		new java.util.function.Supplier<Image>() {
-			private Image cached;
-			private boolean tried;
-
-			@Override
-			public Image get() {
-				if (!tried) {
-					tried = true;
-					try (InputStream in = ScrollPainter.class.getResourceAsStream(
-						"/com/gachaman/art/parchment-texture.png")) {
-						cached = in == null ? null : ImageIO.read(in);
-					}
-					catch (Exception e) {
-						cached = null;
-					}
-				}
-				return cached;
-			}
-		};
-
-
-	/** Tier-tinted shadow color for a roller underside (precompute, not per-frame). */
 
 	/** Center Y of the top roller at unroll progress u (0 = closed, 1 = open). */
 	static int topRollerCy(Rectangle r, double u) {
@@ -88,18 +58,6 @@ final class ScrollPainter {
 		return (int) Math.round(closed + (open - closed) * u);
 	}
 
-	/**
-	 * A horizontal wooden roller spanning the scroll bounds, centered on cy.
-	 *
-	 * <p>Lit as an actual cylinder rather than a flat top-to-bottom ramp: a dark
-	 * rim, a bright specular band held about a third of the way down, a mid
-	 * body, a core shadow, and a weak bounce light along the bottom edge. That
-	 * five-stop profile is what makes a rod read as round — a two-stop ramp
-	 * reads as a bevelled bar however well it is coloured.
-	 *
-	 * @param spin 0..1 phase of the grain, so a rolling scroll looks like it is
-	 *             turning rather than sliding
-	 */
 	/**
 	 * A horizontal wooden roller spanning the scroll bounds, centred on cy.
 	 *
@@ -118,9 +76,9 @@ final class ScrollPainter {
 		int bodyW = r.width - (CAP_W - 2) * 2;
 		String k = String.format("%06x", tier.getRGB() & 0xFFFFFF);
 		int end = ROLLER_H / 2;
-		blit(g, "roller-" + k + "-l", bodyX, y, end, ROLLER_H);
-		blit(g, "roller-" + k + "-m", bodyX + end, y, bodyW - end * 2, ROLLER_H);
-		blit(g, "roller-" + k + "-r", bodyX + bodyW - end, y, end, ROLLER_H);
+		ArtCache.blit(g, "roller-" + k + "-l", bodyX, y, end, ROLLER_H);
+		ArtCache.blit(g, "roller-" + k + "-m", bodyX + end, y, bodyW - end * 2, ROLLER_H);
+		ArtCache.blit(g, "roller-" + k + "-r", bodyX + bodyW - end, y, end, ROLLER_H);
 
 		Shape clip = g.getClip();
 		g.clip(new RoundRectangle2D.Float(bodyX, y, bodyW, ROLLER_H, ROLLER_H, ROLLER_H));
@@ -134,30 +92,9 @@ final class ScrollPainter {
 		}
 		g.setClip(clip);
 
-		blit(g, "roller-" + k + "-cap", r.x, y - 2, CAP_W, ROLLER_H + 4);
-		blit(g, "roller-" + k + "-cap", r.x + r.width - CAP_W, y - 2, CAP_W, ROLLER_H + 4);
+		ArtCache.blit(g, "roller-" + k + "-cap", r.x, y - 2, CAP_W, ROLLER_H + 4);
+		ArtCache.blit(g, "roller-" + k + "-cap", r.x + r.width - CAP_W, y - 2, CAP_W, ROLLER_H + 4);
 	}
-
-	private static final Map<String, Image> ART = new HashMap<>();
-
-	private static void blit(Graphics2D g, String name, int x, int y, int w, int h) {
-		if (w <= 0 || h <= 0) {
-			return;
-		}
-		Image art = ART.computeIfAbsent(name, n -> {
-			try (InputStream in = ScrollPainter.class.getResourceAsStream(
-				"/com/gachaman/art/" + n + ".png")) {
-				return in == null ? null : ImageIO.read(in);
-			}
-			catch (Exception e) {
-				return null;
-			}
-		});
-		if (art != null) {
-			g.drawImage(art, x, y, w, h, null);
-		}
-	}
-
 
 	/**
 	 * The parchment sheet at its full, final position: vertical paper
@@ -170,11 +107,9 @@ final class ScrollPainter {
 		g.fillRect(x, y, w, h);
 
 		// bow shading and paper fibre: both are pure fractions of the sheet, so
-		// one stretched image reproduces them at any scroll size
-		Image tex = TEXTURE.get();
-		if (tex != null) {
-			g.drawImage(tex, x, y, w, h, null);
-		}
+		// one stretched image (authored by com.gachaman.tools.ScrollArt)
+		// reproduces them at any scroll size
+		ArtCache.blit(g, "parchment-texture", x, y, w, h);
 
 		// aged edges: the top and bottom of a sheet darken where it has been
 		// handled, and it stops the paper reading as a flat swatch of colour

@@ -54,20 +54,7 @@ public class PatronsTab extends JPanel {
 		header.setOpaque(false);
 		add(header, BorderLayout.NORTH);
 
-		list.setEditable(false);
-		list.setContentType("text/html");
-		list.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
-		list.setFont(FontManager.getRunescapeSmallFont());
-		list.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		list.setBorder(new EmptyBorder(6, 6, 6, 6));
-		JScrollPane scroll = new JScrollPane(list,
-			ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
-			ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-		scroll.setBorder(null);
-		scroll.getVerticalScrollBar().setUnitIncrement(16);
-		scroll.getViewport().setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		GachamanPanel.styleScrollbar(scroll);
-		add(scroll, BorderLayout.CENTER);
+		add(GachamanPanel.htmlListScroll(list), BorderLayout.CENTER);
 	}
 
 	void rebuild() {

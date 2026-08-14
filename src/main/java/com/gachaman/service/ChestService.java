@@ -919,17 +919,12 @@ public class ChestService {
 	 * per-listener catch is what stops a single broken listener from stranding a
 	 * chest half-committed: by the time this runs the state write and the GC award
 	 * have already happened, so an exception escaping here would lose the
-	 * notification AND the return value with nothing rolled back.
+	 * notification AND the return value with nothing rolled back. Both now live in
+	 * {@link Listeners#fire} — this wrapper stays because the three call sites
+	 * would otherwise each have to repeat the collection and the warning text.
 	 */
 	private void notifyListeners(Consumer<ChestListener> event) {
-		for (ChestListener listener : new ArrayList<>(chestListeners)) {
-			try {
-				event.accept(listener);
-			}
-			catch (Exception e) {
-				log.warn("chest listener failed", e);
-			}
-		}
+		Listeners.fire(chestListeners, event, "chest listener failed");
 	}
 
 	// --- Commit (reveal closed or aborted) ---

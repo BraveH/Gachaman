@@ -154,17 +154,22 @@ public class RevealOverlayTest
 	 * the roulette re-walked the classloader for it on every frame of the spin.
 	 * The cached miss is the whole fix, so the assertion is on the map, not on
 	 * anything drawn.
+	 *
+	 * <p>The map now lives in {@link ArtCache}, which the scroll rollers and the
+	 * parchment texture load through as well — so this one assertion covers every
+	 * sprite the ceremonies draw, including the copy of the bug ScrollPainter was
+	 * still carrying in its own {@code computeIfAbsent}.
 	 */
 	@Test
 	public void aMissingSpriteIsResolvedOnlyOnce()
 	{
 		String missing = "no-such-wheel-part";
-		RevealOverlay.ART.remove(missing);
+		ArtCache.ART.remove(missing);
 		blit(missing);
 		Assert.assertTrue("a miss must be remembered, not retried every frame",
-			RevealOverlay.ART.containsKey(missing));
+			ArtCache.ART.containsKey(missing));
 		Assert.assertNull("a miss caches as an explicit null",
-			RevealOverlay.ART.get(missing));
+			ArtCache.ART.get(missing));
 	}
 
 	/**
@@ -175,10 +180,41 @@ public class RevealOverlayTest
 	@Test
 	public void aShippedSpriteStillLoadsAndCaches()
 	{
-		RevealOverlay.ART.remove("wheel-hub");
+		ArtCache.ART.remove("wheel-hub");
 		blit("wheel-hub");
 		Assert.assertNotNull("wheel-hub.png ships and must decode",
-			RevealOverlay.ART.get("wheel-hub"));
+			ArtCache.ART.get("wheel-hub"));
+	}
+
+	/**
+	 * The scroll chrome loads through the SAME cache, so its misses are cached too.
+	 *
+	 * <p>ScrollPainter used to carry its own {@code computeIfAbsent} copy of the
+	 * loader — the very bug the test above pins for the wheel, sitting on a path
+	 * that blits five slices per roller and two rollers per scroll, four scrolls
+	 * at a time. Drawing a roller in a tier colour nothing was authored for is the
+	 * cheapest way to reach a miss: the draw must survive it, and the cache must
+	 * come out of it holding an explicit null rather than nothing at all.
+	 */
+	@Test
+	public void theScrollRollerCachesItsMissesToo()
+	{
+		String slice = "roller-123456-m";
+		ArtCache.ART.remove(slice);
+		BufferedImage img = new BufferedImage(64, 32, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = img.createGraphics();
+		try
+		{
+			ScrollPainter.drawRoller(g, new Rectangle(0, 0, 64, 32), 16, new Color(0x123456), 0.0);
+		}
+		finally
+		{
+			g.dispose();
+		}
+		Assert.assertTrue("a missing roller slice must be remembered",
+			ArtCache.ART.containsKey(slice));
+		Assert.assertNull("a miss caches as an explicit null",
+			ArtCache.ART.get(slice));
 	}
 
 	/** One blitArt call against a throwaway surface; only the cache is of interest. */

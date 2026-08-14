@@ -4,7 +4,6 @@ import com.gachaman.data.*;
 import java.util.*;
 import javax.inject.*;
 import lombok.*;
-import lombok.extern.slf4j.*;
 import net.runelite.api.*;
 import net.runelite.api.coords.*;
 import net.runelite.api.events.*;
@@ -29,7 +28,6 @@ import net.runelite.client.util.*;
  *     NPC-inflicted damage); loot absent on a monster with a guaranteed drop
  *     = denial, catching fully off-scene assists even with the warning off.
  */
-@Slf4j
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class KillTracker {
@@ -237,14 +235,8 @@ public class KillTracker {
 			// event, one branch, so death is observed exactly where kills are.
 			if (client != null && event.getActor() instanceof Player
 				&& event.getActor() == client.getLocalPlayer()) {
-				for (KillListener listener : new ArrayList<>(listeners)) {
-					try {
-						listener.onLocalPlayerDeath();
-					}
-					catch (Exception e) {
-						log.warn("death listener failed", e);
-					}
-				}
+				Listeners.fire(listeners, KillListener::onLocalPlayerDeath,
+					"death listener failed");
 			}
 			return;
 		}
@@ -363,14 +355,7 @@ public class KillTracker {
 		// verdict, so the eight untouched fields never have to be respelled here
 		Kill kill = draft.withAssistedByOther(finalAssisted(pending.lootSeen,
 			draft.isAssistedByOther(), lootPipelineLive, hasGuaranteedDrop(draft.getNpcName())));
-		for (KillListener listener : new ArrayList<>(listeners)) {
-			try {
-				listener.onKill(kill);
-			}
-			catch (Exception e) {
-				log.warn("kill listener failed", e);
-			}
-		}
+		Listeners.fire(listeners, l -> l.onKill(kill), "kill listener failed");
 	}
 
 	/** Emit everything still pending with current verdicts (logout hygiene). */

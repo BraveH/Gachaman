@@ -470,14 +470,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		if (offer.isPartyRoll()) {
 			// a party offer is not accepted — it is VOTED for; the host's
 			// settlement accepts it on every member's client via acceptPartyOffer
-			if (partyVoteHook != null) {
-				try {
-					partyVoteHook.accept(index);
-				}
-				catch (Exception e) {
-					log.warn("party vote hook failed", e);
-				}
-			}
+			Listeners.fireHook(partyVoteHook, h -> h.accept(index), "party vote hook failed");
 			return true;
 		}
 		// solo: the arming IS the consent, taken through the panel's confirmation
@@ -576,14 +569,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		}
 		recentKillTicks.clear();
 		resetCombo(); // each contract starts its own rhythm
-		if (offerAcceptedHook != null) {
-			try {
-				offerAcceptedHook.accept(offer);
-			}
-			catch (Exception e) {
-				log.warn("offer accepted hook failed", e);
-			}
-		}
+		Listeners.fireHook(offerAcceptedHook, h -> h.accept(offer), "offer accepted hook failed");
 	}
 
 	/**
@@ -843,13 +829,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		fireKillFeedback(new KillFeedback(kill.getNpcName(), awarded, true, tainted, finalKill,
 			newKills, task.getKillsRequired(), assistedPenalty, kill.getDeathLocation()));
 
-		if (docketNow && slayerLatchHook != null) {
-			try {
-				slayerLatchHook.run();
-			}
-			catch (Exception e) {
-				log.warn("slayer latch hook failed", e);
-			}
+		if (docketNow) {
+			Listeners.fireHook(slayerLatchHook, Runnable::run, "slayer latch hook failed");
 		}
 
 		// The re-read stays INSIDE the loop deliberately: a listener is allowed to
@@ -1307,14 +1288,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	}
 
 	private void fireKillFeedback(KillFeedback feedback) {
-		for (Listener listener : new ArrayList<>(listeners)) {
-			try {
-				listener.onKillFeedback(feedback);
-			}
-			catch (Exception e) {
-				log.warn("kill feedback listener failed", e);
-			}
-		}
+		Listeners.fire(listeners, l -> l.onKillFeedback(feedback), "kill feedback listener failed");
 	}
 
 	@Nullable

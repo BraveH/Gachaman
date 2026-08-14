@@ -120,9 +120,11 @@ public class ChestStrainTest
 		for (Tuning.Chest tier : Tuning.Chest.values())
 		{
 			long[] beats = ChestStrain.beats(tier);
-			// A fifth beat would exceed SoundService's four-step pitch cache
-			// (extra beats would clamp to the top pitch) and push past the
-			// fireOnce bits reserved from 16.
+			// The schedule was authored against a four-step pitch ladder — one
+			// whole tone of metal-under-load per beat — and a fifth beat has no
+			// step of its own: it clamps to the top of the ladder and repeats
+			// the fourth. Four ASCENDING groans are the tell; a fifth that
+			// merely repeats the last one is noise that says nothing new.
 			Assert.assertTrue(tier + " has at most four beats", beats.length <= 4);
 			for (int k = 0; k < beats.length; k++)
 			{

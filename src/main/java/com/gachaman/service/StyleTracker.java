@@ -387,14 +387,7 @@ public class StyleTracker {
 		verdict.pardoned = true;
 		log.debug("style pardon: retracting {} verdict from tick {} (magic xp at tick {})",
 			verdict.style, verdict.tick, tick);
-		for (AttackListener listener : new ArrayList<>(listeners)) {
-			try {
-				listener.onAttackPardoned(verdict.tick);
-			}
-			catch (Exception e) {
-				log.warn("attack listener failed", e);
-			}
-		}
+		Listeners.fire(listeners, l -> l.onAttackPardoned(verdict.tick), "attack listener failed");
 	}
 
 	/**
@@ -458,14 +451,7 @@ public class StyleTracker {
 	}
 
 	private void fire(AttackStyle style, int judgedTick) {
-		for (AttackListener listener : new ArrayList<>(listeners)) {
-			try {
-				listener.onAttack(style, judgedTick);
-			}
-			catch (Exception e) {
-				log.warn("attack listener failed", e);
-			}
-		}
+		Listeners.fire(listeners, l -> l.onAttack(style, judgedTick), "attack listener failed");
 	}
 
 	private void logVerdict(int animation, AttackStyle verdict, JudgementSource source, boolean markMatch) {

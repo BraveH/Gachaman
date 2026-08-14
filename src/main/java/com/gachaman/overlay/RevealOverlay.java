@@ -12,11 +12,9 @@ import com.gachaman.ui.*;
 import java.awt.*;
 import java.awt.geom.*;
 import java.awt.image.*;
-import java.io.*;
 import java.util.*;
 import java.util.function.*;
 import javax.annotation.*;
-import javax.imageio.*;
 import javax.inject.*;
 import lombok.extern.slf4j.*;
 import net.runelite.api.*;
@@ -1643,32 +1641,15 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 
 	/** Radius the wheel chrome was authored at; sprites scale from here. */
 	private static final int WHEEL_ART_R = 190;
-	static final Map<String, Image> ART = new HashMap<>();
 
+	/**
+	 * A wheel sprite drawn about an anchor point, scaled from the radius it was
+	 * authored at. Only the placement maths lives here — the decode and the
+	 * cached-miss sentinel are {@link ArtCache}'s, shared with the scrolls.
+	 */
 	static void blitArt(Graphics2D g, String name, int cx, int cy, double scale,
 		int anchorX, int anchorY) {
-		// containsKey, not computeIfAbsent: a HashMap does not RECORD a null
-		// mapping, so computeIfAbsent treats a missing PNG as "not cached yet"
-		// and re-runs the loader on every single frame. All four wheel sprites
-		// ship today, so this is latent rather than live — but on a partial or
-		// stripped jar the roulette would do four failed classloader lookups
-		// per frame for the whole spin. An explicit null value is the same
-		// "tried once" sentinel ScrollPainter.TEXTURE already uses.
-		if (!ART.containsKey(name)) {
-			Image loaded = null;
-			try (InputStream in = RevealOverlay.class.getResourceAsStream(
-				"/com/gachaman/art/" + name + ".png")) {
-				if (in != null) {
-					loaded = ImageIO.read(in);
-				}
-			}
-			catch (Exception e) {
-				// a truncated or corrupt PNG caches as a miss for the same
-				// reason: re-decoding it every frame cannot make it decode
-			}
-			ART.put(name, loaded);
-		}
-		Image art = ART.get(name);
+		Image art = ArtCache.get(name);
 		if (art == null) {
 			return;
 		}

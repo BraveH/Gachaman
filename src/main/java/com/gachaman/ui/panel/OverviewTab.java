@@ -269,12 +269,9 @@ public class OverviewTab extends JPanel {
 	}
 
 	private JPanel buildBalanceSection(GachaState state) {
-		JPanel section = GachamanPanel.section(null);
-		JLabel gc = new JLabel(formatNumber(state.getGc()) + " GC");
-		gc.setFont(FontManager.getRunescapeBoldFont().deriveFont(26f));
-		gc.setForeground(BRAND_ORANGE);
-		gc.setAlignmentX(LEFT_ALIGNMENT);
-		section.add(gc);
+		// the GC readout itself is shared with the Shop tab; only the two lines
+		// under it are this page's
+		JPanel section = GachamanPanel.balanceSection(state);
 		gap(section, 4);
 		section.add(smallLine(
 			"Lifetime earned: " + formatNumber(state.getLifetimeGcEarned()) + " GC",

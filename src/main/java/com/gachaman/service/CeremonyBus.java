@@ -95,14 +95,10 @@ public class CeremonyBus {
 		synchronized (this) {
 			tapsCopy = taps.isEmpty() ? List.of() : new ArrayList<>(taps);
 		}
-		for (Consumer<Request> tap : tapsCopy) {
-			try {
-				tap.accept(request);
-			}
-			catch (Exception e) {
-				log.warn("ceremony tap failed", e);
-			}
-		}
+		// the snapshot stays HERE rather than inside Listeners.fire: that helper
+		// copies for iteration safety, but this copy also has to happen under the
+		// bus monitor, which the helper knows nothing about
+		Listeners.fire(tapsCopy, tap -> tap.accept(request), "ceremony tap failed");
 		enqueue(type, payload);
 	}
 

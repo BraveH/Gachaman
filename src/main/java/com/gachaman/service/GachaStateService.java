@@ -99,13 +99,6 @@ public class GachaStateService {
 	}
 
 	private void notifyListeners(GachaState s) {
-		for (Listener l : new ArrayList<>(listeners)) {
-			try {
-				l.onStateChanged(s);
-			}
-			catch (Exception e) {
-				log.warn("Gachaman state listener failed", e);
-			}
-		}
+		Listeners.fire(listeners, l -> l.onStateChanged(s), "Gachaman state listener failed");
 	}
 }
