@@ -15,26 +15,47 @@ import net.runelite.client.callback.*;
 import net.runelite.client.ui.*;
 import net.runelite.client.util.*;
 
+// The same three static-import-on-demands OverviewTab already carries, for the
+// same reason: this file names GachamanPanel 39 times, ColorScheme 16 and
+// QuantityFormatter 10, and at 12-18 characters a qualifier that is pure budget.
+// They export disjoint simple names (widget helpers and width constants,
+// colours, formatters), none of which collides with anything ShopTab declares —
+// and anything inherited from JPanel would win over all three anyway, since
+// class members shadow imports. Comments keep the qualifier where it explains
+// where a thing comes from; only the code drops it.
+import static com.gachaman.ui.panel.GachamanPanel.*;
+import static net.runelite.client.ui.ColorScheme.*;
+import static net.runelite.client.util.QuantityFormatter.*;
+
 /**
- * Shop: chest tiles (procedurally drawn), style-charge purchases, queued
- * boss-themed chests and the weekly rotating card shop.
+ * Shop: chest tiles (baked sprites, see ShopArt), style-charge purchases,
+ * queued boss-themed chests and the weekly rotating card shop.
  */
 @Singleton
 public class ShopTab extends JPanel {
 	private static final Color GOLD = new Color(230, 190, 80);
 
 	/** The width every section must fit in; 221, derived in GachamanPanel. */
-	private static final int CONTENT_WIDTH = GachamanPanel.VIEWPORT_WIDTH;
+	private static final int CONTENT_WIDTH = VIEWPORT_WIDTH;
 
 	/** Usable width inside a GachamanPanel.section(), which has 8px borders. */
-	private static final int SECTION_INNER_WIDTH = GachamanPanel.SECTION_WIDTH;
+	private static final int SECTION_INNER_WIDTH = SECTION_WIDTH;
 
 	/** BorderLayout hgap used by GachamanPanel.row(). */
 	private static final int ROW_GAP = 6;
 
+	/**
+	 * The pointer every clickable non-button in this tab wears.
+	 *
+	 * <p>Hoisted rather than called at each site because
+	 * {@link Cursor#getPredefinedCursor} hands back one cached, immutable instance
+	 * per type — so the three sites were already sharing this object, they were
+	 * just each spelling out the lookup to get at it.
+	 */
+	private static final Cursor HAND = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR);
+
 	private final GachaStateService stateService;
 	private final ChestService chestService;
-	private final CreditSink creditSink;
 	private final WeeklyShopService weeklyShopService;
 	private final CardDatabase cardDatabase;
 	private final SetTable setTable;
@@ -43,8 +64,14 @@ public class ShopTab extends JPanel {
 	private final ClientThread clientThread;
 	private final TimelineService timelineService;
 
+	/**
+	 * No CreditSink here on purpose: the shop never awards or spends GC itself.
+	 * Every purchase on this tab goes through the service that owns the rule
+	 * (ChestService, TaskService, WeeklyShopService) and those hold the sink, so
+	 * a sink injected here would only be a second, unused route to the ledger.
+	 */
 	@Inject
-	public ShopTab(GachaStateService stateService, ChestService chestService, CreditSink creditSink,
+	public ShopTab(GachaStateService stateService, ChestService chestService,
 		WeeklyShopService weeklyShopService,
 		CardDatabase cardDatabase, SetTable setTable, TaskService taskService,
 		ClientThread clientThread,
@@ -52,7 +79,6 @@ public class ShopTab extends JPanel {
 		this.timelineService = timelineService;
 		this.stateService = stateService;
 		this.chestService = chestService;
-		this.creditSink = creditSink;
 		this.weeklyShopService = weeklyShopService;
 		this.cardDatabase = cardDatabase;
 		this.setTable = setTable;
@@ -67,7 +93,7 @@ public class ShopTab extends JPanel {
 		removeAll();
 		GachaState state = stateService.get();
 		if (state == null) {
-			add(GachamanPanel.centeredNote("Log in to browse the shop."));
+			add(centeredNote("Log in to browse the shop."));
 			revalidate();
 			repaint();
 			return;
@@ -125,7 +151,7 @@ public class ShopTab extends JPanel {
 	 * tooltip always carries the full, untruncated detail.
 	 */
 	private static JLabel truncatedLine(String text, Color color, Font font, int maxWidth, String tooltip) {
-		JLabel label = GachamanPanel.line(text, color, font);
+		JLabel label = line(text, color, font);
 		FontMetrics fm = label.getFontMetrics(font);
 		if (fm.stringWidth(text) > maxWidth) {
 			String ellipsis = "…";
@@ -152,47 +178,38 @@ public class ShopTab extends JPanel {
 	 * wider than the column and the surrounding viewport — which has no
 	 * horizontal scrollbar — clips the overflow at the right edge with no
 	 * ellipsis to show for it. A JTextArea given an explicit size wraps against
-	 * a real width, which is what HelpTab.textBlock already does at this same
-	 * 205px. Every caller passes plain prose, so nothing here needs markup.
+	 * a real width, which is what GachamanPanel.textBlock already does at this
+	 * same 205px. Every caller passes plain prose, so nothing here needs markup.
+	 *
+	 * <p>Which is why the body IS that shared helper now: it builds the identical
+	 * area — same JTextArea flags, same font, same setSize-then-measure, same
+	 * preferred and maximum pinned to (width, measured height). This wrapper adds
+	 * the one thing it does not.
 	 */
 	private static JComponent wrappedText(String text, Color color) {
-		JTextArea area = new JTextArea(text);
-		area.setEditable(false);
-		area.setFocusable(false);
-		area.setOpaque(false);
-		area.setLineWrap(true);
-		area.setWrapStyleWord(true);
-		area.setBorder(null);
-		area.setForeground(color);
-		area.setFont(FontManager.getRunescapeSmallFont());
-		area.setAlignmentX(Component.LEFT_ALIGNMENT);
-		// setSize before asking for the preferred height: the wrap, and so the
-		// line count, only exists once the area has a width to wrap against.
-		area.setSize(SECTION_INNER_WIDTH, Short.MAX_VALUE);
-		int height = area.getPreferredSize().height;
-		// all three pinned: the height above is only correct for a 205px wrap, so a
-		// BoxLayout free to shrink the width would re-wrap to more lines than the
-		// height it was given and silently cut the last one off the bottom
-		Dimension fixed = new Dimension(SECTION_INNER_WIDTH, height);
-		area.setPreferredSize(fixed);
-		area.setMinimumSize(fixed);
-		area.setMaximumSize(fixed);
+		JTextArea area = textBlock(text, color, SECTION_INNER_WIDTH);
+		// the MINIMUM too, and deliberately not pushed down into textBlock: the
+		// measured height is only correct for a 205px wrap, so a BoxLayout free to
+		// shrink this area would re-wrap to more lines than the height it was given
+		// and silently cut the last one off the bottom. HelpTab's and PartyTab's
+		// callers of textBlock do not want that pin, so it stays here.
+		area.setMinimumSize(area.getPreferredSize());
 		return area;
 	}
 
 	/** A button that stretches to the full inner width of a section. */
 	private static JButton fullWidthButton(String text) {
-		JButton button = GachamanPanel.button(text);
+		JButton button = button(text);
 		button.setMaximumSize(new Dimension(SECTION_INNER_WIDTH, button.getPreferredSize().height));
 		return button;
 	}
 
 	/** Same big GC readout as the Overview tab — the shop is where it is spent. */
 	private static JPanel buildBalanceSection(GachaState state) {
-		JPanel section = GachamanPanel.section(null);
-		JLabel gc = new JLabel(QuantityFormatter.formatNumber(state.getGc()) + " GC");
+		JPanel section = section(null);
+		JLabel gc = new JLabel(formatNumber(state.getGc()) + " GC");
 		gc.setFont(FontManager.getRunescapeBoldFont().deriveFont(26f));
-		gc.setForeground(ColorScheme.BRAND_ORANGE);
+		gc.setForeground(BRAND_ORANGE);
 		gc.setAlignmentX(Component.LEFT_ALIGNMENT);
 		section.add(gc);
 		return section;
@@ -201,9 +218,9 @@ public class ShopTab extends JPanel {
 	// --- Chests ---
 
 	private JPanel buildChestSection(GachaState state) {
-		JPanel section = GachamanPanel.section("Chests");
+		JPanel section = section("Chests");
 		if (chestService.getPending() != null) {
-			section.add(GachamanPanel.smallLine("A reveal is in progress…", ColorScheme.LIGHT_GRAY_COLOR));
+			section.add(smallLine("A reveal is in progress…", LIGHT_GRAY_COLOR));
 			section.add(Box.createVerticalStrut(4));
 		}
 		for (Tuning.Chest tier : Tuning.Chest.values()) {
@@ -211,7 +228,7 @@ public class ShopTab extends JPanel {
 			boolean affordable = state.getGc() >= price;
 			double fraction = price <= 0 ? 1 : Math.min(1.0, (double) state.getGc() / price);
 			int remaining = tier == Tuning.Chest.RUSTY
-				? Tuning.RUSTY_LIFETIME_CAP - chestService.rustyChestsOpened()
+				? rustyRemaining(chestService.rustyChestsOpened())
 				: -1;
 			section.add(new ChestTile(tier, affordable, fraction, remaining));
 			section.add(Box.createVerticalStrut(5));
@@ -219,35 +236,68 @@ public class ShopTab extends JPanel {
 		return section;
 	}
 
+	/**
+	 * Lifetime Rusty opens left, floored at zero.
+	 *
+	 * <p>The floor is the whole point, because ChestTile's `remaining` overloads one
+	 * int with three meanings: -1 is "this tier has no cap", 0 is "retired", and
+	 * anything positive prints as "N left". A bare {@code CAP - opened} lets an
+	 * opened count of CAP+1 collide with the uncapped sentinel, and the retired tile
+	 * then renders as a perfectly ordinary chest: every test ChestTile makes is
+	 * either {@code remaining == 0} (the greying, the "Rusted away" caption, the
+	 * "rusted away" tooltip, the affordable flag the mouse listener reads) or
+	 * {@code remaining > 0} (the "N left" suffix), and -1 answers no to both. The
+	 * click that follows is refused by ChestService.rustyAvailable(), and the player
+	 * is told the reveal is busy or their GC is short — neither of which is true.
+	 *
+	 * <p>That count is not hypothetical: it comes off the save through
+	 * getChestsOpenedByTier().getOrDefault(...), so a state file written by an older
+	 * build, migrated, or edited by hand can sit above a cap that openChest's own
+	 * guard only ever enforced going forward. Clamping is a no-op for every count
+	 * openChest can produce (0..CAP) and picks the already-correct retired rendering
+	 * for the rest.
+	 *
+	 * <p>Package-private so the test can pin that -1 never comes back from here.
+	 */
+	static int rustyRemaining(int opened) {
+		return Math.max(0, Tuning.RUSTY_LIFETIME_CAP - opened);
+	}
+
 	private void tryOpenChest(Tuning.Chest tier) {
 		long price = Tuning.CHEST_PRICE_GC.get(tier);
 		String name = chestName(tier);
-		if (!GachamanPanel.confirm(this, "Open chest",
-			"Open " + GachamanPanel.article(name) + " " + name + " for "
-				+ QuantityFormatter.formatNumber(price) + " GC?")) {
+		if (!confirm(this, "Open chest",
+			"Open " + article(name) + " " + name + " for "
+				+ formatNumber(price) + " GC?")) {
 			return;
 		}
 		// chest rolls read live client skill levels — client thread only
 		clientThread.invokeLater(() -> {
 			if (chestService.openChest(tier) == null) {
 				SwingUtilities.invokeLater(() ->
-					GachamanPanel.info(this, "The chest cannot be opened right now"
+					info(this, "The chest cannot be opened right now"
 						+ " (another reveal in progress, or not enough GC)."));
 			}
 		});
 	}
 
-	private static String chestName(Tuning.Chest tier) {
-		switch (tier) {
-			case RUSTY:
-				return "Rusty Chest";
-			case BATTERED:
-				return "Battered Chest";
-			case GILDED:
-				return "Gilded Chest";
-			default:
-				return "Ornate Chest";
-		}
+	/**
+	 * Display names in {@link Tuning.Chest} declaration order — RUSTY, BATTERED,
+	 * GILDED, ORNATE — indexed by ordinal.
+	 *
+	 * <p>A table rather than the switch this used to be, and the trade is worth
+	 * stating: the switch's {@code default:} arm silently answered "Ornate Chest"
+	 * for a tier nobody had written a case for, where the table throws. That is
+	 * the better failure — a new chest tier appearing under the wrong name is a
+	 * bug that ships — but it is only safe because ShopTabTablesTest pins the
+	 * length against Chest.values() and every entry against the name it replaced,
+	 * so a fifth constant fails the build rather than the player's screen.
+	 */
+	static final String[] CHEST_NAMES = {
+		"Rusty Chest", "Battered Chest", "Gilded Chest", "Ornate Chest"};
+
+	static String chestName(Tuning.Chest tier) {
+		return CHEST_NAMES[tier.ordinal()];
 	}
 
 	// --- Odds disclosure ---
@@ -288,7 +338,7 @@ public class ShopTab extends JPanel {
 	private int oddsStamp = -1;
 
 	private JPanel buildOddsSection(GachaState state) {
-		JPanel section = GachamanPanel.section("Chest Odds");
+		JPanel section = section("Chest Odds");
 		JComboBox<Tuning.Chest> picker =
 			new JComboBox<>(Tuning.Chest.values());
 		picker.setSelectedItem(oddsTier);
@@ -305,7 +355,7 @@ public class ShopTab extends JPanel {
 		});
 		// labelled through styleCombo, not by a renderer set beforehand: styleCombo
 		// installs the only renderer the box has, and would overwrite it
-		GachamanPanel.styleCombo(picker, ShopTab::chestName);
+		styleCombo(picker, ShopTab::chestName);
 		picker.setAlignmentX(Component.LEFT_ALIGNMENT);
 		picker.setMaximumSize(new Dimension(SECTION_INNER_WIDTH, 24));
 		section.add(picker);
@@ -319,14 +369,14 @@ public class ShopTab extends JPanel {
 			requestOdds();
 		}
 		if (odds == null) {
-			section.add(wrappedText("Reading your levels…", ColorScheme.MEDIUM_GRAY_COLOR));
+			section.add(wrappedText("Reading your levels…", MEDIUM_GRAY_COLOR));
 			return section;
 		}
 
 		for (Rarity rarity : Rarity.values()) {
 			double fraction = odds.getRarityPercent()[rarity.ordinal()] / 100;
 			section.add(oddsRow(rarity.getDisplayName(), pct(fraction), rarity.getColor(),
-				rarity.getDisplayName() + " card: " + pct(fraction) + " per card"));
+				rarity.getDisplayName() + " card: " + pct(fraction) + " per card", 0));
 		}
 
 		section.add(Box.createVerticalStrut(4));
@@ -381,9 +431,9 @@ public class ShopTab extends JPanel {
 		if (odds.getUntieredTotal() > 0) {
 			section.add(Box.createVerticalStrut(5));
 			section.add(oddsRow("No tier gate", pct(odds.getUntieredTotal()),
-				ColorScheme.LIGHT_GRAY_COLOR,
+				LIGHT_GRAY_COLOR,
 				"Gear with no tier ladder — never held back by the lean, but still subject"
-					+ " to its own in-game requirements."));
+					+ " to its own in-game requirements.", 0));
 		}
 
 		section.add(Box.createVerticalStrut(6));
@@ -403,7 +453,7 @@ public class ShopTab extends JPanel {
 				+ " Not counted here: the jackpot tier upgrade, the hologram that replaces a"
 				+ " card outright, and the pity guarantee on the first card. Slot Chests roll"
 				+ " Gilded odds.",
-			ColorScheme.MEDIUM_GRAY_COLOR));
+			MEDIUM_GRAY_COLOR));
 		return section;
 	}
 
@@ -434,8 +484,8 @@ public class ShopTab extends JPanel {
 		tiers.setMaximumSize(new Dimension(SECTION_INNER_WIDTH, Integer.MAX_VALUE));
 		for (ChestService.TierOdds row : rows) {
 			tiers.add(oddsRow("   " + row.getDisplayName(), pct(row.getProbability()),
-				ColorScheme.LIGHT_GRAY_COLOR,
-				rowTooltip(row, alsoInOtherBand.contains(row.getTierKey()))));
+				LIGHT_GRAY_COLOR,
+				rowTooltip(row, alsoInOtherBand.contains(row.getTierKey())), 0));
 		}
 		tiers.setVisible(expandedBands.contains(band));
 
@@ -452,16 +502,18 @@ public class ShopTab extends JPanel {
 	 * caret, and a missing glyph draws as tofu. The marker is pinned to a fixed
 	 * width so flipping it cannot shift the title's ellipsis budget and make the
 	 * name change length as the band opens.
+	 *
+	 * <p>The line itself is an {@link #oddsRow}: a band header is that same
+	 * label-plus-flush-right-value row, with a marker in front. So it is built as
+	 * one — the marker's column is handed over as the row's `reserved` width and
+	 * the marker goes into the WEST slot afterwards, which leaves the title
+	 * measured against exactly the space it had when this method spelled the
+	 * arithmetic out itself.
 	 */
 	private JPanel bandHeader(Band band, String title, String blurb, int tierCount,
 		double total, Color color, JPanel tiers) {
-		JPanel row = new JPanel(new BorderLayout(ROW_GAP, 0));
-		row.setOpaque(false);
-		row.setAlignmentX(Component.LEFT_ALIGNMENT);
-		row.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-
 		Font font = FontManager.getRunescapeSmallFont();
-		JLabel marker = GachamanPanel.line(expandedBands.contains(band) ? "-" : "+", color, font);
+		JLabel marker = line(expandedBands.contains(band) ? "-" : "+", color, font);
 		FontMetrics fm = marker.getFontMetrics(font);
 		Dimension markerSize = new Dimension(
 			Math.max(fm.stringWidth("+"), fm.stringWidth("-")),
@@ -474,18 +526,10 @@ public class ShopTab extends JPanel {
 		String tip = blurb + " " + pct(total) + " per card, over "
 			+ tierCount + (tierCount == 1 ? " tier." : " tiers.")
 			+ " Click to open or close.";
-		JLabel right = GachamanPanel.line(pct(total), color, font);
-		right.setToolTipText(tip);
-		int budget = SECTION_INNER_WIDTH - markerSize.width
-			- right.getPreferredSize().width - 2 * ROW_GAP;
-		JLabel left = truncatedLine(title, color, font, budget, tip);
+		JPanel row = oddsRow(title, pct(total), color, tip, markerSize.width + ROW_GAP);
+		row.setCursor(HAND);
 		marker.setToolTipText(tip);
-
 		row.add(marker, BorderLayout.WEST);
-		row.add(left, BorderLayout.CENTER);
-		row.add(right, BorderLayout.EAST);
-		int height = Math.max(left.getPreferredSize().height, right.getPreferredSize().height);
-		row.setMaximumSize(new Dimension(SECTION_INNER_WIDTH, height));
 
 		MouseAdapter toggle = new MouseAdapter() {
 			@Override
@@ -512,10 +556,14 @@ public class ShopTab extends JPanel {
 		// component a tooltip registers it with ToolTipManager, which adds a mouse
 		// listener, which makes the LABEL the event target. A listener on the row
 		// alone never fires, because the label under the pointer swallows the press.
+		//
+		// The children rather than a named list of them: the row holds exactly the
+		// title, the total and the marker, and Swing does not bubble mouse events, so
+		// each still ends up with one listener and no component is missed.
 		row.addMouseListener(toggle);
-		for (JLabel part : new JLabel[]{marker, left, right}) {
+		for (Component part : row.getComponents()) {
 			part.addMouseListener(toggle);
-			part.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+			part.setCursor(HAND);
 		}
 		return row;
 	}
@@ -542,20 +590,20 @@ public class ShopTab extends JPanel {
 	 */
 	static String rowTooltip(ChestService.TierOdds row, boolean splitAcrossBands) {
 		StringBuilder html = new StringBuilder("<html>");
-		html.append(GachamanPanel.escape(row.getDisplayName())).append(" - ")
-			.append(GachamanPanel.escape(pct(row.getProbability()))).append(" per card");
+		html.append(escape(row.getDisplayName())).append(" - ")
+			.append(escape(pct(row.getProbability()))).append(" per card");
 		List<String> names = row.getCardNames();
 		if (row.isWieldableNow() || names == null || names.isEmpty()) {
 			return html.append("</html>").toString();
 		}
 		html.append("<br>");
 		html.append(splitAcrossBands
-			? "Some " + GachamanPanel.escape(row.getDisplayName())
+			? "Some " + escape(row.getDisplayName())
 				+ " gear is already within reach. Still out of reach:"
 			: "Out of reach:");
 		int shown = Math.min(names.size(), MAX_TOOLTIP_CARDS);
 		for (int i = 0; i < shown; i++) {
-			html.append("<br>&nbsp;&nbsp;").append(GachamanPanel.escape(names.get(i)));
+			html.append("<br>&nbsp;&nbsp;").append(escape(names.get(i)));
 		}
 		if (names.size() > shown) {
 			html.append("<br>&nbsp;&nbsp;+").append(names.size() - shown).append(" more");
@@ -567,14 +615,22 @@ public class ShopTab extends JPanel {
 	 * A label/value pair on one line, the value flush right. The label is ellipsized
 	 * against whatever the value leaves over, so a long tier name can never widen the
 	 * panel; the tooltip always carries the untruncated text.
+	 *
+	 * @param reserved width to hold back from the label's ellipsis budget for a
+	 *                 component the caller will add itself, gap included. Band
+	 *                 headers put their +/- marker in the WEST slot after this
+	 *                 returns, and the title has to be measured as though it were
+	 *                 already there — otherwise the name changes length the moment
+	 *                 the marker appears. Plain rows pass 0.
 	 */
-	private static JPanel oddsRow(String label, String value, Color color, String tooltip) {
+	private static JPanel oddsRow(String label, String value, Color color, String tooltip,
+		int reserved) {
 		JPanel row = new JPanel(new BorderLayout(ROW_GAP, 0));
 		row.setOpaque(false);
 		row.setAlignmentX(Component.LEFT_ALIGNMENT);
-		JLabel right = GachamanPanel.line(value, color, FontManager.getRunescapeSmallFont());
+		JLabel right = line(value, color, FontManager.getRunescapeSmallFont());
 		right.setToolTipText(tooltip);
-		int budget = SECTION_INNER_WIDTH - right.getPreferredSize().width - ROW_GAP;
+		int budget = SECTION_INNER_WIDTH - reserved - right.getPreferredSize().width - ROW_GAP;
 		JLabel left = truncatedLine(label, color, FontManager.getRunescapeSmallFont(),
 			budget, tooltip);
 		row.add(left, BorderLayout.CENTER);
@@ -603,8 +659,11 @@ public class ShopTab extends JPanel {
 	 * Odds read live skill levels, so they must be computed on the client thread and
 	 * handed back to the EDT. One flight at a time: rebuild() runs on every state
 	 * change and would otherwise queue a client-thread job per rebuild.
+	 *
+	 * <p>Package-private for the test that pins the in-flight flag against a body
+	 * that throws — see the try/finally below for why that case needs pinning.
 	 */
-	private void requestOdds() {
+	void requestOdds() {
 		if (oddsRequested) {
 			return;
 		}
@@ -613,19 +672,45 @@ public class ShopTab extends JPanel {
 		GachaState current = stateService.get();
 		final int stamp = current == null ? -1 : current.getOpensSinceEpic();
 		clientThread.invokeLater(() -> {
-			final ChestService.OddsDisclosure snapshot = chestService.oddsFor(wanted);
-			SwingUtilities.invokeLater(() -> {
-				oddsRequested = false;
-				if (wanted != oddsTier) {
-					// the player switched chests mid-flight: this answer describes the
-					// wrong one, so drop it and ask again rather than showing it
-					requestOdds();
-					return;
-				}
-				oddsSnapshot = snapshot;
-				oddsStamp = stamp;
-				rebuild();
-			});
+			ChestService.OddsDisclosure snapshot = null;
+			try {
+				snapshot = chestService.oddsFor(wanted);
+			}
+			finally {
+				// the flag is cleared by the continuation, so the continuation has to be
+				// posted on EVERY exit from this body and not just the happy one. oddsFor
+				// walks the whole card database and reads live skill levels; if it throws,
+				// a continuation posted only on success leaves oddsRequested latched true
+				// for the rest of the session, the guard at the top turns every later
+				// request into a no-op, and the panel sits on "Reading your levels…"
+				// forever with no way back short of a client restart. There is no catch
+				// here on purpose: the throw still leaves this lambda and reaches
+				// ClientThread's own handler, which logs it — the failure is made
+				// recoverable, not hidden.
+				final ChestService.OddsDisclosure landed = snapshot;
+				SwingUtilities.invokeLater(() -> {
+					oddsRequested = false;
+					if (landed == null) {
+						// oddsFor() is not @Nullable and has a single non-null return, so
+						// null here means it threw. Deliberately neither retried nor
+						// rebuilt: buildOddsSection re-requests whenever the snapshot is
+						// null, so rebuilding on this path would bounce a failing call
+						// between the client thread and the EDT in a tight loop forever.
+						// Clearing the flag alone is enough — the panel keeps its
+						// placeholder and the next ordinary rebuild retries exactly once.
+						return;
+					}
+					if (wanted != oddsTier) {
+						// the player switched chests mid-flight: this answer describes the
+						// wrong one, so drop it and ask again rather than showing it
+						requestOdds();
+						return;
+					}
+					oddsSnapshot = landed;
+					oddsStamp = stamp;
+					rebuild();
+				});
+			}
 		});
 	}
 
@@ -634,28 +719,28 @@ public class ShopTab extends JPanel {
 	private GearSlot selectedSlotChest = GearSlot.WEAPON;
 
 	private JPanel buildSlotChestSection(GachaState state) {
-		JPanel section = GachamanPanel.section("Slot Chests");
+		JPanel section = section("Slot Chests");
 		long price = Tuning.CHEST_PRICE_GC.get(Tuning.Chest.GILDED);
 		JComboBox<GearSlot> picker =
 			new JComboBox<>(GearSlot.values());
 		picker.setSelectedItem(selectedSlotChest);
 		picker.addActionListener(e ->
 			selectedSlotChest = (GearSlot) picker.getSelectedItem());
-		GachamanPanel.styleCombo(picker, GearSlot::getDisplayName);
+		styleCombo(picker, GearSlot::getDisplayName);
 		picker.setAlignmentX(Component.LEFT_ALIGNMENT);
 		picker.setMaximumSize(new Dimension(SECTION_INNER_WIDTH, 24));
 		section.add(picker);
 		section.add(Box.createVerticalStrut(4));
 
-		JButton open = fullWidthButton("Open — " + QuantityFormatter.formatNumber(price) + " GC");
+		JButton open = fullWidthButton("Open — " + formatNumber(price) + " GC");
 		open.setToolTipText("One card, rolled only from the chosen slot's pool (Gilded odds).");
 		open.setEnabled(state.getGc() >= price && chestService.getPending() == null);
 		open.addActionListener(e -> {
 			GearSlot slot = (GearSlot) picker.getSelectedItem();
 			String slotName = slot == null ? "" : slot.getDisplayName();
-			if (slot != null && GachamanPanel.confirm(this, "Slot chest",
-				"Open " + GachamanPanel.article(slotName) + " " + slotName + " chest for "
-					+ QuantityFormatter.formatNumber(price) + " GC?\nOne card, "
+			if (slot != null && confirm(this, "Slot chest",
+				"Open " + article(slotName) + " " + slotName + " chest for "
+					+ formatNumber(price) + " GC?\nOne card, "
 					+ slotName + " slot only.")) {
 				clientThread.invokeLater(() -> chestService.openSlotChest(slot));
 			}
@@ -664,14 +749,14 @@ public class ShopTab extends JPanel {
 		section.add(Box.createVerticalStrut(3));
 		section.add(wrappedText(
 			"Gilded price, one card — but every roll is the slot you chose.",
-			ColorScheme.MEDIUM_GRAY_COLOR));
+			MEDIUM_GRAY_COLOR));
 		return section;
 	}
 
 	// --- Style charges ---
 
 	private JPanel buildChargeSection(GachaState state) {
-		JPanel section = GachamanPanel.section("Style Charges");
+		JPanel section = section("Style Charges");
 		int freeComp = state.getFreeCompactors();
 		int freeExt = state.getFreeExtenders();
 		if (freeComp > 0 || freeExt > 0) {
@@ -690,7 +775,7 @@ public class ShopTab extends JPanel {
 		if (task == null) {
 			section.add(wrappedText(
 				"Charges apply to your CURRENT contract — sign one first.",
-				ColorScheme.MEDIUM_GRAY_COLOR));
+				MEDIUM_GRAY_COLOR));
 			return section;
 		}
 		if (task.getAppliedCharge() != null) {
@@ -701,34 +786,45 @@ public class ShopTab extends JPanel {
 			section.add(Box.createVerticalStrut(3));
 			section.add(wrappedText(
 				"One charge per contract — available again once you sign a new one.",
-				ColorScheme.MEDIUM_GRAY_COLOR));
+				MEDIUM_GRAY_COLOR));
 			return section;
 		}
-		JButton compactor = fullWidthButton(freeComp > 0
-			? "Compactor — FREE voucher"
-			: "Compactor — " + QuantityFormatter.formatNumber(Tuning.COMPACTOR_PRICE_GC) + " GC");
-		compactor.setToolTipText("This contract counts double toward the style cycle, and each"
-			+ " kill counts double toward the contract itself (the skipped count pays no GC)."
-			+ (freeComp > 0 ? " Uses your free voucher — no GC." : ""));
-		compactor.setEnabled(freeComp > 0 || state.getGc() >= Tuning.COMPACTOR_PRICE_GC);
-		compactor.addActionListener(e -> buyCharge(true, "Compactor", Tuning.COMPACTOR_PRICE_GC));
-		section.add(compactor);
+		section.add(chargeButton(true, "Compactor", Tuning.COMPACTOR_PRICE_GC, freeComp,
+			state.getGc(),
+			"This contract counts double toward the style cycle, and each"
+				+ " kill counts double toward the contract itself (the skipped count pays no GC)."));
 		section.add(Box.createVerticalStrut(4));
-		JButton extender = fullWidthButton(freeExt > 0
-			? "Extender — FREE voucher"
-			: "Extender — " + QuantityFormatter.formatNumber(Tuning.EXTENDER_PRICE_GC) + " GC");
-		extender.setToolTipText("This contract counts only half toward the style cycle."
-			+ (freeExt > 0 ? " Uses your free voucher — no GC." : ""));
-		extender.setEnabled(freeExt > 0 || state.getGc() >= Tuning.EXTENDER_PRICE_GC);
-		extender.addActionListener(e -> buyCharge(false, "Extender", Tuning.EXTENDER_PRICE_GC));
-		section.add(extender);
+		section.add(chargeButton(false, "Extender", Tuning.EXTENDER_PRICE_GC, freeExt,
+			state.getGc(),
+			"This contract counts only half toward the style cycle."));
 		section.add(Box.createVerticalStrut(4));
 		section.add(wrappedText(
 			"Compactor: this contract counts x2 toward the style cycle AND kills count x2"
 				+ " toward the contract (skips pay no GC). Extender: it counts x0.5 toward"
 				+ " the cycle.",
-			ColorScheme.MEDIUM_GRAY_COLOR));
+			MEDIUM_GRAY_COLOR));
 		return section;
+	}
+
+	/**
+	 * One style-charge purchase button. The two charges differ only in their name,
+	 * their price, which voucher stock pays for them and the prose that explains
+	 * what they do — everything else (the FREE-voucher label, the voucher sentence
+	 * bolted onto the tooltip, the "affordable or voucher" enablement, the confirm
+	 * and purchase the click runs) was the same five statements twice over.
+	 *
+	 * @param tip the charge's own explanation; the voucher sentence is appended
+	 *            here so neither call site has to carry a copy of it
+	 */
+	JButton chargeButton(boolean compactor, String pretty, int price, int free,
+		long gc, String tip) {
+		JButton button = fullWidthButton(free > 0
+			? pretty + " — FREE voucher"
+			: pretty + " — " + formatNumber(price) + " GC");
+		button.setToolTipText(tip + (free > 0 ? " Uses your free voucher — no GC." : ""));
+		button.setEnabled(free > 0 || gc >= price);
+		button.addActionListener(e -> buyCharge(compactor, pretty, price));
+		return button;
 	}
 
 	private void buyCharge(boolean compactor, String pretty, int price) {
@@ -736,8 +832,8 @@ public class ShopTab extends JPanel {
 		boolean voucher = state != null
 			&& (compactor ? state.getFreeCompactors() > 0 : state.getFreeExtenders() > 0);
 		String cost = voucher ? "using your free voucher? (no GC)"
-			: "for " + QuantityFormatter.formatNumber(price) + " GC?";
-		if (!GachamanPanel.confirm(this, "Buy " + pretty,
+			: "for " + formatNumber(price) + " GC?";
+		if (!confirm(this, "Buy " + pretty,
 			"Apply a " + pretty + " to your current contract " + cost)) {
 			return;
 		}
@@ -748,7 +844,7 @@ public class ShopTab extends JPanel {
 				timelineService.onChargePurchased(compactor, voucherUsed);
 			}
 			else {
-				SwingUtilities.invokeLater(() -> GachamanPanel.info(this,
+				SwingUtilities.invokeLater(() -> info(this,
 					"Purchase failed — you need an active contract, no charge applied yet,"
 						+ " and enough GC."));
 			}
@@ -758,20 +854,20 @@ public class ShopTab extends JPanel {
 	// --- Themed chests ---
 
 	private JPanel buildThemedSection(GachaState state) {
-		JPanel section = GachamanPanel.section("Boss Chests");
+		JPanel section = section("Boss Chests");
 		for (String tag : state.getQueuedThemedChests()) {
-			JButton open = GachamanPanel.button("Open");
+			JButton open = button("Open");
 			open.addActionListener(e -> clientThread.invokeLater(() -> {
 				if (chestService.openThemedChest(tag) == null) {
 					SwingUtilities.invokeLater(() ->
-						GachamanPanel.info(this, "The chest cannot be opened right now."));
+						info(this, "The chest cannot be opened right now."));
 				}
 			}));
 			String name = themedName(tag);
 			int labelWidth = SECTION_INNER_WIDTH - open.getPreferredSize().width - ROW_GAP;
 			JLabel label = truncatedLine(name, GOLD,
 				FontManager.getRunescapeSmallFont(), labelWidth, name);
-			section.add(GachamanPanel.row(label, open));
+			section.add(row(label, open));
 			section.add(Box.createVerticalStrut(3));
 		}
 		return section;
@@ -792,18 +888,18 @@ public class ShopTab extends JPanel {
 	// --- Weekly shop ---
 
 	private JPanel buildWeeklySection(GachaState state) {
-		JPanel section = GachamanPanel.section("Weekly Shop");
+		JPanel section = section("Weekly Shop");
 		List<WeeklyShopService.ShopSlot> offers = weeklyShopService.currentOffers();
 		if (offers.isEmpty()) {
 			section.add(wrappedText("Stock arrives once the card database is ready.",
-				ColorScheme.MEDIUM_GRAY_COLOR));
+				MEDIUM_GRAY_COLOR));
 			return section;
 		}
 		for (WeeklyShopService.ShopSlot slot : offers) {
 			final int index = slot.getSlotIndex();
 			final int price = slot.getPriceGc();
 			final String cardName = slot.getCard().getName();
-			String priceText = QuantityFormatter.formatNumber(price) + " GC";
+			String priceText = formatNumber(price) + " GC";
 			// Name on its own line, ellipsized so it can never widen the panel;
 			// the tooltip always shows the full name and price.
 			section.add(truncatedLine(cardName + (slot.isOwned() ? " (owned)" : ""),
@@ -814,19 +910,19 @@ public class ShopTab extends JPanel {
 			buy.setToolTipText(cardName + " — " + priceText);
 			buy.setEnabled(!slot.isPurchased() && state.getGc() >= price);
 			buy.addActionListener(e -> {
-				if (!GachamanPanel.confirm(this, "Weekly shop",
-					"Buy " + cardName + " for " + QuantityFormatter.formatNumber(price) + " GC?")) {
+				if (!confirm(this, "Weekly shop",
+					"Buy " + cardName + " for " + formatNumber(price) + " GC?")) {
 					return;
 				}
 				if (weeklyShopService.purchase(index) == null) {
-					GachamanPanel.info(this, "Purchase failed (already bought or not enough GC).");
+					info(this, "Purchase failed (already bought or not enough GC).");
 				}
 			});
 			section.add(buy);
 			section.add(Box.createVerticalStrut(5));
 		}
 		section.add(Box.createVerticalStrut(2));
-		section.add(GachamanPanel.smallLine("Stock resets weekly.", ColorScheme.MEDIUM_GRAY_COLOR));
+		section.add(smallLine("Stock resets weekly.", MEDIUM_GRAY_COLOR));
 		return section;
 	}
 
@@ -858,11 +954,11 @@ public class ShopTab extends JPanel {
 				// "1 card" / "3 cards" properly, and the tooltip sat right under it
 				int cards = Tuning.CHEST_CARDS.get(tier);
 				setToolTipText(chestName(tier) + " — " + cards + (cards == 1 ? " card, " : " cards, ")
-					+ QuantityFormatter.formatNumber(Tuning.CHEST_PRICE_GC.get(tier)) + " GC"
+					+ formatNumber(Tuning.CHEST_PRICE_GC.get(tier)) + " GC"
 					+ (remaining > 0 ? ", " + remaining + " left ever" : ""));
 			}
 			if (this.affordable) {
-				setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+				setCursor(HAND);
 			}
 			addMouseListener(new MouseAdapter() {
 				@Override
@@ -881,51 +977,36 @@ public class ShopTab extends JPanel {
 			int w = getWidth();
 			int h = getHeight();
 
-			Color body = bodyColor(tier);
-			Color trim = trimColor(tier);
-			if (!affordable || remaining == 0) {
-				body = desaturate(body);
-				trim = desaturate(trim);
-			}
-
 			// tile background + border
-			g2.setColor(ColorScheme.DARKER_GRAY_COLOR);
+			g2.setColor(DARKER_GRAY_COLOR);
 			g2.fillRoundRect(0, 0, w - 1, h - 1, 8, 8);
-			g2.setColor(affordable ? trim : ColorScheme.MEDIUM_GRAY_COLOR);
+			// the LIT trim, always: an unaffordable tile takes the grey instead, so
+			// this branch never wants the dimmed colour the icon uses
+			g2.setColor(affordable ? trimColor(tier) : MEDIUM_GRAY_COLOR);
 			g2.setStroke(new BasicStroke(1.2f));
 			g2.drawRoundRect(0, 0, w - 1, h - 1, 8, 8);
 
-			// procedural chest icon
-			int ix = 8;
-			int iy = 12;
-			int iw = 40;
-			int ih = 38;
-			g2.setColor(body);
-			g2.fillRoundRect(ix, iy + ih / 3, iw, ih * 2 / 3, 6, 6);
-			g2.fillArc(ix, iy, iw, ih * 2 / 3, 0, 180);
-			g2.setColor(trim);
-			g2.setStroke(new BasicStroke(1.5f));
-			g2.drawRoundRect(ix, iy + ih / 3, iw, ih * 2 / 3, 6, 6);
-			g2.drawArc(ix, iy, iw, ih * 2 / 3, 0, 180);
-			g2.drawLine(ix, iy + ih / 3, ix + iw, iy + ih / 3);
-			// clasp + keyhole
-			g2.fillRect(ix + iw / 2 - 3, iy + ih / 3 - 3, 6, 9);
-			g2.setColor(body.darker());
-			g2.fillOval(ix + iw / 2 - 1, iy + ih / 3, 3, 4);
+			// the chest icon, baked. It was drawn from scratch here on every repaint
+			// even though it only ever depends on the tier and whether the tile is
+			// affordable — eight pictures in total, so it is eight PNGs now. See
+			// ShopArt in test scope for the drawing itself and ShopIconBakeTest for
+			// the pixel comparison against it.
+			g2.drawImage(chestIcon(tier, affordable), ICON_X, ICON_Y, null);
 
 			// texts
-			int tx = ix + iw + 8;
+			int tx = 56;
 			g2.setFont(FontManager.getRunescapeBoldFont());
-			g2.setColor(affordable ? Color.WHITE : ColorScheme.MEDIUM_GRAY_COLOR);
+			g2.setColor(affordable ? Color.WHITE : MEDIUM_GRAY_COLOR);
 			g2.drawString(chestName(tier), tx, 22);
 			g2.setFont(FontManager.getRunescapeSmallFont());
-			g2.setColor(affordable ? GOLD : ColorScheme.MEDIUM_GRAY_COLOR);
+			g2.setColor(affordable ? GOLD : MEDIUM_GRAY_COLOR);
 			if (remaining == 0) {
 				g2.drawString("Rusted away", tx, 38);
 			}
 			else {
-				g2.drawString(QuantityFormatter.formatNumber(Tuning.CHEST_PRICE_GC.get(tier)) + " GC  ·  "
-					+ Tuning.CHEST_CARDS.get(tier) + (Tuning.CHEST_CARDS.get(tier) == 1 ? " card" : " cards")
+				int cards = Tuning.CHEST_CARDS.get(tier);
+				g2.drawString(formatNumber(Tuning.CHEST_PRICE_GC.get(tier)) + " GC  ·  "
+					+ cards + (cards == 1 ? " card" : " cards")
 					+ (remaining > 0 ? "  ·  " + remaining + " left" : ""),
 					tx, 38);
 			}
@@ -947,37 +1028,65 @@ public class ShopTab extends JPanel {
 		}
 	}
 
-	private static Color bodyColor(Tuning.Chest tier) {
-		switch (tier) {
-			case RUSTY:
-				return new Color(88, 60, 42);
-			case BATTERED:
-				return new Color(101, 84, 63);
-			case GILDED:
-				return new Color(133, 105, 41);
-			default:
-				return new Color(90, 56, 128);
-		}
+	/**
+	 * Tile trim per tier, in {@link Tuning.Chest} declaration order — see
+	 * {@link #CHEST_NAMES} for why this is a table and not a switch.
+	 *
+	 * <p>The chest BODY colour used to live beside this one. It does not any more:
+	 * the only thing that ever read it was the icon, which is baked, so the body
+	 * palette moved out to ShopArt with the drawing it belongs to. Trim stays
+	 * because the tile's own border still asks for it at paint time.
+	 */
+	static final Color[] CHEST_TRIMS = {
+		new Color(154, 96, 52),
+		new Color(146, 126, 96),
+		new Color(230, 190, 80),
+		new Color(255, 196, 60)};
+
+	static Color trimColor(Tuning.Chest tier) {
+		return CHEST_TRIMS[tier.ordinal()];
 	}
 
-	private static Color trimColor(Tuning.Chest tier) {
-		switch (tier) {
-			case RUSTY:
-				return new Color(154, 96, 52);
-			case BATTERED:
-				return new Color(146, 126, 96);
-			case GILDED:
-				return new Color(230, 190, 80);
-			default:
-				return new Color(255, 196, 60);
-		}
-	}
+	/**
+	 * Where the baked icon's top-left corner sits inside the tile.
+	 *
+	 * <p>Not the icon box's own (8, 12): the sprite carries two pixels of margin
+	 * on every side so the 1.5f outline and its antialiasing are not cropped, so
+	 * it is blitted two pixels up and to the left of where the drawing starts.
+	 * ShopArt.ORIGIN_X / ORIGIN_Y are these numbers, and ShopIconBakeTest pins
+	 * them against each other — get them wrong and the chest sits two pixels off
+	 * its old position, which nobody would notice by eye.
+	 */
+	static final int ICON_X = 6;
+	static final int ICON_Y = 10;
 
-	private static Color desaturate(Color color) {
-		int gray = (int) (color.getRed() * 0.3 + color.getGreen() * 0.59 + color.getBlue() * 0.11);
-		return new Color(
-			(color.getRed() + gray * 2) / 3,
-			(color.getGreen() + gray * 2) / 3,
-			(color.getBlue() + gray * 2) / 3).darker();
+	/**
+	 * Baked chest icons, keyed tier-and-lit. Loaded once each and held forever:
+	 * eight ~40x42 sprites is a few kilobytes, and the alternative is hitting the
+	 * jar from inside paintComponent.
+	 *
+	 * <p>A plain HashMap with no synchronization is correct here because every
+	 * reader is paintComponent, which Swing only ever calls on the EDT.
+	 */
+	private static final Map<String, Image> CHEST_ICONS = new HashMap<>();
+
+	static Image chestIcon(Tuning.Chest tier, boolean lit) {
+		// Locale.ROOT, not the default locale: a Turkish client lower-cases the I
+		// in GILDED to a dotless i and would then ask the jar for a file that is
+		// not in it.
+		//
+		// loadImageResource THROWS on a resource that is not there, and nothing
+		// here catches it — which is a real difference from the drawing this
+		// replaced, since a drawing cannot fail to be found. It is the right shape
+		// anyway: the sprites are inside the jar or they are not, there is no
+		// runtime condition in between, and ShopIconBakeTest loads all eight
+		// through this very method, so a packaging slip fails the build instead of
+		// reaching a paintComponent. (ScrollPainter's loader swallows failures and
+		// skips the draw instead — it wants that, because it also runs against art
+		// it can do without. A chest tile without its chest is not that.)
+		return CHEST_ICONS.computeIfAbsent(
+			tier.name().toLowerCase(Locale.ROOT) + (lit ? "-lit" : "-dim"),
+			key -> ImageUtil.loadImageResource(ShopTab.class,
+				"/com/gachaman/ui/chest-tile-" + key + ".png"));
 	}
 }

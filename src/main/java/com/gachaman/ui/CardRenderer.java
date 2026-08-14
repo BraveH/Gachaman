@@ -76,10 +76,32 @@ public final class CardRenderer {
 	private CardRenderer() {
 	}
 
+	/**
+	 * A child Graphics2D to draw one layer on, antialiased, optionally clipped —
+	 * the preamble nine drawing methods here used to spell out for themselves.
+	 *
+	 * <p>The null-clip branch is the reason this takes a nullable Shape rather
+	 * than always calling setClip: passing null STRAIGHT through would CLEAR the
+	 * caller's clip (a RuneLite overlay's, or Swing's paint clip) rather than
+	 * leave it alone, and the three top-level entry points rely on inheriting it.
+	 *
+	 * <p>Setting antialiasing here is a no-op for the clipped callers that used
+	 * to omit it — Graphics.create() copies the parent's rendering hints, and
+	 * every clipped child in this file descends from drawBack's or drawFace's
+	 * graphics, on which antialiasing is already on.
+	 */
+	private static Graphics2D layer(Graphics2D g, @Nullable Shape clip) {
+		Graphics2D out = (Graphics2D) g.create();
+		if (clip != null) {
+			out.setClip(clip);
+		}
+		out.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		return out;
+	}
+
 	/** Draw a face-down card back. */
 	public static void drawBack(Graphics2D g, int x, int y, int w, int h, long timeMs) {
-		Graphics2D g2 = (Graphics2D) g.create();
-		g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		Graphics2D g2 = layer(g, null);
 		RoundRectangle2D shape = new RoundRectangle2D.Float(x, y, w, h, w / 7f, w / 7f);
 		g2.setPaint(new GradientPaint(x, y, CARD_BACK_A, x, y + h, CARD_BACK_B));
 		g2.fill(shape);
@@ -92,10 +114,15 @@ public final class CardRenderer {
 		int r = Math.min(w, h) / 5;
 		g2.setColor(new Color(212, 175, 55, 150));
 		g2.drawOval(cx - r, cy - r, r * 2, r * 2);
-		g2.drawLine(cx, cy - r - r / 2, cx + r + r / 2, cy);
-		g2.drawLine(cx + r + r / 2, cy, cx, cy + r + r / 2);
-		g2.drawLine(cx, cy + r + r / 2, cx - r - r / 2, cy);
-		g2.drawLine(cx - r - r / 2, cy, cx, cy - r - r / 2);
+		// the diamond's half-diagonal, one and a half radii. Four separate lines
+		// rather than one drawPolygon on purpose: BasicStroke(2f) defaults to
+		// CAP_SQUARE/JOIN_MITER, so a closed mitered path would differ from four
+		// square-capped strokes by a pixel or two at every vertex.
+		int d = r + r / 2;
+		g2.drawLine(cx, cy - d, cx + d, cy);
+		g2.drawLine(cx + d, cy, cx, cy + d);
+		g2.drawLine(cx, cy + d, cx - d, cy);
+		g2.drawLine(cx - d, cy, cx, cy - d);
 		// slow sheen sweep so backs feel alive
 		drawSheen(g2, shape, x, y, w, h, timeMs, 5200, new Color(255, 255, 255, 26));
 		g2.dispose();
@@ -103,8 +130,7 @@ public final class CardRenderer {
 
 	/** Draw a face-up card. */
 	public static void drawFace(Graphics2D g, int x, int y, int w, int h, CardView view, long timeMs) {
-		Graphics2D g2 = (Graphics2D) g.create();
-		g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		Graphics2D g2 = layer(g, null);
 		RoundRectangle2D shape = new RoundRectangle2D.Float(x, y, w, h, w / 7f, w / 7f);
 
 		// body
@@ -120,11 +146,15 @@ public final class CardRenderer {
 			double scale = Math.min((double) (w - 16) / art.getWidth(), (double) artH / art.getHeight());
 			int dw = Math.max(1, (int) (art.getWidth() * scale));
 			int dh = Math.max(1, (int) (art.getHeight() * scale));
-			Graphics2D ga = (Graphics2D) g2.create();
-			ga.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+			// Nearest-neighbour so a scaled item sprite stays crisp instead of
+			// turning to mush. Set on g2 itself rather than on a throwaway child:
+			// g2 is drawFace's own private copy (created above, disposed at the
+			// end), so the hint cannot escape to the caller, and KEY_INTERPOLATION
+			// only affects drawImage and TexturePaint — neither of which anything
+			// drawn after the art here uses.
+			g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
 				RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
-			ga.drawImage(art, x + (w - dw) / 2, artY + (artH - dh) / 2, dw, dh, null);
-			ga.dispose();
+			g2.drawImage(art, x + (w - dw) / 2, artY + (artH - dh) / 2, dw, dh, null);
 		}
 
 		// Cracked Cards, first of three passes: handling dirt. Deliberately over
@@ -133,12 +163,16 @@ public final class CardRenderer {
 		// 90px. Drawing it under the art instead would read as a dirty background
 		// rather than as a dirty card.
 		CardWear wear = Tuning.cardWear(view.getKillsServed());
+		// seeded from the NAME, not from timeMs and not from a new CardView
+		// field: the pattern is then frame-stable (no shimmer on a static
+		// card), survives a restart, and is identical between the album
+		// thumbnail and the reveal card — one physical object, not two.
+		// Hoisted because all three wear passes below want the same number, and
+		// String.hashCode is specified and pure, so one read cannot disagree
+		// with another.
+		int seed = view.getName().hashCode();
 		if (wear != CardWear.NONE) {
-			// seeded from the NAME, not from timeMs and not from a new CardView
-			// field: the pattern is then frame-stable (no shimmer on a static
-			// card), survives a restart, and is identical between the album
-			// thumbnail and the reveal card — one physical object, not two
-			drawWearGrime(g2, shape, x, y, w, h, wear, view.getName().hashCode());
+			drawWearGrime(g2, shape, x, y, w, h, wear, seed);
 		}
 
 		// name band — the font SHRINKS to fit the name (ellipsis only as a
@@ -208,7 +242,7 @@ public final class CardRenderer {
 		int nameBandTop = y + h - bandH - h / 8;
 		if (wear != CardWear.NONE) {
 			drawWearLines(g2, shape, w, wear, wearSegments(x, y, w, h, wear,
-				view.getName().hashCode(), wearProtect(x, y, w, h, topBandBottom, nameBandTop)));
+				seed, wearProtect(x, y, w, h, topBandBottom, nameBandTop)));
 		}
 
 		// border (variant-tinted)
@@ -226,7 +260,7 @@ public final class CardRenderer {
 		// the gilt has flaked off, so the nicks have to bite the border itself
 		// rather than sit politely inside it.
 		if (wear != CardWear.NONE) {
-			drawWearEdge(g2, shape, x, y, w, h, wear, view.getName().hashCode());
+			drawWearEdge(g2, shape, x, y, w, h, wear, seed);
 		}
 
 		g2.dispose();
@@ -237,8 +271,7 @@ public final class CardRenderer {
 		if (intensity <= 0) {
 			return;
 		}
-		Graphics2D g2 = (Graphics2D) g.create();
-		g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		Graphics2D g2 = layer(g, null);
 		int layers = 12;
 		for (int i = layers; i >= 1; i--) {
 			float t = (float) i / layers;
@@ -246,7 +279,8 @@ public final class CardRenderer {
 			if (alpha <= 0) {
 				continue;
 			}
-			g2.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), Math.min(255, alpha)));
+			// alpha() clamps to 0..255, which subsumes the Math.min this used to do
+			g2.setColor(alpha(color, alpha));
 			int pad = (int) (t * Math.min(w, h) * 0.28f);
 			g2.fill(new RoundRectangle2D.Float(x - pad, y - pad, w + pad * 2, h + pad * 2,
 				w / 6f + pad, w / 6f + pad));
@@ -257,16 +291,14 @@ public final class CardRenderer {
 	// --- effect internals ---
 
 	private static void drawShiny(Graphics2D g2, Shape clip, int x, int y, int w, int h, long timeMs) {
-		Graphics2D gs = (Graphics2D) g2.create();
-		gs.setClip(clip);
+		Graphics2D gs = layer(g2, clip);
 		// two counter-drifting prismatic bands, swept diagonally
 		gs.rotate(Math.toRadians(-25), x + w / 2.0, y + h / 2.0);
 		for (int band = 0; band < 2; band++) {
 			float phase = ((timeMs + band * 900) % 2600) / 2600f;
 			int bx = x - w - h / 2 + (int) (phase * (w * 3 + h));
 			Color c = prismaticColor(timeMs, band * 120);
-			gs.setPaint(new GradientPaint(bx, y, new Color(c.getRed(), c.getGreen(), c.getBlue(), 0),
-				bx + w / 2f, y + h, new Color(c.getRed(), c.getGreen(), c.getBlue(), 70)));
+			gs.setPaint(new GradientPaint(bx, y, alpha(c, 0), bx + w / 2f, y + h, alpha(c, 70)));
 			gs.fillRect(bx, y - h / 2, w / 2, h * 2);
 		}
 		gs.rotate(Math.toRadians(25), x + w / 2.0, y + h / 2.0);
@@ -287,8 +319,7 @@ public final class CardRenderer {
 	}
 
 	private static void drawHologram(Graphics2D g2, Shape clip, int x, int y, int w, int h, long timeMs) {
-		Graphics2D gs = (Graphics2D) g2.create();
-		gs.setClip(clip);
+		Graphics2D gs = layer(g2, clip);
 		// cyan wash
 		gs.setColor(new Color(90, 200, 255, 26));
 		gs.fillRect(x, y, w, h);
@@ -319,8 +350,7 @@ public final class CardRenderer {
 	private static void drawSheen(Graphics2D g2, Shape clip, int x, int y, int w, int h,
 		long timeMs, int periodMs, Color color) {
 		// diagonal sweep: band travels corner-to-corner, tilted ~25 degrees
-		Graphics2D gs = (Graphics2D) g2.create();
-		gs.setClip(clip);
+		Graphics2D gs = layer(g2, clip);
 		gs.rotate(Math.toRadians(-25), x + w / 2.0, y + h / 2.0);
 		float phase = (timeMs % periodMs) / (float) periodMs;
 		int travel = w * 3 + h;
@@ -368,19 +398,40 @@ public final class CardRenderer {
 	}
 
 	/**
+	 * Everything the stage decides, as one table: five parallel switch statements
+	 * over the same four-constant enum were 900-odd characters of case labels for
+	 * twenty numbers, and reading a stage across them meant reading five methods.
+	 * One row per {@link CardWear}, indexed by ordinal, so a row IS the recipe for
+	 * a stage and the progression down a column is visible at a glance.
+	 *
+	 * <p>Rows are in enum declaration order: NONE, HAIRLINE, CRACKED, SHATTERED.
+	 * NONE is ordinal 0 and its row is all zeroes, which is exactly what every
+	 * switch's {@code default:} arm returned. Columns are the five accessors
+	 * below, in this order:
+	 *
+	 * <pre>
+	 *   creases  scratches  lineAlpha  grimeAlpha  edgeNicks
+	 * </pre>
+	 *
+	 * <p>The one honest difference from the switches: a fifth constant added to
+	 * CardWear would throw here where a switch would have quietly returned the
+	 * default. WearTuningTest pins the row order and the row count against the
+	 * enum, so that shows up as a red test rather than as a crash in a reveal.
+	 */
+	private static final int[][] WEAR_TUNING = {
+		{0, 0, 0, 0, 0},
+		{0, 6, 96, 34, 20},
+		{1, 10, 150, 62, 38},
+		{2, 16, 200, 92, 60}
+	};
+
+	/**
 	 * Creases. A crease is the heaviest single thing that can happen to a card
 	 * short of a tear, so these numbers are small on purpose: none at all on a
 	 * lightly played card, one on a worn one, two on a wreck.
 	 */
 	static int creaseCount(CardWear wear) {
-		switch (wear) {
-			case CRACKED:
-				return 1;
-			case SHATTERED:
-				return 2;
-			default:
-				return 0;
-		}
+		return WEAR_TUNING[wear.ordinal()][0];
 	}
 
 	/**
@@ -389,30 +440,12 @@ public final class CardRenderer {
 	 * a loadout a hundred times, and fine scuffing is the first thing that shows.
 	 */
 	static int scratchCount(CardWear wear) {
-		switch (wear) {
-			case HAIRLINE:
-				return 6;
-			case CRACKED:
-				return 10;
-			case SHATTERED:
-				return 16;
-			default:
-				return 0;
-		}
+		return WEAR_TUNING[wear.ordinal()][1];
 	}
 
 	/** Line opacity for creases and scratches. Strictly increasing, never opaque. */
 	static int wearAlpha(CardWear wear) {
-		switch (wear) {
-			case HAIRLINE:
-				return 96;
-			case CRACKED:
-				return 150;
-			case SHATTERED:
-				return 200;
-			default:
-				return 0;
-		}
+		return WEAR_TUNING[wear.ordinal()][2];
 	}
 
 	/**
@@ -420,16 +453,7 @@ public final class CardRenderer {
 	 * under the line work: patina is the layer you notice last.
 	 */
 	static int grimeAlpha(CardWear wear) {
-		switch (wear) {
-			case HAIRLINE:
-				return 34;
-			case CRACKED:
-				return 62;
-			case SHATTERED:
-				return 92;
-			default:
-				return 0;
-		}
+		return WEAR_TUNING[wear.ordinal()][3];
 	}
 
 	/**
@@ -439,16 +463,7 @@ public final class CardRenderer {
 	 * that they overlap.
 	 */
 	static int edgeNicks(CardWear wear) {
-		switch (wear) {
-			case HAIRLINE:
-				return 20;
-			case CRACKED:
-				return 38;
-			case SHATTERED:
-				return 60;
-			default:
-				return 0;
-		}
+		return WEAR_TUNING[wear.ordinal()][4];
 	}
 
 	/**
@@ -772,11 +787,7 @@ public final class CardRenderer {
 		if (alpha <= 0 || w <= 0 || h <= 0) {
 			return;
 		}
-		Graphics2D gg = (Graphics2D) g2.create();
-		gg.setClip(clip);
-		int r = WEAR_GRIME.getRed();
-		int gr = WEAR_GRIME.getGreen();
-		int b = WEAR_GRIME.getBlue();
+		Graphics2D gg = layer(g2, clip);
 		// centred a little above the middle, on the sprite rather than on the
 		// card, so the clear window sits where the thing worth seeing is
 		gg.setPaint(new RadialGradientPaint(
@@ -784,9 +795,9 @@ public final class CardRenderer {
 			Math.max(w, h) * 0.72f,
 			new float[]{0f, 0.50f, 1f},
 			new Color[]{
-				new Color(r, gr, b, 0),
-				new Color(r, gr, b, alpha / 3),
-				new Color(r, gr, b, alpha)
+				alpha(WEAR_GRIME, 0),
+				alpha(WEAR_GRIME, alpha / 3),
+				alpha(WEAR_GRIME, alpha)
 			}));
 		gg.fill(clip);
 		// blotches: flat ovals stacked concentrically rather than one gradient
@@ -805,7 +816,7 @@ public final class CardRenderer {
 			int d = (int) (Math.min(w, h) * (0.34f + 0.40f * Paint.hash01(bs + 3)));
 			int bx = x + (int) (Paint.hash01(bs + 1) * w) - d / 2;
 			int by = y + (int) (Paint.hash01(bs + 2) * h) - d / 2;
-			gg.setColor(new Color(r, gr, b, Math.max(1, alpha / (rings * 2))));
+			gg.setColor(alpha(WEAR_GRIME, Math.max(1, alpha / (rings * 2))));
 			for (int ring = rings; ring >= 1; ring--) {
 				int rd = Math.max(1, d * ring / rings);
 				gg.fillOval(bx + (d - rd) / 2, by + (d - rd) / 2, rd, rd);
@@ -841,67 +852,66 @@ public final class CardRenderer {
 		if (segments.isEmpty()) {
 			return;
 		}
-		List<int[]> creases = ofKind(segments, KIND_CREASE);
-		List<int[]> scratches = ofKind(segments, KIND_SCRATCH);
-		Graphics2D gw = (Graphics2D) g2.create();
-		gw.setClip(clip);
-		gw.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		Graphics2D gw = layer(g2, clip);
 		float line = wearStroke(w);
 		int alpha = wearAlpha(wear);
-		if (!creases.isEmpty()) {
-			strokePass(gw, creases, new BasicStroke(wearInkReach(w) * 2f,
-				BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND), alpha(WEAR_SHADOW, alpha / 4));
-			// the dark side and the lit side sit either side of the fold line, half
-			// a stroke each way. Stacking both on the centre is what flattened the
-			// earlier pass into a drawn-on line: relief is two tones meeting, and
-			// they cannot meet if they are on top of each other.
-			ridgePass(gw, creases, new BasicStroke(line * 0.9f,
-				BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND), alpha(WEAR_SHADOW, alpha),
-				line * -0.5f);
-			ridgePass(gw, creases, new BasicStroke(line * 0.7f,
-				BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND), alpha(WEAR_STOCK, alpha),
-				line * 0.5f);
-		}
+		// Each pass filters the one shared list by kind as it walks it, rather
+		// than being handed a pre-split copy. Splitting first meant building two
+		// throwaway ArrayLists on every frame of every card, and the filter is a
+		// single int compare inside a loop the pass already runs. The z-order is
+		// unchanged and is the whole point of passing rather than stacking: all
+		// crease valleys, then the crease shadow ridge, then the crease stock
+		// ridge, then the two scratch ridges.
+		strokePass(gw, segments, KIND_CREASE, roundStroke(wearInkReach(w) * 2f),
+			alpha(WEAR_SHADOW, alpha / 4));
+		// the dark side and the lit side sit either side of the fold line, half
+		// a stroke each way. Stacking both on the centre is what flattened the
+		// earlier pass into a drawn-on line: relief is two tones meeting, and
+		// they cannot meet if they are on top of each other.
+		ridgePass(gw, segments, KIND_CREASE, roundStroke(line * 0.9f),
+			alpha(WEAR_SHADOW, alpha), line * -0.5f);
+		ridgePass(gw, segments, KIND_CREASE, roundStroke(line * 0.7f),
+			alpha(WEAR_STOCK, alpha), line * 0.5f);
 		// A scratch is a groove, so it gets the same two-tone treatment as a crease
 		// at a tenth of the scale: a dark side and a lit side half a hairline
 		// apart. Sub-pixel at these widths, which is exactly right — antialiasing
 		// resolves it into a soft channel in the surface, where a single bright
 		// line sat on top of the card like a drawn stick.
 		float fine = Math.max(1f, line * 0.35f);
-		ridgePass(gw, scratches, new BasicStroke(fine, BasicStroke.CAP_ROUND,
-			BasicStroke.JOIN_ROUND), alpha(WEAR_SHADOW, alpha * 2 / 5), line * -0.45f);
-		ridgePass(gw, scratches, new BasicStroke(fine, BasicStroke.CAP_ROUND,
-			BasicStroke.JOIN_ROUND), alpha(WEAR_STOCK, alpha * 2 / 5), line * 0.45f);
+		ridgePass(gw, segments, KIND_SCRATCH, roundStroke(fine),
+			alpha(WEAR_SHADOW, alpha * 2 / 5), line * -0.45f);
+		ridgePass(gw, segments, KIND_SCRATCH, roundStroke(fine),
+			alpha(WEAR_STOCK, alpha * 2 / 5), line * 0.45f);
 		gw.dispose();
 	}
 
-	private static List<int[]> ofKind(List<int[]> segments, int kind) {
-		List<int[]> out = new ArrayList<>();
-		for (int[] seg : segments) {
-			if (seg[4] == kind) {
-				out.add(seg);
-			}
-		}
-		return out;
+	/**
+	 * Every stroke in the wear passes is round-capped and round-joined — a worn
+	 * mark has no square ends — so the cap/join pair was spelled out seven times.
+	 * Each caller still gets its own instance; BasicStroke is immutable, so that
+	 * is a formality rather than a requirement.
+	 */
+	private static BasicStroke roundStroke(float width) {
+		return new BasicStroke(width, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
 	}
 
-	private static void strokePass(Graphics2D gw, List<int[]> segments, BasicStroke stroke,
-		Color color) {
-		if (segments.isEmpty()) {
-			return;
-		}
+	private static void strokePass(Graphics2D gw, List<int[]> segments, int kind,
+		BasicStroke stroke, Color color) {
 		gw.setStroke(stroke);
 		gw.setColor(color);
 		for (int[] seg : segments) {
-			gw.drawLine(seg[0], seg[1], seg[2], seg[3]);
+			if (seg[4] == kind) {
+				gw.drawLine(seg[0], seg[1], seg[2], seg[3]);
+			}
 		}
 	}
 
 	/**
-	 * A pass shifted {@code off} pixels perpendicular to each segment. The normal
-	 * comes from the segment's own direction, and the polyline is walked in a
-	 * consistent order, so the shift stays on one side for the whole length of a
-	 * crease instead of flipping about and crosshatching it.
+	 * A pass over every segment of {@code kind}, shifted {@code off} pixels
+	 * perpendicular to each. The normal comes from the segment's own direction,
+	 * and the polyline is walked in a consistent order, so the shift stays on one
+	 * side for the whole length of a crease instead of flipping about and
+	 * crosshatching it.
 	 *
 	 * <p>Drawn through {@link Line2D.Double} rather than the int-coordinate
 	 * drawLine. Rounding the shifted endpoint could push it a further half pixel
@@ -909,15 +919,17 @@ public final class CardRenderer {
 	 * {@link #wearInkReach} — the budget the text-clearance check reserves. There
 	 * is no half pixel spare, so nothing may round.
 	 */
-	private static void ridgePass(Graphics2D gw, List<int[]> segments, BasicStroke stroke,
-		Color color, float off) {
+	private static void ridgePass(Graphics2D gw, List<int[]> segments, int kind,
+		BasicStroke stroke, Color color, float off) {
 		gw.setStroke(stroke);
 		gw.setColor(color);
 		for (int[] seg : segments) {
 			double dx = seg[2] - seg[0];
 			double dy = seg[3] - seg[1];
 			double len = Math.hypot(dx, dy);
-			if (len < 1e-6) {
+			// the wrong kind and a zero-length segment are both "not this pass's
+			// business", so they share the one skip
+			if (seg[4] != kind || len < 1e-6) {
 				continue;
 			}
 			double nx = -dy / len * off;
@@ -960,9 +972,7 @@ public final class CardRenderer {
 		if (marks == 0 || w <= 0 || h <= 0) {
 			return;
 		}
-		Graphics2D ge = (Graphics2D) g2.create();
-		ge.setClip(clip);
-		ge.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		Graphics2D ge = layer(g2, clip);
 		int alpha = wearAlpha(wear);
 		double perimeter = 2.0 * (w + h);
 		// deliberately thin. An earlier pass used w/44 and the marks were so fat
@@ -979,40 +989,37 @@ public final class CardRenderer {
 			double py;
 			double tx;
 			double ty;
-			double inx;
-			double iny;
 			if (at < w) {
 				px = x + at;
 				py = y;
 				tx = 1;
 				ty = 0;
-				inx = 0;
-				iny = 1;
 			}
 			else if (at < w + h) {
 				px = x + w;
 				py = y + (at - w);
 				tx = 0;
 				ty = 1;
-				inx = -1;
-				iny = 0;
 			}
 			else if (at < 2 * w + h) {
 				px = x + w - (at - w - h);
 				py = y + h;
 				tx = -1;
 				ty = 0;
-				inx = 0;
-				iny = -1;
 			}
 			else {
 				px = x;
 				py = y + h - (at - 2 * w - h);
 				tx = 0;
 				ty = -1;
-				inx = 1;
-				iny = 0;
 			}
+			// The inward normal is the tangent turned a quarter turn, on every one
+			// of the four sides — top (1,0) gives (0,1), right (0,1) gives (-1,0),
+			// bottom (-1,0) gives (0,-1), left (0,-1) gives (1,0). It was written
+			// out per branch, which is four more chances for a side to disagree
+			// with its own tangent, and the walk goes clockwise for all four.
+			double inx = -ty;
+			double iny = tx;
 			double corner = Math.min(Math.min(at, Math.abs(at - w)),
 				Math.min(Math.abs(at - (w + h)),
 					Math.min(Math.abs(at - (2 * w + h)), perimeter - at)));
@@ -1045,17 +1052,27 @@ public final class CardRenderer {
 				// halved by the clip, which is what stops the band looking ruled
 				depth = base * (Paint.hash01(ns + 4) * 0.9 - 0.3);
 			}
-			double ax = px + inx * depth - dx * len / 2 + (bite ? dx * len / 2 : 0);
-			double ay = py + iny * depth - dy * len / 2 + (bite ? dy * len / 2 : 0);
+			// How far back along its own direction the mark starts. A tangential
+			// dash is centred on its anchor, so it steps back half its length; a
+			// bite STARTS at the rim and runs inward, so it steps back none. The
+			// old spelling subtracted the half-length and then added it straight
+			// back for bites, which is the same thing said twice.
+			double back = bite ? 0 : len / 2;
+			double ax = px + inx * depth - dx * back;
+			double ay = py + iny * depth - dy * back;
 			double bx = ax + dx * len;
 			double by = ay + dy * len;
-			ge.setStroke(new BasicStroke(th * 1.9f, BasicStroke.CAP_ROUND,
-				BasicStroke.JOIN_ROUND));
+			// one line, drawn twice: a wide faint stroke feathered under a narrow
+			// bright one, so no mark has a hard edge of its own. Graphics2D.draw
+			// does not mutate the shape it is handed, so the two passes can share
+			// the instance instead of allocating a second identical Line2D.
+			Line2D mark = new Line2D.Double(ax, ay, bx, by);
+			ge.setStroke(roundStroke(th * 1.9f));
 			ge.setColor(alpha(WEAR_STOCK, a / 4));
-			ge.draw(new Line2D.Double(ax, ay, bx, by));
-			ge.setStroke(new BasicStroke(th, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+			ge.draw(mark);
+			ge.setStroke(roundStroke(th));
 			ge.setColor(alpha(WEAR_STOCK, a));
-			ge.draw(new Line2D.Double(ax, ay, bx, by));
+			ge.draw(mark);
 		}
 		// The corner blooms, feathered outward-in so they have no rim of their own.
 		// Kept small and faint: this is the last touch, a corner gone soft, not a

@@ -1,5 +1,9 @@
 package com.gachaman.service;
 
+// COLLISION RESOLVER, do not "tidy" into the java.util.* wildcard below: RuneLite
+// ships its own net.runelite.api.Deque (the client's linked-list container), which
+// the net.runelite.api.* wildcard also drags in, and the two make the bare name
+// ambiguous. The single-class import outranks both wildcards and picks java.util's.
 import java.util.Deque;
 import com.gachaman.*;
 import com.gachaman.data.*;
@@ -217,6 +221,34 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		listeners.remove(listener);
 	}
 
+	/**
+	 * The contract in force, or null. Deliberately conflates "no state loaded"
+	 * with "no contract": every caller of this already treated the two the same
+	 * way, and one read of the snapshot means the thing tested and the thing
+	 * used are the same object by construction.
+	 *
+	 * NOT usable where the two cases must be told apart — canRollOffers must say
+	 * "no" while the state is still loading, and onKill must not journal a kill
+	 * against a state that does not exist yet.
+	 */
+	@Nullable
+	private ActiveTask activeTask() {
+		GachaState state = stateService.get();
+		return state == null ? null : state.getActiveTask();
+	}
+
+	/**
+	 * The offers sitting on the board, never null. A missing state and a missing
+	 * list both mean "the board is empty", which is exactly what each caller's
+	 * old null test spelled out by hand. The state's OWN list comes back
+	 * unchanged when there is one, so a caller that hands it to the ceremony bus
+	 * still passes the same instance it always did.
+	 */
+	private List<TaskOffer> pending() {
+		GachaState state = stateService.get();
+		List<TaskOffer> offers = state == null ? null : state.getPendingOffers();
+		return offers == null ? List.of() : offers;
+	}
 
 	/**
 	 * The live Slayer assignment, or null. Swallows hook failures: a broken
@@ -269,8 +301,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 
 	/** GC currently escrowed on the active contract, or 0. */
 	public int getActiveAnteStake() {
-		GachaState state = stateService.get();
-		ActiveTask task = state == null ? null : state.getActiveTask();
+		ActiveTask task = activeTask();
 		return task == null ? 0 : task.getAnteStake();
 	}
 
@@ -295,9 +326,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			return s.withActiveTask(task.withAnteStake(0));
 		});
 		if (lost[0] > 0) {
-			ceremonyBus.submit(CeremonyBus.Type.FANFARE, new CeremonyBus.Fanfare(
-				CeremonyBus.Fanfare.Size.MEDIUM, "The Ante is lost",
-				lost[0] + " GC staked on this contract is gone. The contract stands.", null));
+			fanfare(CeremonyBus.Fanfare.Size.MEDIUM, "The Ante is lost",
+				lost[0] + " GC staked on this contract is gone. The contract stands.");
 		}
 	}
 
@@ -311,8 +341,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 
 	/** Are rolled-but-undecided offers waiting? */
 	public boolean hasPendingOffers() {
-		GachaState state = stateService.get();
-		return state != null && state.getPendingOffers() != null && !state.getPendingOffers().isEmpty();
+		return !pending().isEmpty();
 	}
 
 	/**
@@ -321,19 +350,34 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	 * the predicate and the demotion can never disagree about a given offer set.
 	 */
 	public boolean hasPendingPartyOffers() {
-		GachaState state = stateService.get();
-		return state != null && state.getPendingOffers() != null && !state.getPendingOffers().isEmpty()
-			&& state.getPendingOffers().get(0).isPartyRoll();
+		List<TaskOffer> offers = pending();
+		return !offers.isEmpty() && offers.get(0).isPartyRoll();
 	}
 
 	/** Re-present the already-rolled offers (Esc'd earlier) — never re-rolls. */
 	public boolean presentOffers() {
-		GachaState state = stateService.get();
-		if (state == null || state.getPendingOffers() == null || state.getPendingOffers().isEmpty()) {
+		List<TaskOffer> offers = pending();
+		if (offers.isEmpty()) {
 			return false;
 		}
-		ceremonyBus.submit(CeremonyBus.Type.TASK_OFFERS, state.getPendingOffers());
+		ceremonyBus.submit(CeremonyBus.Type.TASK_OFFERS, offers);
 		return true;
+	}
+
+	/**
+	 * Put a freshly decided offer set on the board: disarm the wager, persist the
+	 * offers, present them and tell the listeners. Shared by the personal roll and
+	 * by the party layer's installer so the two can never drift — a board that
+	 * kept a stale arming, or one the panel never heard about, would be a bug
+	 * visible only on whichever of the two paths forgot a line.
+	 */
+	private void installOffers(List<TaskOffer> offers) {
+		antePercentArmed = 0; // a new board is a new decision
+		stateService.mutate(s -> s.withPendingOffers(offers));
+		ceremonyBus.submit(CeremonyBus.Type.TASK_OFFERS, offers);
+		for (Listener listener : listeners) {
+			listener.onOffersRolled(offers);
+		}
 	}
 
 	/** Personal roll (party rolls go through the party layer's agreement flow). */
@@ -344,17 +388,11 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			// existing offers must be decided (or viewed again) — no free rerolls
 			return null;
 		}
-		int cb = playerCombatLevel();
 		List<TaskOffer> offers = TaskGenerator.generateOffers(
-			monsterTable.getMonsters(), cb, client.getRealSkillLevel(Skill.SLAYER),
+			monsterTable.getMonsters(), playerCombatLevel(), lvl(Skill.SLAYER),
 			localIsMembers(), questUnlockService.completedQuests(), state.getTaint() > 0,
 			maxHitService.estimateFor(state.getAllowedStyle()), rng);
-		antePercentArmed = 0; // a new board is a new decision
-		stateService.mutate(s -> s.withPendingOffers(offers));
-		ceremonyBus.submit(CeremonyBus.Type.TASK_OFFERS, offers);
-		for (Listener listener : listeners) {
-			listener.onOffersRolled(offers);
-		}
+		installOffers(offers);
 		return offers;
 	}
 
@@ -378,12 +416,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			|| offers == null || offers.isEmpty()) {
 			return false;
 		}
-		antePercentArmed = 0; // a new board is a new decision
-		stateService.mutate(s -> s.withPendingOffers(offers));
-		ceremonyBus.submit(CeremonyBus.Type.TASK_OFFERS, offers);
-		for (Listener listener : listeners) {
-			listener.onOffersRolled(offers);
-		}
+		installOffers(offers);
 		return true;
 	}
 
@@ -409,13 +442,31 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		});
 	}
 
-	public boolean acceptOffer(int index) {
+	/**
+	 * The offer at a board position, or null when there is nothing there to
+	 * accept — no state, a contract already in force, an empty board, or an index
+	 * past the end.
+	 *
+	 * Deliberately reads the state itself instead of composing pending(): the
+	 * guard order here (null list tested BEFORE the bounds test) is the one both
+	 * accept paths have always had, and routing it through a never-null list
+	 * would quietly turn a negative index from today's throw into a false.
+	 */
+	@Nullable
+	private TaskOffer offerAt(int index) {
 		GachaState state = stateService.get();
 		if (state == null || state.getActiveTask() != null
 			|| state.getPendingOffers() == null || index >= state.getPendingOffers().size()) {
+			return null;
+		}
+		return state.getPendingOffers().get(index);
+	}
+
+	public boolean acceptOffer(int index) {
+		TaskOffer offer = offerAt(index);
+		if (offer == null) {
 			return false;
 		}
-		TaskOffer offer = state.getPendingOffers().get(index);
 		if (offer.isPartyRoll()) {
 			// a party offer is not accepted — it is VOTED for; the host's
 			// settlement accepts it on every member's client via acceptPartyOffer
@@ -430,7 +481,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			return true;
 		}
 		// solo: the arming IS the consent, taken through the panel's confirmation
-		acceptInternal(offer, null, 0, null, true);
+		acceptInternal(offer, null, null, true, null);
 		return true;
 	}
 
@@ -462,22 +513,23 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	public boolean acceptPartyOffer(int index, String partyLabel,
 		@Nullable List<AttackStyle> partyStyles, boolean anteRequested,
 		@Nullable Long proposalId) {
-		GachaState state = stateService.get();
-		if (state == null || state.getActiveTask() != null
-			|| state.getPendingOffers() == null || index >= state.getPendingOffers().size()) {
+		TaskOffer offer = offerAt(index);
+		if (offer == null) {
 			return false;
 		}
-		TaskOffer offer = state.getPendingOffers().get(index);
-		acceptInternal(offer, partyLabel, 0, partyStyles, anteRequested, proposalId);
+		acceptInternal(offer, partyLabel, partyStyles, anteRequested, proposalId);
 		return true;
 	}
 
-	private void acceptInternal(TaskOffer offer, @Nullable String partyLabel, long partyAnchorId,
-		@Nullable List<AttackStyle> partyStyles, boolean anteRequested) {
-		acceptInternal(offer, partyLabel, partyAnchorId, partyStyles, anteRequested, null);
-	}
-
-	private void acceptInternal(TaskOffer offer, @Nullable String partyLabel, long partyAnchorId,
+	/**
+	 * Signs the contract. There is no partyAnchorId parameter: every caller ever
+	 * passed 0, because RuneLite regenerates party member ids each client session
+	 * and the id is therefore worthless for recognising anyone — partyProposalId
+	 * is what actually reunites a restarted client with its contract. The
+	 * persisted ActiveTask.partyAnchorId field stays (removing it would change
+	 * the save format) and simply keeps its 0 default, exactly as before.
+	 */
+	private void acceptInternal(TaskOffer offer, @Nullable String partyLabel,
 		@Nullable List<AttackStyle> partyStyles, boolean anteRequested,
 		@Nullable Long partyProposalId) {
 		ActiveTask task = ActiveTask.builder()
@@ -493,7 +545,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			.acceptedAtMs(System.currentTimeMillis())
 			.appliedCharge(null) // charges are bought DURING a task, slayer-bracelet style
 			.partyLabel(partyLabel) // non-null = shared contract (party)
-			.partyAnchorId(partyAnchorId)
+			// partyAnchorId is not set: the builder leaves it 0, which is the value
+			// every accept has written since the field existed (see above)
 			.partyProposalId(partyProposalId) // the only handle that survives a restart
 			.partyStyles(partyStyles) // snapshot: the clash bonus is priced at signing
 			.slayerAligned(SlayerAlignment.matches(offer.getMonsterName(), liveSlayerTarget()))
@@ -517,11 +570,9 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		});
 		antePercentArmed = 0; // one arming, one contract
 		if (staked[0] > 0) {
-			ceremonyBus.submit(CeremonyBus.Type.FANFARE, new CeremonyBus.Fanfare(
-				CeremonyBus.Fanfare.Size.MEDIUM, "The Ante is staked",
+			fanfare(CeremonyBus.Fanfare.Size.MEDIUM, "The Ante is staked",
 				staked[0] + " GC is held against this contract — finish it for "
-					+ (long) staked[0] * Tuning.ANTE_PAYOUT_MULT + " GC back, die and it is gone.",
-				null));
+					+ (long) staked[0] * Tuning.ANTE_PAYOUT_MULT + " GC back, die and it is gone.");
 		}
 		recentKillTicks.clear();
 		resetCombo(); // each contract starts its own rhythm
@@ -575,8 +626,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	 * the shared quota.
 	 */
 	public void syncPartyKills(int othersTotal) {
-		GachaState state = stateService.get();
-		ActiveTask task = state == null ? null : state.getActiveTask();
+		ActiveTask task = activeTask();
 		if (task == null || !task.isParty() || othersTotal <= task.getPartyOtherKills()) {
 			return;
 		}
@@ -587,8 +637,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 
 	/** Complete the shared contract when the pooled quota is reached. */
 	public void completeSharedIfReached() {
-		GachaState state = stateService.get();
-		ActiveTask task = state == null ? null : state.getActiveTask();
+		ActiveTask task = activeTask();
 		if (task != null && task.isParty()
 			&& task.getKillsDone() + task.getPartyOtherKills() >= task.getKillsRequired()) {
 			completeTask();
@@ -597,15 +646,17 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 
 	/** A participant's client reported the shared contract complete (sync backstop). */
 	public void forcePartyComplete() {
-		GachaState state = stateService.get();
-		ActiveTask task = state == null ? null : state.getActiveTask();
+		ActiveTask task = activeTask();
 		if (task == null || !task.isParty()) {
 			return;
 		}
-		stateService.mutate(s -> s.getActiveTask() == null ? s
-			: s.withActiveTask(s.getActiveTask()
-				.withPartyOtherKills(Math.max(s.getActiveTask().getPartyOtherKills(),
-					s.getActiveTask().getKillsRequired() - s.getActiveTask().getKillsDone()))));
+		// the mutate re-reads the contract off its OWN snapshot (s), not the one
+		// guarded above, so a completion landing in between cannot be overwritten
+		stateService.mutate(s -> {
+			ActiveTask live = s.getActiveTask();
+			return live == null ? s : s.withActiveTask(live.withPartyOtherKills(Math.max(
+				live.getPartyOtherKills(), live.getKillsRequired() - live.getKillsDone())));
+		});
 		completeSharedIfReached();
 	}
 
@@ -660,7 +711,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 
 	/** Advance the chain for an on-task compliant kill; returns the new stack count. */
 	int advanceCombo(int killTick) {
-		if (comboIdleAnchorTick < 0 || killTick - comboIdleAnchorTick > Tuning.COMBO_IDLE_RESET_TICKS) {
+		if (!comboAlive(killTick)) {
 			comboKills = 1; // fresh chain (dead chains stay dead — attacks after
 			// the idle cutoff cannot revive them, they start this new one)
 		}
@@ -677,7 +728,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	// the idle countdown only runs while no attack commands are being issued
 	@Override
 	public void onAttack(AttackStyle style, int tick) {
-		if (comboIdleAnchorTick >= 0 && tick - comboIdleAnchorTick <= Tuning.COMBO_IDLE_RESET_TICKS) {
+		if (comboAlive(tick)) {
 			// max, not assignment: this tick comes from StyleTracker's counter
 			// while kills anchor with KillTracker's, and the meter reads back
 			// with KillTracker's again. Those three agree today only because
@@ -801,10 +852,26 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			}
 		}
 
+		// The re-read stays INSIDE the loop deliberately: a listener is allowed to
+		// end the contract, and the listeners queued behind it must then observe
+		// that and stay silent. Hoisting the check above the loop would be a real
+		// behaviour change, not a cleanup.
+		//
+		// What changed is that one iteration now makes ONE observation instead of
+		// four. The old form re-read the volatile snapshot for each null test, for
+		// isParty(), and a fourth time to build the argument — so the value that
+		// reached the listener was never the value the three guards had approved.
+		// Nothing pins the four reads to each other: a snapshot swap landing
+		// between the last guard and the argument hands the listener a different
+		// task, or a null, on a callback whose whole contract is "here is the live
+		// shared contract". One local makes the thing tested and the thing passed
+		// the same object by construction. It also takes the hottest path in the
+		// plugin from four state reads per listener per credited kill down to one.
 		for (Listener listener : listeners) {
-			if (stateService.get() != null && stateService.get().getActiveTask() != null
-				&& stateService.get().getActiveTask().isParty()) {
-				listener.onPartyProgress(stateService.get().getActiveTask());
+			GachaState live = stateService.get();
+			ActiveTask shared = live == null ? null : live.getActiveTask();
+			if (shared != null && shared.isParty()) {
+				listener.onPartyProgress(shared);
 			}
 		}
 
@@ -814,15 +881,16 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	}
 
 	private void checkSideBets(KillTracker.Kill kill) {
-		GachaState state = stateService.get();
-		if (state == null || state.getActiveTask() == null) {
+		// one read, taken before the tick bookkeeping: nothing between here and
+		// the old second read touched the state, so this is the same contract
+		ActiveTask task = activeTask();
+		if (task == null) {
 			return;
 		}
 		recentKillTicks.add(kill.getTick());
 		while (recentKillTicks.size() > 10) {
 			recentKillTicks.poll();
 		}
-		ActiveTask task = state.getActiveTask();
 		List<SideBet> bets = task.getSideBets();
 		if (bets == null || bets.isEmpty()) {
 			return;
@@ -858,10 +926,9 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 				for (Listener listener : listeners) {
 					listener.onSideBetHit(done, kill.getNpcName());
 				}
-				ceremonyBus.submit(CeremonyBus.Type.FANFARE, new CeremonyBus.Fanfare(
-					CeremonyBus.Fanfare.Size.SMALL,
+				fanfare(CeremonyBus.Fanfare.Size.SMALL,
 					bet.isSealed() ? "Sealed bet revealed!" : "Side bet hit!",
-					describeSideBet(done) + " +" + bet.getPayoutGc() + " GC", null));
+					describeSideBet(done) + " +" + bet.getPayoutGc() + " GC");
 			}
 			else {
 				updated.add(bet);
@@ -898,25 +965,23 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		// only the first ten discoveries get a banner (early-game flood control);
 		// after that the codex meter and milestone fanfares carry the feedback
 		if (count <= 10) {
-			ceremonyBus.submit(CeremonyBus.Type.FANFARE, new CeremonyBus.Fanfare(
-				CeremonyBus.Fanfare.Size.SMALL, "New species: " + monsterName,
-				"Codex entry " + count + " — +" + Tuning.DISCOVERY_GC + " GC", null));
+			fanfare(CeremonyBus.Fanfare.Size.SMALL, "New species: " + monsterName,
+				"Codex entry " + count + " — +" + Tuning.DISCOVERY_GC + " GC");
 		}
 		for (int i = 0; i < Tuning.BESTIARY_MILESTONES.length; i++) {
 			if (count == Tuning.BESTIARY_MILESTONES[i]) {
 				int bonus = Tuning.BESTIARY_MILESTONE_GC[i];
 				creditSink.award(bonus, new CreditSink.GcContext(
 					CreditSink.Source.DISCOVERY, null, null));
-				ceremonyBus.submit(CeremonyBus.Type.FANFARE, new CeremonyBus.Fanfare(
-					CeremonyBus.Fanfare.Size.MEDIUM, count + " species discovered!",
-					"The codex swells — +" + bonus + " GC", null));
+				fanfare(CeremonyBus.Fanfare.Size.MEDIUM, count + " species discovered!",
+					"The codex swells — +" + bonus + " GC");
 			}
 		}
 	}
 
 	private boolean killTrackerLowHp() {
 		int boosted = client.getBoostedSkillLevel(Skill.HITPOINTS);
-		int real = client.getRealSkillLevel(Skill.HITPOINTS);
+		int real = lvl(Skill.HITPOINTS);
 		return real > 0 && boosted * 4 <= real;
 	}
 
@@ -1008,6 +1073,11 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		// the party and Double Docket chain above for the same reason the
 		// docket does: a milestone should be worth the same PROPORTION of a
 		// shared or aligned contract as of a plain one.
+		//
+		// This completion's lifetime contract number — and, being one past the old
+		// total, also the new total the mutate below files. Deed milestones, the
+		// fragment window and the milestone multiple are all read off this single
+		// value so they cannot disagree about which contract this was.
 		int taskNumber = state.getTotalTasksCompleted() + 1;
 		double milestoneMult = Tuning.completionMilestoneMult(taskNumber);
 		completionMult *= milestoneMult;
@@ -1060,13 +1130,12 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 
 		final PersonalBest pbFinal = updatedPb;
 		final String monsterName = task.getMonsterName();
-		int newTotal = taskNumber; // same count the milestone multiple was read from
 
 		// deed milestone?
 		int milestone = 0;
 		int claimed = state.getDeedMilestonesClaimed();
 		if (claimed < Tuning.DEED_TASK_MILESTONES.length
-			&& newTotal >= Tuning.DEED_TASK_MILESTONES[claimed]
+			&& taskNumber >= Tuning.DEED_TASK_MILESTONES[claimed]
 			&& state.getDeededSlots().size() < GearSlot.values().length) {
 			milestone = Tuning.DEED_TASK_MILESTONES[claimed];
 		}
@@ -1075,7 +1144,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		// Deed Fragments: harder contracts during the first ten tasks pay
 		// fragments; ten forge the one-per-account bonus deed
 		int fragmentsEarned = 0;
-		if (!state.isFragmentDeedForged() && newTotal <= Tuning.FRAGMENT_WINDOW_TASKS) {
+		if (!state.isFragmentDeedForged() && taskNumber <= Tuning.FRAGMENT_WINDOW_TASKS) {
 			fragmentsEarned = Tuning.fragmentsFor(task.getDifficulty());
 		}
 		final int fragmentsEarnedFinal = fragmentsEarned;
@@ -1108,7 +1177,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 				.withPersonalBests(pbs)
 				.withTasksCompletedByDifficulty(byDiff)
 				.withMonsterStats(stats)
-				.withTotalTasksCompleted(newTotal);
+				.withTotalTasksCompleted(taskNumber);
 			if (anteStake[0] > 0) {
 				// The principal comes back RAW, in the same mutate that retires
 				// the contract, because it was never income — it is the player's
@@ -1155,9 +1224,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			long profit = creditSink.award((long) anteStake[0] * (Tuning.ANTE_PAYOUT_MULT - 1),
 				new CreditSink.GcContext(CreditSink.Source.SIDE_BET, task.getMonsterName(),
 					tagsFor(task.getMonsterName())));
-			ceremonyBus.submit(CeremonyBus.Type.FANFARE, new CeremonyBus.Fanfare(
-				CeremonyBus.Fanfare.Size.MEDIUM, "The Ante pays",
-				anteStake[0] + " GC staked returns with " + profit + " GC won.", null));
+			fanfare(CeremonyBus.Fanfare.Size.MEDIUM, "The Ante pays",
+				anteStake[0] + " GC staked returns with " + profit + " GC won.");
 		}
 
 		boolean forgedNow = fragmentsEarned > 0 && !state.isFragmentDeedForged()
@@ -1178,10 +1246,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			ceremonyBus.submit(CeremonyBus.Type.DEED_CHOICE, milestone);
 		}
 		if (forgedNow) {
-			ceremonyBus.submit(CeremonyBus.Type.FANFARE, new CeremonyBus.Fanfare(
-				CeremonyBus.Fanfare.Size.LARGE, "Deed forged from fragments!",
-				Tuning.FRAGMENTS_REQUIRED + " fragments fuse into a bonus Slot Deed — choose a slot.",
-				null));
+			fanfare(CeremonyBus.Fanfare.Size.LARGE, "Deed forged from fragments!",
+				Tuning.FRAGMENTS_REQUIRED + " fragments fuse into a bonus Slot Deed — choose a slot.");
 			ceremonyBus.submit(CeremonyBus.Type.DEED_CHOICE, 0);
 		}
 		if (cycleTriggered) {
@@ -1210,6 +1276,26 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	}
 
 	// --- Helpers ---
+
+	/**
+	 * Raise a banner. Every celebration this service submits is the same shape —
+	 * a size, a title, one line of detail and no item icon — so the constructor
+	 * ceremony is written once here instead of at seven call sites. It still goes
+	 * through submit(), so the taps fire and the SMALL-banner coalescing inside
+	 * enqueue() behaves exactly as it did.
+	 */
+	private void fanfare(CeremonyBus.Fanfare.Size size, String title, String detail) {
+		ceremonyBus.submit(CeremonyBus.Type.FANFARE, new CeremonyBus.Fanfare(size, title, detail, null));
+	}
+
+	/**
+	 * Base (unboosted) level shorthand. Nine sites read levels off the client,
+	 * seven of them inside one combat-level computation; the delegation is exact,
+	 * so the arguments still reach Experience.getCombatLevel in the same order.
+	 */
+	private int lvl(Skill skill) {
+		return client.getRealSkillLevel(skill);
+	}
 
 	private void journalKill(String monsterName, long gcAwarded) {
 		stateService.mutate(s -> {
@@ -1250,12 +1336,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 
 	public int playerCombatLevel() {
 		return Experience.getCombatLevel(
-			client.getRealSkillLevel(Skill.ATTACK),
-			client.getRealSkillLevel(Skill.STRENGTH),
-			client.getRealSkillLevel(Skill.DEFENCE),
-			client.getRealSkillLevel(Skill.HITPOINTS),
-			client.getRealSkillLevel(Skill.MAGIC),
-			client.getRealSkillLevel(Skill.RANGED),
-			client.getRealSkillLevel(Skill.PRAYER));
+			lvl(Skill.ATTACK), lvl(Skill.STRENGTH), lvl(Skill.DEFENCE), lvl(Skill.HITPOINTS),
+			lvl(Skill.MAGIC), lvl(Skill.RANGED), lvl(Skill.PRAYER));
 	}
 }

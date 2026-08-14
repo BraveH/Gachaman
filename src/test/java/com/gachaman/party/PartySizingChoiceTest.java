@@ -226,6 +226,80 @@ public class PartySizingChoiceTest
 			.contains("pre-Fighting Weight"));
 	}
 
+	// --- E2. the label on the CARD, which both cards now ask for ---
+
+	/** One heard answer, carrying nothing but the protocol the label reads. */
+	private static PartyRollService.Stance heard(int protocol)
+	{
+		return new PartyRollService.Stance(PartyRollResponseMessage.AGREE, 1L, true, 70, 55,
+			"MELEE", protocol, Collections.emptyList(), null);
+	}
+
+	@Test
+	public void theCardNamesTheHostsRuleWhenEveryBuildCanRunIt()
+	{
+		Assert.assertEquals("Weakest Man", PartyRollService.effectiveSizingLabel(
+			Arrays.asList(heard(PartyRollService.ROLL_PROTOCOL),
+				heard(PartyRollService.ROLL_PROTOCOL)),
+			"WEAKEST_MAN"));
+		Assert.assertEquals("Fighting Weight", PartyRollService.effectiveSizingLabel(
+			Collections.singletonList(heard(PartyRollService.ROLL_PROTOCOL)),
+			"FIGHTING_WEIGHT"));
+	}
+
+	@Test
+	public void aJoinedMemberIsNotShownARuleTheRollWillNotUse()
+	{
+		// The committed card used to print PartySizing.fromWire(hostSizingMode)
+		// — the host's DECLARED choice — so a member who had JOINED read
+		// "Sizing: Weakest Man" for a roll that a protocol-1 member had already
+		// forced down to Fighting Weight, while the member who had NOT joined
+		// read the truth off the identical answers. One function answers both
+		// now, so the two cards cannot disagree about one roll.
+		List<PartyRollService.Stance> mixed = Arrays.asList(
+			heard(PartyRollService.ROLL_PROTOCOL_FIGHTING_WEIGHT),
+			heard(PartyRollService.ROLL_PROTOCOL));
+
+		String label = PartyRollService.effectiveSizingLabel(mixed, "WEAKEST_MAN");
+		Assert.assertNotEquals("the declared rule is exactly what must not be shown",
+			PartySizing.fromWire("WEAKEST_MAN").toString(), label);
+		Assert.assertTrue(label, label.startsWith("Fighting Weight"));
+		Assert.assertTrue("the card has to say WHY, or it reads as the host's own choice",
+			label.contains("cannot read the host's rule"));
+	}
+
+	@Test
+	public void aPreFightingWeightBuildDragsTheCardAllTheWayDown()
+	{
+		String label = PartyRollService.effectiveSizingLabel(
+			Arrays.asList(heard(0), heard(PartyRollService.ROLL_PROTOCOL)), "FIGHTING_WEIGHT");
+		// the legacy rule IS the lowest level, so the honest name for it is
+		// Weakest Man — even against a host who asked for the average
+		Assert.assertTrue(label, label.startsWith("Weakest Man"));
+		Assert.assertTrue(label.contains("too old to average"));
+	}
+
+	@Test
+	public void theLocalBuildIsAlwaysCountedInTheCardsAnswer()
+	{
+		// an empty answer set is still this client's roll to join, and
+		// everyoneAtLeast reads an empty list as "no", so the label would fall
+		// to the legacy wording for a party of nobody without that term
+		Assert.assertEquals("Weakest Man",
+			PartyRollService.effectiveSizingLabel(Collections.emptyList(), "WEAKEST_MAN"));
+	}
+
+	@Test
+	public void anUnreadableHostChoiceLandsOnTheDefaultOnTheCardToo()
+	{
+		// same rule as the wire parser: garbage is Fighting Weight everywhere,
+		// never a fabricated third answer
+		Assert.assertEquals("Fighting Weight", PartyRollService.effectiveSizingLabel(
+			Collections.singletonList(heard(PartyRollService.ROLL_PROTOCOL)), null));
+		Assert.assertEquals("Fighting Weight", PartyRollService.effectiveSizingLabel(
+			Collections.singletonList(heard(PartyRollService.ROLL_PROTOCOL)), "NONSENSE"));
+	}
+
 	// --- F. the wire ---
 
 	@Test

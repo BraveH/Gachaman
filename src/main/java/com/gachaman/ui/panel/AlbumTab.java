@@ -86,7 +86,7 @@ public class AlbumTab extends JPanel {
 	private final JLabel collectedLabel = new JLabel();
 	private final JLabel rarityCountsLabel = new JLabel();
 	private final JLabel stardustLabel = new JLabel();
-	private final JPanel holoPanel = new JPanel();
+	private final JPanel holoPanel = box(BoxLayout.Y_AXIS);
 	private final GridPanel grid = new GridPanel();
 
 	private List<CardDefinition> sorted = Collections.emptyList();
@@ -109,24 +109,26 @@ public class AlbumTab extends JPanel {
 		setLayout(new BorderLayout(0, 6));
 		setOpaque(false);
 
-		slotFilter = comboOf("All slots", slotNames());
-		rarityFilter = comboOf("All rarities", rarityNames());
+		// Arrays.stream over values() keeps enum DECLARATION order, which is the
+		// order applyFilters depends on when it maps selectedIndex-1 back through
+		// GearSlot.values() / Rarity.values(). This replaced two named helpers
+		// holding byte-identical index loops; denser to read, but the Plugin Hub
+		// token budget is the binding constraint and the helpers bought nothing.
+		slotFilter = comboOf("All slots",
+			Arrays.stream(GearSlot.values()).map(GearSlot::getDisplayName).toArray(String[]::new));
+		rarityFilter = comboOf("All rarities",
+			Arrays.stream(Rarity.values()).map(Rarity::getDisplayName).toArray(String[]::new));
 		variantFilter = comboOf("All variants", new String[]{"Normal", "Shiny"});
 
-		JPanel north = new JPanel();
-		north.setLayout(new BoxLayout(north, BoxLayout.Y_AXIS));
-		north.setOpaque(false);
+		JPanel north = box(BoxLayout.Y_AXIS);
 
 		collectedLabel.setFont(FontManager.getRunescapeBoldFont());
 		collectedLabel.setForeground(Color.WHITE);
-		JPanel headerRow = new JPanel();
-		headerRow.setLayout(new BoxLayout(headerRow, BoxLayout.X_AXIS));
-		headerRow.setOpaque(false);
-		headerRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+		JPanel headerRow = box(BoxLayout.X_AXIS);
 		headerRow.add(collectedLabel);
 		headerRow.add(Box.createHorizontalGlue());
 		stardustLabel.setFont(FontManager.getRunescapeSmallFont());
-		stardustLabel.setIcon(new StardustIcon());
+		stardustLabel.setIcon(icon("stardust"));
 		stardustLabel.setIconTextGap(4);
 		headerRow.add(stardustLabel);
 		north.add(headerRow);
@@ -145,8 +147,8 @@ public class AlbumTab extends JPanel {
 		ownedOnlyBox.setOpaque(false);
 		ownedOnlyBox.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 		ownedOnlyBox.setFont(FontManager.getRunescapeSmallFont());
-		ownedOnlyBox.setIcon(new CheckboxIcon(false));
-		ownedOnlyBox.setSelectedIcon(new CheckboxIcon(true));
+		ownedOnlyBox.setIcon(icon("checkbox-off"));
+		ownedOnlyBox.setSelectedIcon(icon("checkbox-on"));
 		filterGrid.add(ownedOnlyBox);
 		north.add(filterGrid);
 		north.add(Box.createVerticalStrut(4));
@@ -181,10 +183,7 @@ public class AlbumTab extends JPanel {
 			BorderFactory.createLineBorder(ColorScheme.MEDIUM_GRAY_COLOR),
 			new EmptyBorder(2, 5, 2, 5)));
 		searchField.setToolTipText("Search by card name");
-		JPanel searchRow = new JPanel();
-		searchRow.setLayout(new BoxLayout(searchRow, BoxLayout.X_AXIS));
-		searchRow.setOpaque(false);
-		searchRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+		JPanel searchRow = box(BoxLayout.X_AXIS);
 		searchRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
 		searchRow.add(searchField);
 		searchRow.add(Box.createHorizontalStrut(4));
@@ -192,9 +191,6 @@ public class AlbumTab extends JPanel {
 		north.add(searchRow);
 		north.add(Box.createVerticalStrut(5));
 
-		holoPanel.setLayout(new BoxLayout(holoPanel, BoxLayout.Y_AXIS));
-		holoPanel.setOpaque(false);
-		holoPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		north.add(holoPanel);
 
 		add(north, BorderLayout.NORTH);
@@ -256,7 +252,7 @@ public class AlbumTab extends JPanel {
 		serviceByCardId = ServiceRecordService.bestByCardId(
 			state == null ? null : state.getOwnedCards());
 
-		updateHeader();
+		updateHeader(state);
 		rebuildHoloSection(state);
 		applyFilters();
 	}
@@ -287,7 +283,14 @@ public class AlbumTab extends JPanel {
 		sortedDescending = descending;
 	}
 
-	private void updateHeader() {
+	/**
+	 * Takes the state rather than re-reading it: the only caller is rebuild(),
+	 * which already holds the same snapshot and hands it to rebuildHoloSection
+	 * two lines later. Nothing between the two runs off the EDT or mutates
+	 * state, so this is the same object either way — and the asymmetry of one
+	 * sibling taking the state while the other silently re-fetched it is gone.
+	 */
+	private void updateHeader(@Nullable GachaState state) {
 		int total = sorted.size();
 		int ownedCount = 0;
 		Map<Rarity, Integer> ownedByRarity = new EnumMap<>(Rarity.class);
@@ -302,9 +305,8 @@ public class AlbumTab extends JPanel {
 		collectedLabel.setText("Collected: " + QuantityFormatter.formatNumber(ownedCount)
 			+ " / " + QuantityFormatter.formatNumber(total));
 
-		GachaState stardustState = stateService.get();
-		int dust = stardustState == null ? 0 : stardustState.getStardust();
-		boolean armed = stardustState != null && stardustState.isStardustBlessArmed();
+		int dust = state == null ? 0 : state.getStardust();
+		boolean armed = state != null && state.isStardustBlessArmed();
 		stardustLabel.setText(armed ? "Blessed!" : dust + "/" + Tuning.STARDUST_REQUIRED);
 		stardustLabel.setForeground(armed ? new Color(230, 190, 80) : new Color(190, 170, 255));
 		stardustLabel.setToolTipText(armed
@@ -319,9 +321,10 @@ public class AlbumTab extends JPanel {
 				html.append("&nbsp;&nbsp;");
 			}
 			first = false;
-			Color c = rarity.getColor();
-			html.append("<span style='color:rgb(").append(c.getRed()).append(',')
-				.append(c.getGreen()).append(',').append(c.getBlue()).append(")'>")
+			// #rrggbb and rgb(r,g,b) parse to the same Color in Swing's CSS, and
+			// GachamanPanel.hex is what Dossier, Patrons and Timeline already use
+			html.append("<span style='color:").append(GachamanPanel.hex(rarity.getColor()))
+				.append("'>")
 				.append(rarity.getDisplayName().charAt(0)).append(':')
 				.append(ownedByRarity.getOrDefault(rarity, 0)).append('/')
 				.append(totalByRarity.getOrDefault(rarity, 0)).append("</span>");
@@ -362,8 +365,7 @@ public class AlbumTab extends JPanel {
 			// indented under it; the tooltip carries the lot.
 			String full = name + " — tier " + owned.getTierKey()
 				+ (assigned != null ? " — " + assigned.getDisplayName() : "")
-				+ (served > 0 ? " — present for " + QuantityFormatter.formatNumber(served)
-					+ (served == 1 ? " kill" : " kills") : "");
+				+ (served > 0 ? " — " + servedText(served) : "");
 			JLabel label = GachamanPanel.line(name,
 				def != null ? def.getRarity().getColor() : ColorScheme.LIGHT_GRAY_COLOR,
 				FontManager.getRunescapeSmallFont());
@@ -377,8 +379,7 @@ public class AlbumTab extends JPanel {
 			holoPanel.add(detail);
 
 			if (served > 0) {
-				JLabel service = GachamanPanel.smallLine("    present for "
-						+ QuantityFormatter.formatNumber(served) + (served == 1 ? " kill" : " kills"),
+				JLabel service = GachamanPanel.smallLine("    " + servedText(served),
 					ColorScheme.MEDIUM_GRAY_COLOR);
 				service.setToolTipText(full);
 				holoPanel.add(service);
@@ -407,8 +408,12 @@ public class AlbumTab extends JPanel {
 			: GearSlot.values()[slotFilter.getSelectedIndex() - 1];
 		Rarity raritySel = rarityFilter.getSelectedIndex() <= 0 ? null
 			: Rarity.values()[rarityFilter.getSelectedIndex() - 1];
-		Variant variantSel = variantFilter.getSelectedIndex() == 1 ? Variant.NORMAL
-			: variantFilter.getSelectedIndex() == 2 ? Variant.SHINY : null;
+		// same values()[index - 1] idiom as the two filters above: the combo is
+		// ["All variants", "Normal", "Shiny"] and Variant is [NORMAL, SHINY,
+		// HOLOGRAM], so index 3 (HOLOGRAM) is unreachable — the combo has three
+		// items — and index 0 or -1 falls through to "no variant filter"
+		Variant variantSel = variantFilter.getSelectedIndex() <= 0 ? null
+			: Variant.values()[variantFilter.getSelectedIndex() - 1];
 		boolean ownedOnly = ownedOnlyBox.isSelected();
 		String query = searchField.getText() == null ? "" : searchField.getText().trim().toLowerCase();
 
@@ -448,22 +453,31 @@ public class AlbumTab extends JPanel {
 		return combo;
 	}
 
-	private static String[] slotNames() {
-		GearSlot[] slots = GearSlot.values();
-		String[] names = new String[slots.length];
-		for (int i = 0; i < slots.length; i++) {
-			names[i] = slots[i].getDisplayName();
-		}
-		return names;
+	/**
+	 * The transparent left-aligned BoxLayout panel this file assembled by hand
+	 * four times over. LEFT_ALIGNMENT is set unconditionally: every one of these
+	 * panels either sits in a BoxLayout parent that honours it, or — in the case
+	 * of the north container — is added with BorderLayout.NORTH, which ignores
+	 * alignmentX outright, so the one extra call is inert rather than a change.
+	 */
+	private static JPanel box(int axis) {
+		JPanel panel = new JPanel();
+		panel.setLayout(new BoxLayout(panel, axis));
+		panel.setOpaque(false);
+		panel.setAlignmentX(Component.LEFT_ALIGNMENT);
+		return panel;
 	}
 
-	private static String[] rarityNames() {
-		Rarity[] rarities = Rarity.values();
-		String[] names = new String[rarities.length];
-		for (int i = 0; i < rarities.length; i++) {
-			names[i] = rarities[i].getDisplayName();
-		}
-		return names;
+	/**
+	 * The Service Record phrase, shared by the hologram tooltip, the hologram
+	 * detail line and the grid tooltip. ServiceRecordService's javadoc pins the
+	 * wording — "present for N kills", never "killed N", because the record
+	 * counts kills the card was ASSIGNED TO THE LOADOUT for, on-task or not —
+	 * so one place to say it is also one place to keep saying it correctly.
+	 */
+	private static String servedText(int kills) {
+		return "present for " + QuantityFormatter.formatNumber(kills)
+			+ (kills == 1 ? " kill" : " kills");
 	}
 
 	// --- Grid entry ---
@@ -478,9 +492,12 @@ public class AlbumTab extends JPanel {
 
 	private static String keyOf(Entry entry) {
 		// the Service Record is baked into the raster and the LRU is never
-		// cleared on rebuild, so it must key the cache or thumbnails go stale
-		return entry.card.getCardId() + (entry.owned ? ":o:" : ":u:") + entry.variant
-			+ ":" + entry.serviceKills;
+		// cleared on rebuild, so it must key the cache or thumbnails go stale.
+		// The variant deliberately does NOT: rasterize() hardcodes the NORMAL
+		// face and the variant effects are painted live, so keying on it only
+		// re-rasterized an identical image when a card upgraded to shiny. The
+		// ":o:"/":u:" separator keeps ids and kill counts unambiguous.
+		return entry.card.getCardId() + (entry.owned ? ":o:" : ":u:") + entry.serviceKills;
 	}
 
 	/** True for cells the live (non-rasterized) effect pass animates. */
@@ -506,89 +523,25 @@ public class AlbumTab extends JPanel {
 	}
 
 	/**
-	 * Two-state checkbox icon: a dark rounded square with a light border,
-	 * plus a crisp white 2px check mark when selected. The stock LAF check
-	 * mark was nearly invisible on the dark panel.
+	 * A flat 13x13 icon authored by com.gachaman.tools.IconArt, in test scope.
+	 *
+	 * <p>The stardust sparkle and the two "Owned only" checkbox states used to be
+	 * hand-painted Icon classes right here. Every one of them is a FIXED drawing
+	 * — no animation, no tint that varies with state (the "Blessed!" case
+	 * recolours the LABEL, not the sparkle) — so painting them on each panel
+	 * build was re-deriving a constant, exactly the case IconArt already exists
+	 * for. AlbumIconBakeTest keeps the old paintIcon bodies and renders both ways
+	 * onto the same backgrounds: no pixel moved, and the only drift was ±1 on one
+	 * channel of eight pixels over the dark panel — the extra rounding step a
+	 * composited layer costs, since ARGB is stored non-premultiplied.
+	 *
+	 * <p>GachamanPanel has a character-identical loader but keeps it private;
+	 * duplicating four lines here is deliberate, so this change stays inside one
+	 * file. Collapsing the two into one package-private helper is a later pass.
 	 */
-	/** Static 4-point sparkle in pale violet — the stardust counter's icon. */
-	private static final class StardustIcon implements Icon {
-		private static final int SIZE = 13;
-		private static final Color SPARKLE = new Color(190, 170, 255);
-
-		@Override
-		public void paintIcon(Component c, Graphics g, int x, int y) {
-			Graphics2D g2 = (Graphics2D) g.create();
-			try {
-				g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-				int cx = x + SIZE / 2;
-				int cy = y + SIZE / 2;
-				g2.setColor(SPARKLE);
-				g2.setStroke(new BasicStroke(1.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-				g2.drawLine(cx, y + 2, cx, y + SIZE - 2);
-				g2.drawLine(x + 2, cy, x + SIZE - 2, cy);
-				g2.setStroke(new BasicStroke(1f));
-				g2.drawLine(cx - 2, cy - 2, cx + 2, cy + 2);
-				g2.drawLine(cx - 2, cy + 2, cx + 2, cy - 2);
-				g2.setColor(Color.WHITE);
-				g2.fillOval(cx - 1, cy - 1, 2, 2);
-			}
-			finally {
-				g2.dispose();
-			}
-		}
-
-		@Override
-		public int getIconWidth() {
-			return SIZE;
-		}
-
-		@Override
-		public int getIconHeight() {
-			return SIZE;
-		}
-	}
-
-	private static final class CheckboxIcon implements Icon {
-		private static final int SIZE = 13;
-		private static final BasicStroke CHECK_STROKE =
-			new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
-
-		private final boolean selected;
-
-		CheckboxIcon(boolean selected) {
-			this.selected = selected;
-		}
-
-		@Override
-		public void paintIcon(Component c, Graphics g, int x, int y) {
-			Graphics2D g2 = (Graphics2D) g.create();
-			try {
-				g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-				g2.setColor(ColorScheme.DARKER_GRAY_COLOR);
-				g2.fillRoundRect(x, y, SIZE, SIZE, 4, 4);
-				g2.setColor(ColorScheme.LIGHT_GRAY_COLOR);
-				g2.drawRoundRect(x, y, SIZE - 1, SIZE - 1, 4, 4);
-				if (selected) {
-					g2.setColor(Color.WHITE);
-					g2.setStroke(CHECK_STROKE);
-					g2.drawLine(x + 3, y + 7, x + 5, y + 9);
-					g2.drawLine(x + 5, y + 9, x + 10, y + 3);
-				}
-			}
-			finally {
-				g2.dispose();
-			}
-		}
-
-		@Override
-		public int getIconWidth() {
-			return SIZE;
-		}
-
-		@Override
-		public int getIconHeight() {
-			return SIZE;
-		}
+	private static ImageIcon icon(String name) {
+		return new ImageIcon(ImageUtil.loadImageResource(
+			AlbumTab.class, "/com/gachaman/ui/" + name + ".png"));
 	}
 
 	// --- Grid panel ---
@@ -662,26 +615,24 @@ public class AlbumTab extends JPanel {
 		}
 
 		private boolean hasVisibleEffectCells() {
-			if (entries.isEmpty()) {
-				return false;
-			}
 			Rectangle vis = getVisibleRect();
-			if (vis.isEmpty()) {
+			if (entries.isEmpty() || vis.isEmpty()) {
 				return false;
 			}
 			int c = cols();
 			int rowH = THUMB_H + GAP;
 			int firstRow = Math.max(0, (vis.y - GAP) / rowH);
-			int lastRow = Math.max(firstRow, (vis.y + vis.height) / rowH);
-			for (int row = firstRow; row <= lastRow; row++) {
-				for (int col = 0; col < c; col++) {
-					int index = row * c + col;
-					if (index >= entries.size()) {
-						return false;
-					}
-					if (hasLiveEffect(entries.get(index))) {
-						return true;
-					}
+			// This was a nested row/col walk, but index = row * c + col rises by
+			// exactly one every step, so the visible cells are one contiguous run
+			// of the flat list. Math.min against entries.size() is the old inner
+			// "past the last entry, give up" bail; keeping Math.max(firstRow, ...)
+			// preserves the old lastRow clamp for a negative vis.y, which cannot
+			// happen through a JViewport but costs nothing to honour.
+			int last = Math.min(entries.size(),
+				(Math.max(firstRow, (vis.y + vis.height) / rowH) + 1) * c);
+			for (int i = firstRow * c; i < last; i++) {
+				if (hasLiveEffect(entries.get(i))) {
+					return true;
 				}
 			}
 			return false;
@@ -1049,10 +1000,7 @@ public class AlbumTab extends JPanel {
 			String variantText = entry.variant == Variant.SHINY ? " — Shiny" : "";
 			// "present for", never "killed": the record counts kills the card was
 			// ASSIGNED TO THE LOADOUT for, on-task or not, tainted or not
-			String service = entry.serviceKills > 0
-				? " — present for " + QuantityFormatter.formatNumber(entry.serviceKills)
-					+ (entry.serviceKills == 1 ? " kill" : " kills")
-				: "";
+			String service = entry.serviceKills > 0 ? " — " + servedText(entry.serviceKills) : "";
 			return entry.card.getName() + " — " + entry.card.getRarity().getDisplayName()
 				+ variantText + " — " + entry.card.getSlot().getDisplayName() + service;
 		}

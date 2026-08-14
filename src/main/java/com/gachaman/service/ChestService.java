@@ -35,7 +35,15 @@ public class ChestService {
 		boolean nearMiss;       // shiny roll landed just outside the band -> stardust
 	}
 
+	/**
+	 * {@code @With} is here for rerollSlot, which changes exactly one field
+	 * (the slot list) and would otherwise have to hand-copy all ten — a list that
+	 * silently rots the next time a field is added. The generated withSlots()
+	 * expands to the very constructor call it replaces, and Gson binds by field,
+	 * so the persisted blob shape is untouched.
+	 */
 	@Value
+	@With
 	public static class ChestOpenResult {
 		Tuning.Chest purchasedTier;
 		Tuning.Chest effectiveTier;
@@ -125,10 +133,39 @@ public class ChestService {
 
 	private final List<ChestListener> chestListeners = new ArrayList<>();
 
-	/** The single pending (uncommitted) open, if any. */
+	/**
+	 * The single pending (uncommitted) open, if any.
+	 *
+	 * <p>Volatile because the writers and some of the readers are different
+	 * threads. Every write happens under this object's monitor — recoverPending,
+	 * openFirstColoursChest, rerollSlot and commitPending are all synchronized, and
+	 * the one remaining write lives in deal(), which is deliberately NOT
+	 * synchronized because its only callers (openChest, openSlotChest,
+	 * openThemedChest) are, and already hold this monitor when they call it. Grep
+	 * for `pending =` and you will land in deal() rather than in the openers; that
+	 * is the reason, not a lock that went missing. The Lombok getter takes
+	 * no lock, and the Swing EDT reads through it (ShopTab:205 and :652) while the
+	 * client thread is the one doing the writing. With no lock and no volatile
+	 * there is no happens-before edge to the EDT at all, so it is free to keep
+	 * observing a stale reference indefinitely: a shop tile stuck on "a reveal is
+	 * in progress" after the reveal has already closed, or an Open button that
+	 * stays disabled. Publishing the reference safely is the whole fix — the
+	 * object behind it is a deeply immutable Lombok value type, so a reader that
+	 * sees the reference necessarily sees a fully built result.
+	 *
+	 * <p>Deliberately volatile rather than a synchronized getter: the getter would
+	 * put the EDT behind the same monitor commitPending() holds while it rewrites
+	 * state, awards GC and fans out to every listener, which is a UI stall bought
+	 * for nothing. Every reader does a single read into a local and never a
+	 * compound check, so a plain volatile read is all the atomicity they need.
+	 *
+	 * <p>rerollUsedThisReveal below needs no such treatment: its only reader is
+	 * canReroll(), which is itself synchronized, so every read of it already
+	 * takes the lock that its writes are made under.
+	 */
 	@Nullable
 	@Getter
-	private ChestOpenResult pending;
+	private volatile ChestOpenResult pending;
 	private boolean rerollUsedThisReveal;
 
 	public void addChestListener(ChestListener listener) {
@@ -203,11 +240,26 @@ public class ChestService {
 		if (!creditSink.spend(price)) {
 			return null;
 		}
-		ChestOpenResult result = roll(tier, null, null, price);
+		return deal(roll(tier, null, null, price, null), CeremonyBus.Type.CHEST_OPEN);
+	}
+
+	/**
+	 * The tail every PURCHASED open shares: publish the outcome, arm a fresh
+	 * reroll, get the blob on disk, and only then hand the result to the ceremony
+	 * queue. That order is the crash contract — a client that dies during the
+	 * ceremony must find the paid-for outcome in state, so persistPending() has to
+	 * run before the reveal can possibly start.
+	 *
+	 * <p>Called only from synchronized openers, so it inherits their monitor (see
+	 * the note on `pending`). openFirstColoursChest deliberately does NOT route
+	 * through here: it folds the blob write and the owed-flag clear into ONE
+	 * mutate, for the crash-window reason its own javadoc gives.
+	 */
+	private ChestOpenResult deal(ChestOpenResult result, CeremonyBus.Type type) {
 		pending = result;
 		rerollUsedThisReveal = false;
 		persistPending();
-		ceremonyBus.submit(CeremonyBus.Type.CHEST_OPEN, result);
+		ceremonyBus.submit(type, result);
 		return result;
 	}
 
@@ -224,12 +276,8 @@ public class ChestService {
 		if (!creditSink.spend(price)) {
 			return null;
 		}
-		ChestOpenResult result = roll(Tuning.Chest.GILDED, null, slot, price);
-		pending = result;
-		rerollUsedThisReveal = false;
-		persistPending();
-		ceremonyBus.submit(CeremonyBus.Type.CHEST_OPEN, result);
-		return result;
+		return deal(roll(Tuning.Chest.GILDED, null, slot, price, null),
+			CeremonyBus.Type.CHEST_OPEN);
 	}
 
 	/** Open a queued boss-themed chest (free). */
@@ -245,12 +293,8 @@ public class ChestService {
 			queued.remove(setTag);
 			return s.withQueuedThemedChests(queued);
 		});
-		ChestOpenResult result = roll(Tuning.Chest.GILDED, setTag, null, 0);
-		pending = result;
-		rerollUsedThisReveal = false;
-		persistPending();
-		ceremonyBus.submit(CeremonyBus.Type.THEMED_CHEST, result);
-		return result;
+		return deal(roll(Tuning.Chest.GILDED, setTag, null, 0, null),
+			CeremonyBus.Type.THEMED_CHEST);
 	}
 
 	/**
@@ -307,15 +351,12 @@ public class ChestService {
 		return result;
 	}
 
-	ChestOpenResult roll(Tuning.Chest tier, @Nullable String themedSetTag,
-		@Nullable GearSlot targetSlot, long price) {
-		return roll(tier, themedSetTag, targetSlot, price, null);
-	}
-
 	/**
 	 * {@code require} steers the FIRST card only, and only as a preference. A
 	 * chest that promised the player something usable must keep that promise in
 	 * the card they see first, while the rest of the box stays honest gacha.
+	 * Every caller that has nothing to steer passes an explicit null; the
+	 * convenience overload that used to hide it was pure budget.
 	 */
 	ChestOpenResult roll(Tuning.Chest tier, @Nullable String themedSetTag,
 		@Nullable GearSlot targetSlot, long price,
@@ -334,21 +375,23 @@ public class ChestService {
 		}
 
 		// jackpot upgrade (regular untargeted chests only; the starter tier
-		// never upgrades — it must stay the humblest box in the shop)
-		Tuning.Chest effective = tier;
-		boolean jackpot = false;
-		if (themedSetTag == null && targetSlot == null && !rusty) {
-			double jackpotChance = Tuning.JACKPOT_CHANCE;
-			if (rng.chance(jackpotChance)) {
-				jackpot = true;
-				if (tier == Tuning.Chest.BATTERED) {
-					effective = Tuning.Chest.GILDED;
-				}
-				else if (tier == Tuning.Chest.GILDED) {
-					effective = Tuning.Chest.ORNATE;
-				}
-			}
-		}
+		// never upgrades — it must stay the humblest box in the shop).
+		//
+		// rng.chance is the LAST && term deliberately: && short-circuits, so a
+		// themed, slot-targeted or Rusty chest still consumes no RNG here, exactly
+		// as the nested ifs this replaces did. Move it earlier and every fixed-seed
+		// test shifts.
+		boolean jackpot = themedSetTag == null && targetSlot == null && !rusty
+			&& rng.chance(Tuning.JACKPOT_CHANCE);
+		// Chest is declared RUSTY, BATTERED, GILDED, ORNATE, so ordinal + 1 IS the
+		// one-tier promotion: BATTERED -> GILDED, GILDED -> ORNATE, the only two
+		// steps the ladder has. ORNATE is excluded because it is the top of the shop
+		// — its jackpot pays a fourth card below instead — and RUSTY can never get
+		// here at all because !rusty gates the roll. That is a real dependency on
+		// the enum's declaration order, which ChestJackpotLadderTest pins.
+		Tuning.Chest effective = jackpot && tier != Tuning.Chest.ORNATE
+			? Tuning.Chest.values()[tier.ordinal() + 1]
+			: tier;
 		int cardCount = targetSlot != null ? 1 : Tuning.CHEST_CARDS.get(effective);
 		if (jackpot && tier == Tuning.Chest.ORNATE) {
 			cardCount++; // ornate jackpot: 4th card
@@ -357,34 +400,13 @@ public class ChestService {
 		// pity (themed chests are free rewards and sit outside pity; Rusty can
 		// never pay Epic+ so it neither benefits from nor advances pity)
 		boolean pityEligible = themedSetTag == null && !rusty;
-		int hardCap = Tuning.PITY_HARD_CAP;
-		boolean pityBreak = pityEligible && opensSinceEpic + 1 >= hardCap;
+		boolean pityBreak = pityEligible && opensSinceEpic + 1 >= Tuning.PITY_HARD_CAP;
 		double pityBonus = pityEligible
 			? Math.max(0, opensSinceEpic - Tuning.PITY_SOFT_START) * Tuning.PITY_BONUS_PER_OPEN
 			: 0;
 
-		List<CardDefinition> pool;
-		if (targetSlot != null) {
-			pool = cardDatabase.all().values().stream()
-				.filter(c -> c.getSlot() == targetSlot)
-				.collect(Collectors.toList());
-		}
-		else if (themedSetTag != null) {
-			pool = cardDatabase.setMembers(themedSetTag);
-		}
-		else if (rusty) {
-			pool = rustyPool(state);
-		}
-		else {
-			pool = new ArrayList<>(cardDatabase.all().values());
-		}
-		if (pool.isEmpty()) {
-			// crash-guard only — a themed tag landing here means bosses.json
-			// references a set that sets.json does not define (integrity-tested)
-			log.warn("empty chest pool (themedSetTag={}, targetSlot={}) — falling back to all cards",
-				themedSetTag, targetSlot);
-			pool = new ArrayList<>(cardDatabase.all().values());
-		}
+		List<CardDefinition> pool = poolFor(targetSlot == null ? null : targetSlot.name(),
+			themedSetTag, rusty, state);
 
 		// themed chests roll no variants at all (unchanged); Rusty rolls no
 		// holograms (too grand for the starter box) but shiny at a juiced rate
@@ -395,22 +417,23 @@ public class ChestService {
 		Set<String> ownedKeys = ownedKeys(state);
 		List<RolledSlot> slots = new ArrayList<>(cardCount);
 		for (int i = 0; i < cardCount; i++) {
-			final Predicate<CardDefinition> steer = i == 0 ? require : null;
-			if (i == 0 && pityBreak) {
-				RolledSlot slot = rollSlot(pool, Rarity.LEGENDARY, hologramsAllowed,
-					shinyChance, shinyAttempts, ownedKeys, steer);
-				slots.add(slot.withPityLocked(true));
-				continue;
-			}
-			Rarity rarity = rollRarity(Tuning.CHEST_ODDS.get(effective), pityBonus);
-			slots.add(rollSlot(pool, rarity, hologramsAllowed,
-				shinyChance, shinyAttempts, ownedKeys, steer));
+			// The ternary on `rarity` is load-bearing, not cosmetic: it
+			// short-circuits, so the guaranteed pity card still consumes NO
+			// rollRarity draw. Turn it into an unconditional call whose result is
+			// then discarded and every fixed-seed test in the suite moves.
+			boolean locked = i == 0 && pityBreak;
+			Rarity rarity = locked
+				? Rarity.LEGENDARY
+				: rollRarity(Tuning.CHEST_ODDS.get(effective), pityBonus);
+			RolledSlot slot = rollSlot(pool, rarity, hologramsAllowed, shinyChance,
+				shinyAttempts, ownedKeys, i == 0 ? require : null);
+			slots.add(locked ? slot.withPityLocked(true) : slot);
 		}
 
-		boolean deed = false;
-		if (themedSetTag == null && rng.chance(Tuning.DEED_CHANCE.getOrDefault(tier, 0.0))) {
-			deed = true;
-		}
+		// themed chests never grant deeds; the null check stays FIRST so it still
+		// gates whether the deed roll is drawn at all
+		boolean deed = themedSetTag == null
+			&& rng.chance(Tuning.DEED_CHANCE.getOrDefault(tier, 0.0));
 
 		return new ChestOpenResult(tier, effective, jackpot, pityBreak, deed, themedSetTag,
 			targetSlot == null ? null : targetSlot.name(), slots, price, blessed);
@@ -476,10 +499,6 @@ public class ChestService {
 		return new RolledSlot(card.getRarity(), card.getCardId(), null, variant, duplicate, false, nearMiss);
 	}
 
-	CardDefinition pickCardOfRarity(List<CardDefinition> pool, Rarity rarity) {
-		return pickCardOfRarity(pool, rarity, null);
-	}
-
 	/**
 	 * {@code require} narrows the candidate list BEFORE the draw instead of
 	 * rejecting after it, so a constrained pick still costs exactly one
@@ -493,39 +512,40 @@ public class ChestService {
 		return bucket.isLeaned() ? pickLeaned(bucket.getCards()) : rng.pick(bucket.getCards());
 	}
 
-	RollBucket bucketFor(List<CardDefinition> pool, Rarity rarity) {
-		return bucketFor(pool, rarity, null);
-	}
-
 	/**
 	 * The exact candidate list a roll of this rarity would draw from — everything
 	 * pickCardOfRarity used to do except the draw itself. Split out because it
 	 * consumes NO RNG, which is what lets oddsFor() quote the roll's own numbers
 	 * instead of a parallel transcription that would drift.
+	 *
+	 * <p>Two passes rather than two near-identical loops. Pass 0 is the real draw:
+	 * Epic+ may land anywhere, below that stay near what the player's levels can
+	 * actually wield (see isReachable for the headroom). Pass 1 is the fallback for
+	 * when the gate excluded every card of every rarity, and drops BOTH the gate
+	 * and the preference — dropping the preference is free rather than a change,
+	 * because constrained(list, null) hands back the very same list instance, so
+	 * pass 1 builds exactly the list the old unconstrained loop built and no
+	 * rng.pick bound moves.
+	 *
+	 * <p>Each pass walks r DOWN the Rarity declaration order: a rarity with no
+	 * candidates falls back to the next one below it, never above.
 	 */
 	RollBucket bucketFor(List<CardDefinition> pool, Rarity rarity,
 		@Nullable Predicate<CardDefinition> require) {
-		// Epic+ rolls may land anywhere; below that, stay near what the
-		// player's levels can actually wield (see isReachable for the headroom).
-		boolean proximityGated = !rarity.atLeast(Rarity.EPIC);
-		for (int r = rarity.ordinal(); r >= 0; r--) {
-			final Rarity target = Rarity.values()[r];
-			List<CardDefinition> candidates = constrained(pool.stream()
-				.filter(c -> c.getRarity() == target)
-				.filter(c -> !proximityGated || isReachable(c))
-				.collect(Collectors.toList()), require);
-			if (!candidates.isEmpty()) {
-				return new RollBucket(candidates, proximityGated);
-			}
-		}
-		// gate excluded everything of every rarity — fall back unfiltered
-		for (int r = rarity.ordinal(); r >= 0; r--) {
-			final Rarity target = Rarity.values()[r];
-			List<CardDefinition> candidates = pool.stream()
-				.filter(c -> c.getRarity() == target)
-				.collect(Collectors.toList());
-			if (!candidates.isEmpty()) {
-				return new RollBucket(candidates, false);
+		for (int pass = 0; pass < 2; pass++) {
+			final boolean gate = pass == 0 && !rarity.atLeast(Rarity.EPIC);
+			for (int r = rarity.ordinal(); r >= 0; r--) {
+				final Rarity target = Rarity.values()[r];
+				List<CardDefinition> candidates = constrained(pool.stream()
+					.filter(c -> c.getRarity() == target)
+					.filter(c -> !gate || isReachable(c, true))
+					.collect(Collectors.toList()), pass == 0 ? require : null);
+				if (!candidates.isEmpty()) {
+					// `gate` doubles as the leaned flag on purpose: the house lean
+					// applies exactly when the proximity gate ran, so one variable
+					// cannot let the two drift apart.
+					return new RollBucket(candidates, gate);
+				}
 			}
 		}
 		return new RollBucket(pool, false);
@@ -597,14 +617,60 @@ public class ChestService {
 			.collect(Collectors.toList());
 	}
 
-	/** Is this card's tier within reach of the player's levels (+headroom)? */
-	boolean isReachable(CardDefinition card) {
-		return isReachable(card, true);
+	/**
+	 * The card pool a chest of this shape draws from, plus the empty-pool fallback.
+	 * Shared by roll() and rerollSlot() so a reroll can never draw from a different
+	 * pool than the open it is re-flipping.
+	 *
+	 * <p>Keyed on the gear slot's NAME rather than the enum because that is how
+	 * ChestOpenResult carries it (it has to survive Gson), and GearSlot.name() /
+	 * valueOf() round-trip exactly, so the filtered pool is unchanged.
+	 *
+	 * <p>An empty pool has two causes, only one of which is a defect: bosses.json
+	 * naming a set sets.json does not define (a dataset bug, integrity-tested) —
+	 * and, perfectly legitimately, a Rusty pool on an account whose deeded slots
+	 * hold nothing wieldable yet. Both fall back to the whole card list so a chest
+	 * always deals, and both log, because the first case is worth shouting about
+	 * and the second is rare enough that the noise is cheap. Note this makes the
+	 * reroll path log where it used to fall back silently, and turns a reroll of an
+	 * empty themed/slot-targeted pool from an rng.pick crash into the same fallback
+	 * the open itself would have taken.
+	 */
+	private List<CardDefinition> poolFor(@Nullable String targetSlot, @Nullable String themedSetTag,
+		boolean rusty, @Nullable GachaState state) {
+		List<CardDefinition> pool;
+		if (targetSlot != null) {
+			GearSlot slot = GearSlot.valueOf(targetSlot);
+			pool = cardDatabase.all().values().stream()
+				.filter(c -> c.getSlot() == slot)
+				.collect(Collectors.toList());
+		}
+		else if (themedSetTag != null) {
+			pool = cardDatabase.setMembers(themedSetTag);
+		}
+		else if (rusty) {
+			pool = rustyPool(state);
+		}
+		else {
+			pool = new ArrayList<>(cardDatabase.all().values());
+		}
+		if (pool.isEmpty()) {
+			log.warn("empty chest pool (themedSetTag={}, targetSlot={}) — falling back to all cards",
+				themedSetTag, targetSlot);
+			pool = new ArrayList<>(cardDatabase.all().values());
+		}
+		return pool;
 	}
 
 	/**
-	 * Headroom is a flag rather than a number because the two branches below measure
-	 * it in different units — metal in tier ranks, dhide/robes in skill levels.
+	 * Is this card's tier within reach of the player's levels? With
+	 * {@code allowHeadroom} it also admits the aspirational band just above them.
+	 *
+	 * <p>Headroom is a flag rather than a number because the two branches below
+	 * measure it in different units — metal in tier ranks, dhide/robes in skill
+	 * levels. Callers pass it explicitly (the one-argument convenience overload was
+	 * deleted as pure budget); true is the roll's proximity gate, false is "can
+	 * wield today", which is what the lean and the Rusty pool ask for.
 	 */
 	boolean isReachable(CardDefinition card, boolean allowHeadroom) {
 		if (card.getTierKey() == null || client == null || tierTable == null) {
@@ -674,22 +740,17 @@ public class ChestService {
 		for (HologramDefinition holo : holos) {
 			maxRank = Math.max(maxRank, rankOf(holo));
 		}
-		List<Double> weights = new ArrayList<>(holos.size());
+		double[] weights = new double[holos.size()];
 		double total = 0;
-		for (HologramDefinition holo : holos) {
-			double weight = Math.pow(maxRank - rankOf(holo) + 1, 2);
-			weights.add(weight);
-			total += weight;
-		}
-		double roll = rng.nextDouble() * total;
-		double cumulative = 0;
 		for (int i = 0; i < holos.size(); i++) {
-			cumulative += weights.get(i);
-			if (roll < cumulative) {
-				return holos.get(i);
-			}
+			weights[i] = Math.pow(maxRank - rankOf(holos.get(i)) + 1, 2);
+			total += weights[i];
 		}
-		return holos.get(holos.size() - 1);
+		// the same cumulative walk this used to open-code, including the landing
+		// spot when a rounding crumb pushes the roll past the total: weightedIndex
+		// returns the LAST index, which is what holos.get(holos.size() - 1) did.
+		// One rng.nextDouble(), in the same position, so no seeded test moves.
+		return holos.get(RollOdds.weightedIndex(rng.nextDouble() * total, weights));
 	}
 
 	private int rankOf(HologramDefinition holo) {
@@ -752,17 +813,18 @@ public class ChestService {
 			if (share <= 0) {
 				continue;
 			}
-			RollBucket bucket = bucketFor(pool, rarity);
+			RollBucket bucket = bucketFor(pool, rarity, null);
 			List<CardDefinition> cards = bucket.getCards();
 			boolean[] flags = new boolean[cards.size()];
+			// one pass fills flags[] and files the name, because the name only ever
+			// needs its OWN index's flag — nothing here reads a later one
 			for (int i = 0; i < cards.size(); i++) {
-				flags[i] = wieldableByCardId.getOrDefault(cards.get(i).getCardId(), true);
-			}
-			for (int i = 0; i < cards.size(); i++) {
+				CardDefinition card = cards.get(i);
+				flags[i] = wieldableByCardId.getOrDefault(card.getCardId(), true);
 				namesByBand
-					.computeIfAbsent(RollOdds.bandOf(cards.get(i), flags[i]),
+					.computeIfAbsent(RollOdds.bandOf(card, flags[i]),
 						k -> new TreeSet<>(String.CASE_INSENSITIVE_ORDER))
-					.add(cards.get(i).getName());
+					.add(card.getName());
 			}
 			for (Map.Entry<RollOdds.TierBand, Double> entry
 				: RollOdds.tierShares(cards, flags, bucket.isLeaned()).entrySet()) {
@@ -828,25 +890,8 @@ public class ChestService {
 		rerollUsedThisReveal = true;
 
 		boolean rusty = pending.getPurchasedTier() == Tuning.Chest.RUSTY;
-		List<CardDefinition> pool;
-		if (pending.getTargetSlot() != null) {
-			GearSlot slot = GearSlot.valueOf(pending.getTargetSlot());
-			pool = cardDatabase.all().values().stream()
-				.filter(c -> c.getSlot() == slot)
-				.collect(Collectors.toList());
-		}
-		else if (pending.getThemedSetTag() != null) {
-			pool = cardDatabase.setMembers(pending.getThemedSetTag());
-		}
-		else if (rusty) {
-			pool = rustyPool(state);
-			if (pool.isEmpty()) {
-				pool = new ArrayList<>(cardDatabase.all().values());
-			}
-		}
-		else {
-			pool = new ArrayList<>(cardDatabase.all().values());
-		}
+		List<CardDefinition> pool = poolFor(pending.getTargetSlot(), pending.getThemedSetTag(),
+			rusty, state);
 		boolean hologramsAllowed = pending.getThemedSetTag() == null && !rusty;
 		double shinyChance = pending.getThemedSetTag() != null ? 0
 			: (rusty ? Tuning.RUSTY_SHINY_CHANCE : Tuning.SHINY_CHANCE);
@@ -857,26 +902,37 @@ public class ChestService {
 
 		List<RolledSlot> slots = new ArrayList<>(pending.getSlots());
 		slots.set(slotIndex, fresh);
-		pending = new ChestOpenResult(pending.getPurchasedTier(), pending.getEffectiveTier(),
-			pending.isJackpotUpgraded(), pending.isPityBreak(), pending.isDeedGranted(),
-			pending.getThemedSetTag(), pending.getTargetSlot(), slots, pending.getPricePaid(),
-			pending.isStardustBlessed());
+		// withSlots() is the generated copy of every OTHER field verbatim; the list
+		// is freshly built so it is never == and a real copy always happens
+		pending = pending.withSlots(slots);
 		persistPending();
+		notifyListeners(ChestListener::onRerollSpent);
+		return fresh;
+	}
+
+	/**
+	 * Fan one event out to every listener — the three call sites (reroll spent,
+	 * chest committed, deed claimed) had this loop copied out verbatim.
+	 *
+	 * <p>The defensive copy is what lets a listener add or drop another one from
+	 * inside its own callback without a ConcurrentModificationException, and the
+	 * per-listener catch is what stops a single broken listener from stranding a
+	 * chest half-committed: by the time this runs the state write and the GC award
+	 * have already happened, so an exception escaping here would lose the
+	 * notification AND the return value with nothing rolled back.
+	 */
+	private void notifyListeners(Consumer<ChestListener> event) {
 		for (ChestListener listener : new ArrayList<>(chestListeners)) {
 			try {
-				listener.onRerollSpent();
+				event.accept(listener);
 			}
 			catch (Exception e) {
 				log.warn("chest listener failed", e);
 			}
 		}
-		return fresh;
 	}
 
 	// --- Commit (reveal closed or aborted) ---
-
-	@Nullable
-
 
 	/** Apply the pending open to state. Returns GC gained from duplicates. */
 	public synchronized long commitPending() {
@@ -907,24 +963,25 @@ public class ChestService {
 			owned.addAll(newCards);
 			Map<String, Integer> byTier = new HashMap<>(s.getChestsOpenedByTier());
 			byTier.merge(result.getPurchasedTier().name(), 1, Integer::sum);
+			// One walk, two tallies. Pity counts CARDS since the last Epic+ card, in
+			// reveal order; stardust counts near-misses, which bank at commit
+			// (rerolls replaced their slot, so this can never double-count) and arm
+			// the next chest once 8 are held. The pity counter is computed even for
+			// chests that sit outside pity and then thrown away — both reads are
+			// pure, so the wasted arithmetic simply buys one less pass over the list.
+			int counter = s.getOpensSinceEpic();
+			int nearMisses = 0;
+			for (RolledSlot slot : result.getSlots()) {
+				counter = slot.getRarity().atLeast(Rarity.EPIC) ? 0 : counter + 1;
+				if (slot.isNearMiss()) {
+					nearMisses++;
+				}
+			}
 			GachaState next = s.withOwnedCards(owned).withChestsOpenedByTier(byTier)
 				.withPendingChestBlob(null);
 			if (result.getThemedSetTag() == null
 				&& result.getPurchasedTier() != Tuning.Chest.RUSTY) {
-				// pity counts CARDS since the last Epic+ card, in reveal order
-				int counter = s.getOpensSinceEpic();
-				for (RolledSlot slot : result.getSlots()) {
-					counter = slot.getRarity().atLeast(Rarity.EPIC) ? 0 : counter + 1;
-				}
 				next = next.withOpensSinceEpic(counter);
-			}
-			// stardust: near-misses bank at commit (rerolls replaced their slot,
-			// so this can never double-count); 8 banked arms the next chest
-			int nearMisses = 0;
-			for (RolledSlot slot : result.getSlots()) {
-				if (slot.isNearMiss()) {
-					nearMisses++;
-				}
 			}
 			if (nearMisses > 0) {
 				int dust = s.getStardust() + nearMisses;
@@ -966,14 +1023,7 @@ public class ChestService {
 				ceremonyBus.submit(CeremonyBus.Type.DEED_CHOICE, 0);
 			}
 		}
-		for (ChestListener listener : new ArrayList<>(chestListeners)) {
-			try {
-				listener.onChestCommitted(result, dupeGc);
-			}
-			catch (Exception e) {
-				log.warn("chest listener failed", e);
-			}
-		}
+		notifyListeners(l -> l.onChestCommitted(result, dupeGcFinal));
 		return dupeGc;
 	}
 
@@ -993,14 +1043,7 @@ public class ChestService {
 		ceremonyBus.submit(CeremonyBus.Type.FANFARE, new CeremonyBus.Fanfare(
 			CeremonyBus.Fanfare.Size.LARGE, "Slot Deed: " + slot.getDisplayName(),
 			"The " + slot.getDisplayName() + " slot is now unlocked!", null));
-		for (ChestListener listener : new ArrayList<>(chestListeners)) {
-			try {
-				listener.onDeedClaimed(slot);
-			}
-			catch (Exception e) {
-				log.warn("chest listener failed", e);
-			}
-		}
+		notifyListeners(l -> l.onDeedClaimed(slot));
 		return true;
 	}
 

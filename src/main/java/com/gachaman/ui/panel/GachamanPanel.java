@@ -59,27 +59,34 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 
 	private final GachaStateService stateService;
 	private final CardDatabase cardDatabase;
+	// Only the two tabs the plugin later pushes a supplier into keep a field.
+	// The other nine became write-only the moment their rebuild() moved into the
+	// rebuilders map below: the constructor parameter is enough to build the card
+	// and capture the method reference, so a second reference bought nothing.
 	private final OverviewTab overviewTab;
-	private final ShopTab shopTab;
-	private final AlbumTab albumTab;
-	private final SetsTab setsTab;
-	private final JournalTab journalTab;
-	private final TimelineTab timelineTab;
-	private final DossierTab dossierTab;
 	private final PartyTab partyTab;
-	private final PatronsTab patronsTab;
-	private final LoadoutTab loadoutTab;
-	private final HelpTab helpTab;
 
 	private final CardLayout contentLayout = new CardLayout();
 	private final JPanel content = new JPanel(contentLayout);
 	private final JLabel scanLabel = new JLabel("", SwingConstants.CENTER);
 	private final Map<Tab, JButton> tabButtons = new EnumMap<>(Tab.class);
+	// One rebuild() per tab, registered next to the card it redraws. This replaces
+	// an eleven-arm switch whose every arm was the same statement with a different
+	// receiver — a shape that can silently go stale against the enum, where a
+	// missing registration here surfaces through the log line rebuildIfDirty
+	// already writes.
+	private final EnumMap<Tab, Runnable> rebuilders = new EnumMap<>(Tab.class);
 	private final EnumSet<Tab> dirty = EnumSet.allOf(Tab.class);
 	private final AtomicBoolean refreshQueued = new AtomicBoolean();
 
 	private Tab selected = Tab.OVERVIEW;
-	private Timer scanTimer;
+	// volatile for the same reason as started/active below: this field is WRITTEN
+	// on the EDT (ensureScanTimer, reached from onActivate and refreshNow) but
+	// READ from the client thread, because GachamanPlugin.shutDown calls stop() ->
+	// stopScanTimer() there. Without it the client thread may read a stale null
+	// and skip stopping a live 400ms poll. javax.swing.Timer.stop() is itself
+	// thread-safe, so publishing the reference is the whole of what is needed.
+	private volatile Timer scanTimer;
 	private volatile boolean started;
 	private volatile boolean active;
 
@@ -107,16 +114,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		this.stateService = stateService;
 		this.cardDatabase = cardDatabase;
 		this.overviewTab = overviewTab;
-		this.shopTab = shopTab;
-		this.albumTab = albumTab;
-		this.setsTab = setsTab;
-		this.journalTab = journalTab;
-		this.timelineTab = timelineTab;
-		this.dossierTab = dossierTab;
 		this.partyTab = partyTab;
-		this.patronsTab = patronsTab;
-		this.loadoutTab = loadoutTab;
-		this.helpTab = helpTab;
 
 		setLayout(new BorderLayout(0, 6));
 		setBorder(new EmptyBorder(6, 6, 6, 6));
@@ -155,23 +153,20 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		updateTabVisibility();
 
 		content.setOpaque(false);
-		JPanel loading = new JPanel(new GridBagLayout());
-		loading.setOpaque(false);
-		scanLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		scanLabel.setFont(FontManager.getRunescapeSmallFont());
-		loading.add(scanLabel, new GridBagConstraints());
-		content.add(loading, CARD_LOADING);
-		content.add(wrapScroll(overviewTab), Tab.OVERVIEW.name());
-		content.add(wrapScroll(shopTab), Tab.SHOP.name());
-		content.add(albumTab, Tab.ALBUM.name()); // album manages its own scroll
-		content.add(wrapScroll(setsTab), Tab.SETS.name());
-		content.add(wrapScroll(journalTab), Tab.JOURNAL.name());
-		content.add(timelineTab, Tab.TIMELINE.name()); // timeline manages its own scroll
-		content.add(dossierTab, Tab.DOSSIER.name()); // dossier pins its totals outside the scroll
-		content.add(wrapScroll(partyTab), Tab.PARTY.name());
-		content.add(patronsTab, Tab.PATRONS.name()); // patrons pins its totals outside the scroll
-		content.add(wrapScroll(loadoutTab), Tab.LOADOUT.name());
-		content.add(wrapScroll(helpTab), Tab.HELP.name());
+		// the scan card is exactly centeredNote()'s panel with the label handed in
+		// rather than created, so the two "nothing to show yet" screens cannot drift
+		content.add(centered(scanLabel), CARD_LOADING);
+		addCard(Tab.OVERVIEW, wrapScroll(overviewTab), overviewTab::rebuild);
+		addCard(Tab.SHOP, wrapScroll(shopTab), shopTab::rebuild);
+		addCard(Tab.ALBUM, albumTab, albumTab::rebuild); // album manages its own scroll
+		addCard(Tab.SETS, wrapScroll(setsTab), setsTab::rebuild);
+		addCard(Tab.JOURNAL, wrapScroll(journalTab), journalTab::rebuild);
+		addCard(Tab.TIMELINE, timelineTab, timelineTab::rebuild); // timeline scrolls itself
+		addCard(Tab.DOSSIER, dossierTab, dossierTab::rebuild); // dossier pins its totals outside the scroll
+		addCard(Tab.PARTY, wrapScroll(partyTab), partyTab::rebuild);
+		addCard(Tab.PATRONS, patronsTab, patronsTab::rebuild); // patrons pins its totals outside the scroll
+		addCard(Tab.LOADOUT, wrapScroll(loadoutTab), loadoutTab::rebuild);
+		addCard(Tab.HELP, wrapScroll(helpTab), helpTab::rebuild);
 		add(content, BorderLayout.CENTER);
 
 		updateTabButtonStyles();
@@ -278,46 +273,30 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		contentLayout.show(content, tab.name());
 	}
 
+	/**
+	 * Register a tab's card and the call that redraws it, in one place so the two
+	 * cannot be added independently.
+	 *
+	 * <p>Every path that can reach {@link #rebuildIfDirty} must run after this —
+	 * a tab with a card but no rebuilder would NPE inside the try below and be
+	 * logged instead of drawn. The one caller that runs earlier in the
+	 * constructor is {@link #updateTabVisibility}, and it only reaches
+	 * rebuildIfDirty through its "selected tab went away" fallback, which cannot
+	 * fire there: the selected tab is still Overview, Overview takes the
+	 * always-visible {@code default} arm of {@link #isTabVisible}, and its button
+	 * was put in the map by the loop above.
+	 */
+	private void addCard(Tab tab, JComponent card, Runnable rebuild) {
+		content.add(card, tab.name());
+		rebuilders.put(tab, rebuild);
+	}
+
 	private void rebuildIfDirty(Tab tab) {
 		if (!dirty.remove(tab)) {
 			return;
 		}
 		try {
-			switch (tab) {
-				case OVERVIEW:
-					overviewTab.rebuild();
-					break;
-				case SHOP:
-					shopTab.rebuild();
-					break;
-				case ALBUM:
-					albumTab.rebuild();
-					break;
-				case SETS:
-					setsTab.rebuild();
-					break;
-				case JOURNAL:
-					journalTab.rebuild();
-					break;
-				case TIMELINE:
-					timelineTab.rebuild();
-					break;
-				case DOSSIER:
-					dossierTab.rebuild();
-					break;
-				case PARTY:
-					partyTab.rebuild();
-					break;
-				case PATRONS:
-					patronsTab.rebuild();
-					break;
-				case LOADOUT:
-					loadoutTab.rebuild();
-					break;
-				case HELP:
-					helpTab.rebuild();
-					break;
-			}
+			rebuilders.get(tab).run();
 		}
 		catch (Exception e) {
 			log.warn("Gachaman tab rebuild failed: {}", tab, e);
@@ -409,6 +388,18 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	// --- Header links ---
 
 	/**
+	 * A flat panel icon, authored by com.gachaman.tools.IconArt.
+	 *
+	 * <p>Package-private, not private: the tabs bake their own fixed-size icons
+	 * to PNG through the same authoring tool, and every one of them loads it back
+	 * through here rather than re-deriving the loadImageResource path.
+	 */
+	static ImageIcon icon(String name) {
+		return new ImageIcon(ImageUtil.loadImageResource(
+			GachamanPanel.class, "/com/gachaman/ui/" + name + ".png"));
+	}
+
+	/**
 	 * A flat icon that opens a URL.
 	 *
 	 * A JLabel rather than a JButton on purpose: a button brings a border, a fill
@@ -422,12 +413,6 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 * copy-to-clipboard prompt on a machine with no usable browser handler,
 	 * instead of throwing onto the EDT.
 	 */
-	/** A flat panel icon, authored by com.gachaman.tools.IconArt. */
-	private static ImageIcon icon(String name) {
-		return new ImageIcon(ImageUtil.loadImageResource(
-			GachamanPanel.class, "/com/gachaman/ui/" + name + ".png"));
-	}
-
 	private static JLabel linkIcon(ImageIcon normal, ImageIcon hover, String url, String tooltip) {
 		JLabel label = new JLabel(normal);
 		label.setToolTipText(tooltip);
@@ -474,7 +459,8 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 					updateScanLabel();
 				}
 			});
-			scanTimer.setRepeats(true);
+			// no setRepeats(true) — that IS javax.swing.Timer's documented default,
+			// so the call only restated it. The poll still fires every SCAN_POLL_MS.
 		}
 		if (!scanTimer.isRunning()) {
 			scanTimer.start();
@@ -498,6 +484,21 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		return scroll;
 	}
 
+	/**
+	 * The stone palette the scrollbar thumb and the slider thumb are both cut
+	 * from — the two UIs used to carry byte-identical private copies of these
+	 * RGBs, which is how they would eventually have drifted apart.
+	 *
+	 * <p>Deliberately NOT named TRACK/THUMB: {@link MeterBar} has its own TRACK,
+	 * a genuinely different dark, and although an inner field legally shadows an
+	 * outer one, two same-named different-valued constants in one file is a trap
+	 * for whoever next deletes the "redundant" copy.
+	 */
+	private static final Color STONE_TRACK = new Color(28, 27, 25);
+	private static final Color STONE_THUMB = new Color(82, 72, 58);
+	private static final Color STONE_EDGE = new Color(115, 102, 82);
+	private static final Color STONE_EDGE_DARK = new Color(46, 40, 32);
+
 	/** Slim, dark, game-styled scrollbar (stone thumb, no arrow buttons). */
 	public static void styleScrollbar(JScrollPane scroll) {
 		JScrollBar bar = scroll.getVerticalScrollBar();
@@ -507,14 +508,9 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	}
 
 	private static final class GameScrollBarUI extends BasicScrollBarUI {
-		private static final Color TRACK = new Color(28, 27, 25);
-		private static final Color THUMB = new Color(82, 72, 58);
-		private static final Color THUMB_EDGE_LIGHT = new Color(115, 102, 82);
-		private static final Color THUMB_EDGE_DARK = new Color(46, 40, 32);
-
 		@Override
 		protected void paintTrack(Graphics g, JComponent c, Rectangle r) {
-			g.setColor(TRACK);
+			g.setColor(STONE_TRACK);
 			g.fillRect(r.x, r.y, r.width, r.height);
 		}
 
@@ -523,12 +519,12 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 			if (r.isEmpty() || !scrollbar.isEnabled()) {
 				return;
 			}
-			g.setColor(THUMB);
+			g.setColor(STONE_THUMB);
 			g.fillRect(r.x + 1, r.y + 1, r.width - 2, r.height - 2);
-			g.setColor(THUMB_EDGE_LIGHT);
+			g.setColor(STONE_EDGE);
 			g.drawLine(r.x + 1, r.y + 1, r.x + r.width - 2, r.y + 1);
 			g.drawLine(r.x + 1, r.y + 1, r.x + 1, r.y + r.height - 2);
-			g.setColor(THUMB_EDGE_DARK);
+			g.setColor(STONE_EDGE_DARK);
 			g.drawLine(r.x + 1, r.y + r.height - 2, r.x + r.width - 2, r.y + r.height - 2);
 			g.drawLine(r.x + r.width - 2, r.y + 1, r.x + r.width - 2, r.y + r.height - 2);
 		}
@@ -684,10 +680,16 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		return "AEIOUaeiou".indexOf(noun.charAt(0)) >= 0 ? "an" : "a";
 	}
 
-	static JComponent centeredNote(String text) {
+	/**
+	 * A caller-supplied label alone in the middle of an otherwise empty card.
+	 *
+	 * <p>Takes the label rather than the text because the scan card in the
+	 * constructor centres a label it has to keep a reference to (it retitles it
+	 * every 400ms), and that was the only difference between the two.
+	 */
+	static JPanel centered(JLabel label) {
 		JPanel panel = new JPanel(new GridBagLayout());
 		panel.setOpaque(false);
-		JLabel label = new JLabel(text, SwingConstants.CENTER);
 		label.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 		label.setFont(FontManager.getRunescapeSmallFont());
 		panel.add(label, new GridBagConstraints());
@@ -695,22 +697,22 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		return panel;
 	}
 
+	static JComponent centeredNote(String text) {
+		return centered(new JLabel(text, SwingConstants.CENTER));
+	}
+
 	static boolean confirm(Component parent, String titleText, String message) {
 		JOptionPane pane = new JOptionPane(dialogBody(message),
 			JOptionPane.WARNING_MESSAGE, JOptionPane.YES_NO_OPTION);
-		JDialog dialog = pane.createDialog(parent, titleText);
-		sizeForTargetScreen(dialog, parent);
-		dialog.setVisible(true);
-		dialog.dispose();
+		showDialog(pane, parent, titleText);
+		// the dialog is modal, so showDialog only returns once JOptionPane has
+		// stored the chosen option on the pane
 		return Integer.valueOf(JOptionPane.YES_OPTION).equals(pane.getValue());
 	}
 
 	static void info(Component parent, String message) {
-		JOptionPane pane = new JOptionPane(dialogBody(message), JOptionPane.INFORMATION_MESSAGE);
-		JDialog dialog = pane.createDialog(parent, "Gachaman");
-		sizeForTargetScreen(dialog, parent);
-		dialog.setVisible(true);
-		dialog.dispose();
+		showDialog(new JOptionPane(dialogBody(message), JOptionPane.INFORMATION_MESSAGE),
+			parent, "Gachaman");
 	}
 
 	/** Fixed-width HTML body so the dialog's preferred size is stable on any monitor. */
@@ -720,18 +722,25 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	}
 
 	/**
-	 * Mixed-DPI multi-monitor fix: createDialog() packs the dialog with the
-	 * PRIMARY monitor's graphics configuration; when the client sits on a
-	 * monitor with a different scale factor the dialog opens clipped — message
-	 * truncated, Yes/No buttons entirely off the bottom. Move the window onto
-	 * the target screen FIRST, then re-pack so layout runs with that monitor's
-	 * real metrics, and pin the packed size as the minimum.
+	 * Build, size, show and dispose one modal option pane — the whole tail that
+	 * {@link #confirm} and {@link #info} used to spell out identically.
+	 *
+	 * <p>Mixed-DPI multi-monitor fix, and the reason the sizing is not left to
+	 * createDialog(): createDialog() packs the dialog with the PRIMARY monitor's
+	 * graphics configuration; when the client sits on a monitor with a different
+	 * scale factor the dialog opens clipped — message truncated, Yes/No buttons
+	 * entirely off the bottom. Move the window onto the target screen FIRST, then
+	 * re-pack so layout runs with that monitor's real metrics, pin the packed size
+	 * as the minimum, and re-centre because the re-pack changed the size.
 	 */
-	private static void sizeForTargetScreen(JDialog dialog, Component parent) {
+	private static void showDialog(JOptionPane pane, Component parent, String titleText) {
+		JDialog dialog = pane.createDialog(parent, titleText);
 		dialog.setLocationRelativeTo(parent);
 		dialog.pack();
 		dialog.setMinimumSize(dialog.getSize());
 		dialog.setLocationRelativeTo(parent);
+		dialog.setVisible(true);
+		dialog.dispose();
 	}
 
 	/** A thin horizontal meter with an optional centered label. */
@@ -788,11 +797,19 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		return panel;
 	}
 
+	/**
+	 * The one step below {@code DARKER_GRAY_COLOR} that every recessed control in
+	 * this panel — button face, combo arrow, spinner steppers — is painted with.
+	 * Package-private so the other tabs can reach the same instance instead of
+	 * calling {@code .darker()} again for an equal colour.
+	 */
+	static final Color SUNKEN = ColorScheme.DARKER_GRAY_COLOR.darker();
+
 	static JButton button(String text) {
 		JButton button = new JButton(text);
 		button.setFont(FontManager.getRunescapeSmallFont());
 		button.setFocusPainted(false);
-		button.setBackground(ColorScheme.DARKER_GRAY_COLOR.darker());
+		button.setBackground(SUNKEN);
 		button.setForeground(Color.WHITE);
 		button.setBorder(BorderFactory.createCompoundBorder(
 			BorderFactory.createLineBorder(ColorScheme.MEDIUM_GRAY_COLOR),
@@ -825,10 +842,8 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		combo.setUI(new BasicComboBoxUI() {
 			@Override
 			protected JButton createArrowButton() {
-				BasicArrowButton arrow = new BasicArrowButton(
-					SwingConstants.SOUTH, ColorScheme.DARKER_GRAY_COLOR.darker(),
-					ColorScheme.DARKER_GRAY_COLOR.darker(), ColorScheme.LIGHT_GRAY_COLOR,
-					ColorScheme.DARKER_GRAY_COLOR.darker());
+				BasicArrowButton arrow = new BasicArrowButton(SwingConstants.SOUTH,
+					SUNKEN, SUNKEN, ColorScheme.LIGHT_GRAY_COLOR, SUNKEN);
 				arrow.setBorder(BorderFactory.createEmptyBorder());
 				return arrow;
 			}
@@ -853,12 +868,16 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		combo.setRenderer(renderer);
 	}
 
-	/** Dark, RuneLite-styled spinner (date/number editors alike). */
-	static void styleSpinner(JComponent spinner) {
-		if (!(spinner instanceof JSpinner)) {
-			return;
-		}
-		JSpinner s = (JSpinner) spinner;
+	/**
+	 * Dark, RuneLite-styled spinner (date/number editors alike).
+	 *
+	 * <p>Takes JSpinner, not JComponent: the parameter used to be widened with an
+	 * instanceof guard that quietly returned, which meant a caller passing the
+	 * wrong thing got an unstyled spinner and no complaint. Both callers already
+	 * hold a JSpinner, so the type does the checking for free and a future
+	 * mistake is a compile error instead of a silent white box.
+	 */
+	static void styleSpinner(JSpinner s) {
 		s.setBorder(BorderFactory.createLineBorder(ColorScheme.MEDIUM_GRAY_COLOR));
 		s.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		JComponent editor = s.getEditor();
@@ -873,17 +892,13 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		}
 		for (Component child : s.getComponents()) {
 			if (child instanceof JButton) {
-				child.setBackground(ColorScheme.DARKER_GRAY_COLOR.darker());
+				child.setBackground(SUNKEN);
 			}
 		}
 	}
 
 	/** Dark game-styled slider: stone thumb on a slim dark track. */
 	static final class GameSliderUI extends BasicSliderUI {
-		private static final Color TRACK = new Color(28, 27, 25);
-		private static final Color THUMB = new Color(82, 72, 58);
-		private static final Color THUMB_EDGE = new Color(115, 102, 82);
-
 		GameSliderUI(JSlider slider) {
 			super(slider);
 		}
@@ -891,7 +906,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		@Override
 		public void paintTrack(Graphics g) {
 			int cy = trackRect.y + trackRect.height / 2;
-			g.setColor(TRACK);
+			g.setColor(STONE_TRACK);
 			g.fillRoundRect(trackRect.x, cy - 3, trackRect.width, 6, 6, 6);
 			g.setColor(ColorScheme.BRAND_ORANGE);
 			int fill = thumbRect.x + thumbRect.width / 2 - trackRect.x;
@@ -902,9 +917,9 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 
 		@Override
 		public void paintThumb(Graphics g) {
-			g.setColor(THUMB);
+			g.setColor(STONE_THUMB);
 			g.fillRect(thumbRect.x + 2, thumbRect.y + 2, thumbRect.width - 4, thumbRect.height - 4);
-			g.setColor(THUMB_EDGE);
+			g.setColor(STONE_EDGE);
 			g.drawRect(thumbRect.x + 2, thumbRect.y + 2, thumbRect.width - 5, thumbRect.height - 5);
 		}
 
@@ -918,9 +933,14 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 * Pre-realization fallback only: the 242px non-wrapped PluginPanel minus
 	 * its 6px borders and a full stock 17px scrollbar — the NARROWEST the
 	 * viewport can plausibly be, so nothing clips even before measuring.
+	 *
+	 * <p>Written out cancelled. The full derivation adds SCROLLBAR_WIDTH to reach
+	 * the 242px outer width and then subtracts it again for the scrollbar, so the
+	 * two terms annihilate and PANEL_WIDTH less the two borders is all that
+	 * survives: 225 + 17 - 12 - 17 == 225 - 12 == 213. The prose above is the
+	 * derivation; the expression below only has to reach the same number.
 	 */
-	static final int FALLBACK_WIDTH = PluginPanel.PANEL_WIDTH + PluginPanel.SCROLLBAR_WIDTH
-		- 2 * PluginPanel.BORDER_OFFSET - PluginPanel.SCROLLBAR_WIDTH;
+	static final int FALLBACK_WIDTH = PluginPanel.PANEL_WIDTH - 2 * PluginPanel.BORDER_OFFSET;
 
 	static String htmlWrap(String body) {
 		return "<html><body>" + body + "</body></html>";

@@ -54,7 +54,17 @@ public class KillTracker {
 		int engagementStartTick;
 		boolean tookDamageDuringEngagement;
 		int maxHitDealt;
-		/** Another player assisted this kill (final, loot-oracle-adjusted). */
+		/**
+		 * Another player assisted this kill (final, loot-oracle-adjusted).
+		 *
+		 * Field-level @With so only withAssistedByOther is generated. The kill is
+		 * built at death carrying the provisional SUSPICION verdict and re-stamped
+		 * when the loot oracle rules a couple of ticks later; lombok's wither hands
+		 * back THIS very instance when the verdict is unchanged, which is the
+		 * identity short-circuit the hand-written rebuild used to spell out. The
+		 * common case (verdict stands) therefore still allocates nothing.
+		 */
+		@With
 		boolean assistedByOther;
 		LocalPoint deathLocation;
 	}
@@ -142,11 +152,10 @@ public class KillTracker {
 
 	@Subscribe
 	public void onInteractingChanged(InteractingChanged event) {
-		if (event.getSource() != client.getLocalPlayer() || !(event.getTarget() instanceof NPC)) {
-			return;
+		// instanceof already excludes null, so this covers "stopped interacting"
+		if (event.getSource() == client.getLocalPlayer() && event.getTarget() instanceof NPC) {
+			refresh((NPC) event.getTarget());
 		}
-		NPC npc = (NPC) event.getTarget();
-		refresh(npc);
 	}
 
 	@Subscribe
@@ -202,24 +211,23 @@ public class KillTracker {
 		}
 		// the warning refers to the monster just attacked: the current target,
 		// falling back to the most recently refreshed engagement
-		NPC target = client.getLocalPlayer() != null
-			&& client.getLocalPlayer().getInteracting() instanceof NPC
-			? (NPC) client.getLocalPlayer().getInteracting() : null;
-		if (target != null) {
-			warnedAssist.add(target.getIndex());
+		Player local = client.getLocalPlayer();
+		if (local != null && local.getInteracting() instanceof NPC) {
+			warnedAssist.add(((NPC) local.getInteracting()).getIndex());
 			return;
 		}
-		int bestIndex = -1;
-		int bestTick = -1;
-		for (Map.Entry<Integer, Engagement> entry : engagements.entrySet()) {
-			if (entry.getValue().lastRefreshTick > bestTick) {
-				bestTick = entry.getValue().lastRefreshTick;
-				bestIndex = entry.getKey();
-			}
-		}
-		if (bestIndex >= 0) {
-			warnedAssist.add(bestIndex);
-		}
+		// Two details make this the same search the hand-rolled loop performed.
+		// Ties: the loop used a strict >, so the first entry encountered kept the
+		// crown; Stream.max reduces with BinaryOperator.maxBy, which returns the
+		// LEFT argument whenever compare(a, b) >= 0 — first-encountered wins there
+		// too, over the same entrySet in the same order.
+		// Emptiness: the loop's trailing bestIndex >= 0 only asked "did anything
+		// match at all", because lastRefreshTick is assigned from tick and so is
+		// never below 0, which the -1 seed always loses to on the first entry, and
+		// npc indices are never negative. ifPresent asks exactly that question.
+		engagements.entrySet().stream()
+			.max(Comparator.comparingInt(e -> e.getValue().lastRefreshTick))
+			.ifPresent(e -> warnedAssist.add(e.getKey()));
 	}
 
 	@Subscribe
@@ -351,12 +359,10 @@ public class KillTracker {
 
 	private void emit(PendingKill pending) {
 		Kill draft = pending.kill;
-		boolean assisted = finalAssisted(pending.lootSeen, draft.isAssistedByOther(),
-			lootPipelineLive, hasGuaranteedDrop(draft.getNpcName()));
-		Kill kill = assisted == draft.isAssistedByOther() ? draft
-			: new Kill(draft.getNpcName(), draft.getNpcCombatLevel(), draft.getNpcIndex(),
-				draft.getTick(), draft.getEngagementStartTick(), draft.isTookDamageDuringEngagement(),
-				draft.getMaxHitDealt(), assisted, draft.getDeathLocation());
+		// the wither rebuilds only when the oracle actually overturns the draft
+		// verdict, so the eight untouched fields never have to be respelled here
+		Kill kill = draft.withAssistedByOther(finalAssisted(pending.lootSeen,
+			draft.isAssistedByOther(), lootPipelineLive, hasGuaranteedDrop(draft.getNpcName())));
 		for (KillListener listener : new ArrayList<>(listeners)) {
 			try {
 				listener.onKill(kill);
@@ -371,9 +377,7 @@ public class KillTracker {
 	public void flushPending() {
 		List<PendingKill> drain = new ArrayList<>(pendingKills);
 		pendingKills.clear();
-		for (PendingKill pending : drain) {
-			emit(pending);
-		}
+		drain.forEach(this::emit);
 		otherDamaged.clear();
 		warnedAssist.clear();
 		engagements.clear();
@@ -393,11 +397,10 @@ public class KillTracker {
 		return noDrop != null && !noDrop;
 	}
 
-	public boolean isPlayerLowHp(double fraction) {
-		int boosted = client.getBoostedSkillLevel(Skill.HITPOINTS);
-		int real = client.getRealSkillLevel(Skill.HITPOINTS);
-		return real > 0 && boosted <= real * fraction;
-	}
+	// No low-HP helper lives here any more: the only clutch-kill check in the
+	// plugin is TaskService's own private killTrackerLowHp(), which never called
+	// this one. Nothing player-visible changed — the same check still runs, from
+	// the same place it always ran.
 
 	private Engagement refresh(NPC npc) {
 		Engagement engagement = engagements.get(npc.getIndex());

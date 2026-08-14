@@ -29,6 +29,9 @@ public final class IconArt {
 	private static final Color CHEST_FILL = new Color(112, 82, 46);
 	private static final Color CHEST_TRIM = new Color(230, 190, 80);
 	private static final int LINK_ICON_SIZE = 18;
+	/** The album header's stardust sparkle and "Owned only" checkbox. */
+	private static final int ALBUM_ICON_SIZE = 13;
+	private static final Color STARDUST = new Color(190, 170, 255);
 
 	private static final String RES = "src/main/resources/com/gachaman/ui/";
 
@@ -44,7 +47,82 @@ public final class IconArt {
 		ImageIO.write(githubIcon(true), "png", new File(RES + "link-github-hover.png"));
 		ImageIO.write(kofiIcon(false), "png", new File(RES + "link-kofi.png"));
 		ImageIO.write(kofiIcon(true), "png", new File(RES + "link-kofi-hover.png"));
-		System.out.println("wrote 5 icons to " + RES + " and icon.png");
+		ImageIO.write(stardustIcon(), "png", new File(RES + "stardust.png"));
+		ImageIO.write(checkboxIcon(false), "png", new File(RES + "checkbox-off.png"));
+		ImageIO.write(checkboxIcon(true), "png", new File(RES + "checkbox-on.png"));
+		System.out.println("wrote 8 icons to " + RES + " and icon.png");
+	}
+
+	/**
+	 * A 13x13 canvas with antialiasing on — the surface both album icons below
+	 * were painting onto, once per repaint, straight into the panel's Graphics.
+	 *
+	 * <p>Compositing an antialiased shape into a transparent ARGB buffer and then
+	 * drawing that buffer SRC_OVER gives cov*src + (1-cov)*dst, which is what
+	 * drawing the shape straight onto the destination gives — the identity
+	 * ChestArt and CeremonyArt already rely on. It was measured for these two
+	 * rather than assumed, and it is not quite bit-exact: no pixel moved, and on
+	 * a white or transparent destination the two routes agreed exactly, but over
+	 * the dark panel eight pixels per icon came out ±1 on one channel, because
+	 * ARGB is stored non-premultiplied and a layer rounds once more than a direct
+	 * draw. AlbumIconBakeTest holds the old drawing code and pins that band.
+	 */
+	private static Graphics2D iconCanvas(BufferedImage img) {
+		Graphics2D g = img.createGraphics();
+		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		return g;
+	}
+
+	/**
+	 * The stardust counter's icon: a static 4-point sparkle in pale violet. No
+	 * animation and no state — the "Blessed!" case recolours the LABEL, never
+	 * this glyph — so the album was re-deriving a constant on every panel build.
+	 */
+	static BufferedImage stardustIcon() {
+		int size = ALBUM_ICON_SIZE;
+		BufferedImage img = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = iconCanvas(img);
+		int cx = size / 2;
+		int cy = size / 2;
+		g.setColor(STARDUST);
+		g.setStroke(new BasicStroke(1.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+		g.drawLine(cx, 2, cx, size - 2);
+		g.drawLine(2, cy, size - 2, cy);
+		g.setStroke(new BasicStroke(1f));
+		g.drawLine(cx - 2, cy - 2, cx + 2, cy + 2);
+		g.drawLine(cx - 2, cy + 2, cx + 2, cy - 2);
+		g.setColor(Color.WHITE);
+		g.fillOval(cx - 1, cy - 1, 2, 2);
+		g.dispose();
+		return img;
+	}
+
+	/**
+	 * The album's "Owned only" checkbox in both states: a dark rounded square
+	 * with a light border, plus a crisp white 2px check mark when selected. The
+	 * stock look-and-feel's check mark was nearly invisible on the dark panel,
+	 * which is why the plugin draws its own.
+	 *
+	 * <p>The border is drawn at SIZE-1 so the 1px stroke lands inside the icon's
+	 * own 13x13 box; the default STROKE_NORMALIZE then snaps it to the pixel
+	 * grid, so nothing bleeds outside the raster this bakes into.
+	 */
+	static BufferedImage checkboxIcon(boolean selected) {
+		int size = ALBUM_ICON_SIZE;
+		BufferedImage img = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = iconCanvas(img);
+		g.setColor(ColorScheme.DARKER_GRAY_COLOR);
+		g.fillRoundRect(0, 0, size, size, 4, 4);
+		g.setColor(ColorScheme.LIGHT_GRAY_COLOR);
+		g.drawRoundRect(0, 0, size - 1, size - 1, 4, 4);
+		if (selected) {
+			g.setColor(Color.WHITE);
+			g.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+			g.drawLine(3, 7, 5, 9);
+			g.drawLine(5, 9, 10, 3);
+		}
+		g.dispose();
+		return img;
 	}
 
 	/** The artwork centred on a non-square canvas, aspect preserved. */

@@ -56,6 +56,15 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 	private static final int PH_DEED_CHOOSE = 0;
 	private static final int PH_DEED_BURST = 1;
 
+	/**
+	 * Strength and falloff of the white blow-out at the moment each chest gives,
+	 * indexed by {@link Tuning.Chest#ordinal()} (RUSTY, BATTERED, GILDED,
+	 * ORNATE). A better box does not merely open — it goes off, and these two
+	 * rows are the whole difference between a creak and a detonation.
+	 */
+	private static final double[] FLASH_PEAK = {0.30, 0.55, 0.5, 0.85};
+	private static final double[] FLASH_TAU = {200.0, 220.0, 260.0, 300.0};
+
 	private static final long UPGRADE_MS = 1700;
 	private static final long DEAL_STAGGER_MS = 160;
 	private static final long DEAL_FLIGHT_MS = 520;
@@ -184,7 +193,6 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 	private int phase;
 	private long phaseStartMs;
 	private long ceremonyStartMs;
-	private int firedSounds;
 	/** Timestamp of the last frame in which the modal was actually drawn; 0 = never. */
 	private long lastModalPaintMs;
 
@@ -216,18 +224,15 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 	private int shockCx;
 	private int shockCy;
 	private Color shockwaveColor = Color.WHITE;
-	private int dealSoundIndex = -1;
 
 	// style roll
 	private StyleService.StyleRollResult styleResult;
 	private double wheelThetaEnd;
-	private long wheelTickCount;
 
 	// task offers
 	private List<TaskOffer> offers;
 	private OfferScrollArt[] offerArt = new OfferScrollArt[0];
 	private int acceptedIndex = -1;
-	private int offerWhooshCount;
 
 	// task complete
 
@@ -237,7 +242,6 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 	// fanfare (non-modal, independent of the modal slot)
 	private CeremonyBus.Fanfare fanfare;
 	private long fanfareStartMs;
-	private int fanfareSounds;
 
 	// preallocated scratch (zero allocation on the hot paths)
 	private final Rectangle rectScratch = new Rectangle();
@@ -290,7 +294,6 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 				}
 				fanfare = (CeremonyBus.Fanfare) request.getPayload();
 				fanfareStartMs = 0; // clock starts on the first frame actually painted
-				fanfareSounds = 0;
 				return true;
 			}
 			if (activeType != null) {
@@ -337,7 +340,6 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 						"Contract complete",
 						done.getCompletionGcAwarded() + " GC", null);
 					fanfareStartMs = 0;
-					fanfareSounds = 0;
 					return true;
 				}
 				case DEED_CHOICE:
@@ -345,7 +347,6 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 					phase = PH_DEED_CHOOSE;
 					phaseStartMs = now;
 					ceremonyStartMs = now;
-					firedSounds = 0;
 					chosenDeedSlot = null;
 					activeType = CeremonyBus.Type.DEED_CHOICE;
 					return true;
@@ -384,8 +385,6 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 		phase = PH_CHEST_INTRO;
 		phaseStartMs = now;
 		ceremonyStartMs = now;
-		firedSounds = 0;
-		dealSoundIndex = -1;
 		pityFlipMs = 0;
 		shockwaveStartMs = 0;
 		lastHoverMs = now;
@@ -396,8 +395,6 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 		phase = PH_SPIN;
 		phaseStartMs = now;
 		ceremonyStartMs = now;
-		firedSounds = 0;
-		wheelTickCount = 0;
 		int idx = result.getRolled().ordinal();
 		double jitter = (Paint.hash01((int) now * 31 + idx) - 0.5f) * 80.0;
 		double landing = 90 - (idx * 120 + 60) + jitter;
@@ -417,9 +414,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 		phase = PH_OFFERS_UNROLL;
 		phaseStartMs = now;
 		ceremonyStartMs = now;
-		firedSounds = 0;
 		acceptedIndex = -1;
-		offerWhooshCount = 0;
 	}
 
 	// --- input surface (called by RevealInputListener / SafeModeService) ---
@@ -486,8 +481,10 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 		int ch = client.getCanvasHeight();
 		snapshotCanReroll();
 
+		// no action a click can raise carries an argument (only the offer-accept
+		// path does, and that is raised from stagedAdvance/advanceModalLocked),
+		// so the arg is the literal -1 rather than a local nothing ever writes
 		int action = ACT_NONE;
-		int actionArg = -1;
 		int rerollIndex = -1;
 		GearSlot deedClicked = null;
 
@@ -561,7 +558,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 		if (deedClicked != null) {
 			applyDeedClaim(deedClicked, now);
 		}
-		executeAction(action, actionArg);
+		executeAction(action, -1);
 	}
 
 	/** Esc: staged skip, then close. */
@@ -921,18 +918,12 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 						}
 						break;
 					case PH_CHEST_UPGRADE:
-						if (el >= 850 && fireOnce(9)) {
-						}
 						if (el >= UPGRADE_MS) {
 							phase = PH_CHEST_DEAL;
 							phaseStartMs = now;
 						}
 						break;
 					case PH_CHEST_DEAL:
-						while (dealSoundIndex + 1 < chestSlots.size()
-							&& el >= DEAL_CHEST_DROP_MS + (dealSoundIndex + 1) * DEAL_STAGGER_MS) {
-							dealSoundIndex++;
-						}
 						if (el >= dealTotalMs(chestSlots.size())) {
 							phase = PH_CHEST_REVEAL;
 							phaseStartMs = now;
@@ -980,31 +971,21 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 				break;
 			}
 			case STYLE_ROLL:
-				if (phase == PH_SPIN) {
-					long spin = spinMs();
-					double t = clamp01(el / (double) spin);
-					double theta = wheelThetaEnd * (1 - Math.pow(1 - t, 3));
-					long count = (long) (theta / 120.0);
-					if (count > wheelTickCount) {
-						wheelTickCount = count;
-					}
-					if (el >= spin) {
-						phase = PH_SPIN_RESULT;
-						phaseStartMs = now;
-					}
+				// Nothing to integrate: the wheel's on-screen angle is solved
+				// independently in drawStyleRoll from wheelThetaEnd and the phase
+				// clock, so all the advance step owes the roulette is the moment
+				// the spin is over.
+				if (phase == PH_SPIN && el >= spinMs()) {
+					phase = PH_SPIN_RESULT;
+					phaseStartMs = now;
 				}
 				break;
 			case TASK_OFFERS:
-				if (phase == PH_OFFERS_UNROLL) {
-					// one soft paper whoosh as each scroll starts to unroll
-					int started = (int) Math.min(offers.size(), el / OFFER_UNROLL_STAGGER_MS + 1);
-					if (started > offerWhooshCount) {
-						offerWhooshCount = started;
-					}
-					if (el >= unrollTotalMs()) {
-						phase = PH_OFFERS_SETTLED;
-						phaseStartMs = now;
-					}
+				// likewise the scrolls: each one's unroll progress is a pure
+				// function of el, computed where it is drawn
+				if (phase == PH_OFFERS_UNROLL && el >= unrollTotalMs()) {
+					phase = PH_OFFERS_SETTLED;
+					phaseStartMs = now;
 				}
 				else if (phase == PH_OFFERS_ACCEPTED && el >= OFFER_BURN_MS) {
 					int idx = acceptedIndex;
@@ -1025,20 +1006,9 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 	}
 
 
-	private boolean fireOnce(int bit) {
-		int mask = 1 << bit;
-		if ((firedSounds & mask) != 0) {
-			return false;
-		}
-		firedSounds |= mask;
-		return true;
-	}
-
 	/** Fired at flip COMPLETION (the face is fully visible at this instant). */
 	private void onFlipEffectsLocked(int i, long now, Rectangle cardRect) {
 		ChestService.RolledSlot slot = chestSlots.get(i);
-		if (slot.isDuplicate()) {
-		}
 		if (i == 0 && chestResult.isPityBreak()) {
 			pityFlipMs = now;
 		}
@@ -1052,9 +1022,9 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 			shockCx = cardRect.x + cardRect.width / 2;
 			shockCy = cardRect.y + cardRect.height / 2;
 		}
-		if (slot.isNearMiss()) {
-			// soft fizzle cue — deliberately NOT the shiny fanfare
-		}
+		// A near miss deliberately gets NOTHING here: its cue is the quiet
+		// stardust fizzle drawn on the card itself, and anything fired from this
+		// method would read as the shiny fanfare the player did not win.
 	}
 
 	private void updateHoverCharges(long now) {
@@ -1134,32 +1104,28 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 		int cx = cw / 2;
 		int cy = ch / 2 + 20;
 
+		// Only the motion is computed here. The lid angle and the seam leak used
+		// to be solved alongside it and handed to a hand-drawn chest; both are
+		// baked into the pre-rendered frames now, so the values were being
+		// computed and thrown away — deleting them is not a change to what the
+		// lid does, it is deleting a second opinion nobody asked for.
 		double shakeX = 0;
 		double shakeY = 0;
-		double lidOpen = 0;
-		float flash = 0;
-		float leak = 0;
 		double camX = 0;
 		double camY = 0;
+		// the instant the lock loses; everything after the strain is anchored to it
+		long give = ChestStrain.giveMs(tier);
 
 		if (tier == Tuning.Chest.RUSTY) {
 			// one feeble wobble, a creak, and the lid gives up — no drama
 			if (el >= 300 && el < 800) {
 				shakeX = Math.sin(el * 0.07) * 2;
 			}
-			if (el >= 900) {
-				lidOpen = smoothstep(clamp01((el - 900) / 350.0));
-				flash = (float) Math.max(0, 0.30 * Math.exp(-(el - 900) / 200.0));
-			}
 		}
 		else if (tier == Tuning.Chest.BATTERED) {
 			if (ChestStrain.straining(el, tier)) {
 				shakeX = Math.sin(el * 0.09)
 					* (2 + 5 * ChestStrain.load(el, tier) + 3 * ChestStrain.kick(el, tier));
-			}
-			if (el >= 1400) {
-				lidOpen = smoothstep(clamp01((el - 1400) / 400.0));
-				flash = (float) Math.max(0, 0.55 * Math.exp(-(el - 1400) / 220.0));
 			}
 		}
 		else if (tier == Tuning.Chest.GILDED) {
@@ -1168,36 +1134,32 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 				shakeX = Math.sin(el * 0.12) * amp;
 				shakeY = Math.cos(el * 0.10) * amp * 0.4;
 			}
-			if (el >= 3200) {
-				lidOpen = smoothstep(clamp01((el - 3200) / 500.0));
-			}
-			if (el >= 2800) {
-				flash = (float) Math.max(0, 0.5 * Math.exp(-(el - 2800) / 260.0));
-			}
 		}
 		else {
 			// ornate: a padlock bursts and the chain it held whips off - the
 			// outer chain at 1200, the inner at 2600 - then the lid seam leaks
 			// light with mounting intensity, then the lid blasts open with a
-			// decaying 2-3px camera shake
+			// decaying 2-3px camera shake. Only that last camera shake is still
+			// drawn from here; the chains and the seam are in the frames.
 			if (ChestStrain.straining(el, tier)) {
 				double load = ChestStrain.load(el, tier);
 				double amp = 1.5 + 6.5 * load + 4 * ChestStrain.kick(el, tier);
 				shakeX = Math.sin(el * (0.05 + 0.06 * load)) * amp;
 			}
-			// the upper bound is load-bearing: without it the seam keeps
-			// glowing through the lid-blast frames and swallows the payoff
-			if (el >= 4000 && el < 6400) {
-				leak = (float) clamp01((el - 4000) / 2400.0);
-			}
-			if (el >= 6400) {
-				lidOpen = smoothstep(clamp01((el - 6400) / 350.0)) * 1.35;
-				flash = (float) Math.max(0, 0.85 * Math.exp(-(el - 6400) / 300.0));
-				double mag = 3.0 * Math.exp(-(el - 6400) / 260.0);
+			if (el >= give) {
+				double mag = 3.0 * Math.exp(-(el - give) / 260.0);
 				camX = Math.sin(el * 0.19) * mag;
 				camY = Math.cos(el * 0.23) * mag * 0.7;
 			}
 		}
+
+		// The white blow-out at the give, which every tier does with the same
+		// curve and only its own strength and falloff: peak * exp(-since/tau).
+		// The four thresholds it used to be written against ARE ChestStrain's
+		// give times, so it reads them from there rather than keeping a second
+		// copy that could drift out of step with the strain schedule.
+		float flash = el < give ? 0f : (float) Math.max(0,
+			FLASH_PEAK[tier.ordinal()] * Math.exp(-(el - give) / FLASH_TAU[tier.ordinal()]));
 
 		Graphics2D gc = (Graphics2D) g.create();
 		gc.translate(camX, camY);
@@ -1350,14 +1312,10 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 		if (rerollAtMs[i] > 0) {
 			long t = now - rerollAtMs[i];
 			if (t < REROLL_FLIPBACK_MS) {
-				// face flips back over (cosine ease-in-out)
-				double s = Math.cos(Math.PI * t / (double) REROLL_FLIPBACK_MS);
-				if (s > 0) {
-					drawScaledX(g, r, s, true, i, now);
-				}
-				else {
-					drawScaledX(g, r, -s, false, i, now);
-				}
+				// face flips back over (cosine ease-in-out): starts face-first,
+				// so the positive half of the cosine is the FACE
+				drawScaledX(g, r, Math.cos(Math.PI * t / (double) REROLL_FLIPBACK_MS),
+					true, i, now);
 			}
 			else {
 				// face-down shimmer while the replacement is prepared
@@ -1393,13 +1351,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 		if (t < FLIP_MS) {
 			// horizontal scale 1 -> 0 (back), swap, 0 -> 1 (face); the cosine
 			// gives ease-in-out and the face NEVER paints in the first half
-			double s = Math.cos(Math.PI * t / (double) FLIP_MS);
-			if (s > 0) {
-				drawScaledX(g, r, s, false, i, now);
-			}
-			else {
-				drawScaledX(g, r, -s, true, i, now);
-			}
+			drawScaledX(g, r, Math.cos(Math.PI * t / (double) FLIP_MS), false, i, now);
 			return;
 		}
 
@@ -1426,11 +1378,23 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 		}
 	}
 
-	/** Draw one card side horizontally squashed (flip animation). */
-	private void drawScaledX(Graphics2D g, Rectangle r, double scaleX, boolean face, int i, long now) {
+	/**
+	 * Draw one card side horizontally squashed (flip animation).
+	 *
+	 * <p>{@code v} is the raw signed cosine of the flip: its magnitude is the
+	 * horizontal scale, and its sign says which side is facing the viewer. Both
+	 * callers differ only in WHICH side that is — a reveal turns back-first, a
+	 * re-roll turns face-first — so they hand over the cosine untouched and name
+	 * that difference with {@code faceWhenPositive}. At exactly zero the card is
+	 * edge-on and the early return below draws nothing, whichever side "wins".
+	 */
+	private void drawScaledX(Graphics2D g, Rectangle r, double v, boolean faceWhenPositive,
+		int i, long now) {
+		double scaleX = Math.abs(v);
 		if (scaleX < 0.04) {
 			return;
 		}
+		boolean face = (v > 0) == faceWhenPositive;
 		Graphics2D g2 = (Graphics2D) g.create();
 		double cx = r.x + r.width / 2.0;
 		g2.translate(cx, 0);
@@ -1595,7 +1559,10 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 		g2.setStroke(new BasicStroke(1.5f + (1 - u) * 8f));
 		g2.drawOval(shockCx - (int) r2, shockCy - (int) r2, (int) (r2 * 2), (int) (r2 * 2));
 
-		// vignette breath
+		// Vignette breath. Deliberately NOT drawEdgeBands: this one is a flat
+		// colour and its side bands stop short of the corners, so the corners are
+		// inked once. Running it through the gradient helper would blend them
+		// twice and ring the flash with four dark blocks.
 		float vig = (float) Math.sin(Math.PI * u) * 0.35f;
 		g2.setColor(new Color(0, 0, 0, (int) (vig * 255)));
 		int band = Math.max(30, ch / 7);
@@ -1615,10 +1582,9 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 			double speed = (90 + h2 * 320);
 			int px = shockCx + (int) (Math.cos(ang) * speed * ts);
 			int py = shockCy + (int) (Math.sin(ang) * speed * ts + 340 * ts * ts);
+			// hash01 and (1 - u) are both non-negative, so this never falls below
+			// the base 2 and every particle always has a body to draw
 			int size = 2 + (int) (h3 * 3 * (1 - u));
-			if (size <= 0) {
-				continue;
-			}
 			g2.setColor(Paint.withAlpha((p & 1) == 0 ? shockwaveColor : Color.WHITE, ringAlpha));
 			g2.fillRect(px, py, size, size);
 		}
@@ -1632,9 +1598,23 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 		if (a <= 0.02f) {
 			return;
 		}
-		int band = Math.max(26, ch / 9);
-		Color inner = Paint.withAlpha(GOLD, 0f);
-		Color outer = Paint.withAlpha(GOLD, a);
+		drawEdgeBands(g, cw, ch, Math.max(26, ch / 9),
+			Paint.withAlpha(GOLD, a), Paint.withAlpha(GOLD, 0f));
+	}
+
+	/**
+	 * The four-sided gradient vignette: every edge fades from {@code outer} at
+	 * the border to {@code inner} {@code band} px inwards.
+	 *
+	 * <p>The left and right bands run the full height rather than stopping at the
+	 * top and bottom ones, so the corners take two passes and come out heavier
+	 * than the edges. That double blend is the point — it is what rounds the
+	 * frame instead of leaving four butted rectangles — and it is why the pity
+	 * glow and the offer backdrop must share one implementation rather than two
+	 * that could drift apart in the order they lay the bands down.
+	 */
+	private static void drawEdgeBands(Graphics2D g, int cw, int ch, int band,
+		Color outer, Color inner) {
 		g.setPaint(new GradientPaint(0, 0, outer, 0, band, inner));
 		g.fillRect(0, 0, cw, band);
 		g.setPaint(new GradientPaint(0, ch, outer, 0, ch - band, inner));
@@ -1663,19 +1643,32 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 
 	/** Radius the wheel chrome was authored at; sprites scale from here. */
 	private static final int WHEEL_ART_R = 190;
-	private static final Map<String, Image> ART = new HashMap<>();
+	static final Map<String, Image> ART = new HashMap<>();
 
-	private static void blitArt(Graphics2D g, String name, int cx, int cy, double scale,
+	static void blitArt(Graphics2D g, String name, int cx, int cy, double scale,
 		int anchorX, int anchorY) {
-		Image art = ART.computeIfAbsent(name, n -> {
+		// containsKey, not computeIfAbsent: a HashMap does not RECORD a null
+		// mapping, so computeIfAbsent treats a missing PNG as "not cached yet"
+		// and re-runs the loader on every single frame. All four wheel sprites
+		// ship today, so this is latent rather than live — but on a partial or
+		// stripped jar the roulette would do four failed classloader lookups
+		// per frame for the whole spin. An explicit null value is the same
+		// "tried once" sentinel ScrollPainter.TEXTURE already uses.
+		if (!ART.containsKey(name)) {
+			Image loaded = null;
 			try (InputStream in = RevealOverlay.class.getResourceAsStream(
-				"/com/gachaman/art/" + n + ".png")) {
-				return in == null ? null : ImageIO.read(in);
+				"/com/gachaman/art/" + name + ".png")) {
+				if (in != null) {
+					loaded = ImageIO.read(in);
+				}
 			}
 			catch (Exception e) {
-				return null;
+				// a truncated or corrupt PNG caches as a miss for the same
+				// reason: re-decoding it every frame cannot make it decode
 			}
-		});
+			ART.put(name, loaded);
+		}
+		Image art = ART.get(name);
 		if (art == null) {
 			return;
 		}
@@ -1927,17 +1920,8 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 
 	/** Dark vignette backdrop plus the gold-trimmed ceremony header. */
 	private void drawOffersBackdrop(Graphics2D g, int cw, int ch) {
-		int band = Math.max(70, ch / 4);
-		Color edge = new Color(0, 0, 0, 185);
-		Color mid = new Color(0, 0, 0, 0);
-		g.setPaint(new GradientPaint(0, 0, edge, 0, band, mid));
-		g.fillRect(0, 0, cw, band);
-		g.setPaint(new GradientPaint(0, ch, edge, 0, ch - band, mid));
-		g.fillRect(0, ch - band, cw, band);
-		g.setPaint(new GradientPaint(0, 0, edge, band, 0, mid));
-		g.fillRect(0, 0, band, ch);
-		g.setPaint(new GradientPaint(cw, 0, edge, cw - band, 0, mid));
-		g.fillRect(cw - band, 0, band, ch);
+		drawEdgeBands(g, cw, ch, Math.max(70, ch / 4),
+			new Color(0, 0, 0, 185), new Color(0, 0, 0, 0));
 
 		int hw = Math.min(430, cw - 60);
 		int hh = 46;
@@ -2252,7 +2236,7 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 	 *
 	 * @return the next free y, so the caller's footer keeps stacking
 	 */
-	private static int drawVoters(Graphics2D g,
+	static int drawVoters(Graphics2D g,
 		List<PartyRollService.Voter> voters,
 		int x, int y, int maxWidth, int parchBot) {
 		if (voters == null || voters.isEmpty()) {
@@ -2280,16 +2264,38 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 			int chipW = faceW + fm.stringWidth(name);
 
 			if (cx > x && cx + chipW > x + maxWidth) {
+				// The out-of-room test belongs HERE, before the wrap, not after
+				// it. It used to sit below this block and draw the label with
+				// the already-reset cx (== x) against the previous row's
+				// baseline (y - rowH), which stamped "+N more" straight over the
+				// first name on the last drawn row. Nothing else moves y inside
+				// this loop and the guard above proves the first row always
+				// fits, so the refusal was only ever reachable on the iteration
+				// that had just wrapped — i.e. always with a clobbered cx. Same
+				// arithmetic, one row earlier: y + rowH * 2 is the bottom of the
+				// row the wrap was about to open.
+				if (y + rowH * 2 > parchBot - 6) {
+					// no room for another line: say how many went unnamed rather
+					// than trailing off, since a truncated list of allies is a
+					// misleading one.
+					//
+					// The label is appended at the pen, so it can run past the
+					// right edge of the column — the wrap fired precisely
+					// because the remaining width was too narrow for the next
+					// chip, and "+N more" is not much shorter than a name.
+					// Overhang is the deliberate choice: wrapText already lets
+					// an over-long word run wide for the same reason, and the
+					// only alternative — clamping back toward the margin — is
+					// exactly the overprint this fixed. A count you cannot tell
+					// apart from an ally's name is worse than one a few pixels
+					// wide.
+					g.setColor(PARCH_INK_SOFT);
+					g.drawString("+" + (voters.size() - v) + " more", cx,
+						y + (rowH + fm.getAscent()) / 2 - 2);
+					return y + rowH + 2;
+				}
 				cx = x;
 				y += rowH;
-			}
-			if (y + rowH > parchBot - 6) {
-				// no room for another line: say how many went unnamed rather than
-				// trailing off, since a truncated list of allies is a misleading one
-				g.setColor(PARCH_INK_SOFT);
-				g.drawString("+" + (voters.size() - v) + " more", cx,
-					y - rowH + (rowH + fm.getAscent()) / 2 - 2);
-				return y + 2;
 			}
 			int baseline = y + (rowH + fm.getAscent()) / 2 - 2;
 			if (voter.getAvatar() != null) {
@@ -2392,7 +2398,9 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 			g.drawString(line, cx - fm.stringWidth(line) / 2, y + fm.getAscent() / 2 - 2);
 			y += fm.getHeight();
 		}
-		return y + gapAfter - (lines.isEmpty() ? 0 : 0);
+		// the gap is claimed whether or not any line fitted: an empty block that
+		// silently gave its leading back would shift the whole footer stack up
+		return y + gapAfter;
 	}
 
 	/** Width of {@code text} once {@code tracking} px are added between letters. */
@@ -2671,21 +2679,26 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 			boolean hovered = phase == PH_DEED_CHOOSE && !deeded && pointerValid
 				&& r.contains(pointerX, pointerY);
 
-			if (deeded || chosen) {
-				g.setColor(new Color(66, 52, 18, 235));
-				g.fillRoundRect(r.x, r.y, r.width, r.height, 10, 10);
-				g.setColor(GOLD);
-				g.setStroke(new BasicStroke(2.5f));
-				g.drawRoundRect(r.x, r.y, r.width, r.height, 10, 10);
+			// Every box is the same rounded plate at the same geometry; a slot
+			// that is won (or being won right now) differs only in its three
+			// colours and a heavier border. `lit` and `hovered` are mutually
+			// exclusive by construction — hovered demands PH_DEED_CHOOSE and
+			// !deeded — so the border weight is simply "either of them".
+			boolean lit = deeded || chosen;
+			g.setColor(lit ? new Color(66, 52, 18, 235)
+				: hovered ? new Color(46, 46, 54, 240) : new Color(30, 30, 36, 235));
+			g.fillRoundRect(r.x, r.y, r.width, r.height, 10, 10);
+			g.setColor(lit ? GOLD
+				: hovered ? new Color(200, 200, 210) : new Color(90, 90, 100));
+			g.setStroke(new BasicStroke(lit || hovered ? 2.5f : 1.6f));
+			g.drawRoundRect(r.x, r.y, r.width, r.height, 10, 10);
+			if (lit) {
+				// won: the name alone, centred, with nothing left to unlock
 				drawCenteredText(g, slots[i].getDisplayName(), r.x + r.width / 2,
 					r.y + r.height / 2 + 4, FONT_BODY, GOLD, true);
 			}
 			else {
-				g.setColor(hovered ? new Color(46, 46, 54, 240) : new Color(30, 30, 36, 235));
-				g.fillRoundRect(r.x, r.y, r.width, r.height, 10, 10);
-				g.setColor(hovered ? new Color(200, 200, 210) : new Color(90, 90, 100));
-				g.setStroke(new BasicStroke(hovered ? 2.5f : 1.6f));
-				g.drawRoundRect(r.x, r.y, r.width, r.height, 10, 10);
+				// locked: the padlock takes the middle and the name sits under it
 				drawCenteredText(g, slots[i].getDisplayName(), r.x + r.width / 2,
 					r.y + r.height - 10, FONT_SMALL,
 					hovered ? Color.WHITE : new Color(150, 150, 160), false);
@@ -2757,18 +2770,6 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 	private void drawFanfare(Graphics2D g, int cw, int ch, long now, long el) {
 		CeremonyBus.Fanfare fan = fanfare;
 		long total = fanfareDurationMs(fan.getSize());
-
-		if (fanfareSounds == 0) {
-			fanfareSounds = 1;
-			switch (fan.getSize()) {
-				case SMALL:
-					break;
-				case MEDIUM:
-					break;
-				default:
-					break;
-			}
-		}
 
 		if (fan.getSize() == CeremonyBus.Fanfare.Size.MEDIUM) {
 			drawConfetti(g, cw, ch, el);
@@ -2863,8 +2864,6 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 			if (bt > 1000) {
 				continue;
 			}
-			if (bt < 60 && fireFanfareBurst(m)) {
-			}
 			float u = bt / 1000f;
 			double ts = bt / 1000.0;
 			for (int p = 0; p < 26; p++) {
@@ -2878,15 +2877,6 @@ public class RevealOverlay extends Overlay implements CeremonyBus.Renderer {
 				g.fillRect(px, py, 3, 3);
 			}
 		}
-	}
-
-	private boolean fireFanfareBurst(int m) {
-		int mask = 1 << (m + 1);
-		if ((fanfareSounds & mask) != 0) {
-			return false;
-		}
-		fanfareSounds |= mask;
-		return true;
 	}
 
 	// =====================================================================
