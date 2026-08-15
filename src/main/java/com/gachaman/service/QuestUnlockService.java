@@ -45,9 +45,8 @@ public class QuestUnlockService {
 		this.client = client;
 		Set<String> names = new TreeSet<>();
 		for (MonsterTable.Monster monster : monsterTable.getMonsters()) {
-			if (monster.getQuests() != null) {
+			if (monster.getQuests() != null)
 				names.addAll(monster.getQuests());
-			}
 		}
 		List<Quest> resolved = new ArrayList<>(names.size());
 		Set<String> resolvedNames = new LinkedHashSet<>();
@@ -95,9 +94,8 @@ public class QuestUnlockService {
 		Set<String> finished = new HashSet<>();
 		for (Quest quest : gatingQuests) {
 			try {
-				if (quest.getState(client) == QuestState.FINISHED) {
+				if (quest.getState(client) == QuestState.FINISHED)
 					finished.add(quest.name());
-				}
 			}
 			catch (Exception e) {
 				// A quest-state script hiccup is not evidence of completion.

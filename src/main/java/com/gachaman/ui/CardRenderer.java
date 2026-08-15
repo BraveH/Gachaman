@@ -92,9 +92,8 @@ public final class CardRenderer {
 	 */
 	private static Graphics2D layer(Graphics2D g, Shape clip) {
 		Graphics2D out = (Graphics2D) g.create();
-		if (clip != null) {
+		if (clip != null)
 			out.setClip(clip);
-		}
 		out.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		return out;
 	}
@@ -171,9 +170,8 @@ public final class CardRenderer {
 		// String.hashCode is specified and pure, so one read cannot disagree
 		// with another.
 		int seed = view.getName().hashCode();
-		if (wear != CardWear.NONE) {
+		if (wear != CardWear.NONE)
 			drawWearGrime(g2, shape, x, y, w, h, wear, seed);
-		}
 
 		// name band — the font SHRINKS to fit the name (ellipsis only as a
 		// last resort at the minimum size)
@@ -214,9 +212,8 @@ public final class CardRenderer {
 			(labelLeft + labelRight) / 2, y + h / 14 + 4, labelRight - labelLeft);
 
 		// variant effects
-		if (view.getVariant() == Variant.SHINY) {
+		if (view.getVariant() == Variant.SHINY)
 			drawShiny(g2, shape, x, y, w, h, timeMs);
-		}
 		else if (view.getVariant() == Variant.HOLOGRAM) {
 			drawHologram(g2, shape, x, y, w, h, timeMs);
 		}
@@ -226,9 +223,8 @@ public final class CardRenderer {
 
 		// after the variant effects so the number is not lost under scanlines;
 		// the border block below re-sets both colour and stroke, so nothing leaks
-		if (service != null) {
+		if (service != null)
 			drawServiceBadge(g2, x, y, w, h, service);
-		}
 
 		// Second pass: creases and scratches. Drawn BEFORE the border so the
 		// rarity frame always paints on top of them, and allowed to run edge to
@@ -259,9 +255,8 @@ public final class CardRenderer {
 		// that is the whole point of it. A worn card's frame is interrupted where
 		// the gilt has flaked off, so the nicks have to bite the border itself
 		// rather than sit politely inside it.
-		if (wear != CardWear.NONE) {
+		if (wear != CardWear.NONE)
 			drawWearEdge(g2, shape, x, y, w, h, wear, seed);
-		}
 
 		g2.dispose();
 	}
@@ -502,9 +497,8 @@ public final class CardRenderer {
 			for (Rectangle r : protect) {
 				if (r == null)
 					continue;
-				if (r.y <= lo) {
+				if (r.y <= lo)
 					lo = Math.max(lo, r.y + r.height);
-				}
 				else {
 					hi = Math.min(hi, r.y);
 				}
@@ -892,9 +886,8 @@ public final class CardRenderer {
 		gw.setStroke(stroke);
 		gw.setColor(color);
 		for (int[] seg : segments) {
-			if (seg[4] == kind) {
+			if (seg[4] == kind)
 				gw.drawLine(seg[0], seg[1], seg[2], seg[3]);
-			}
 		}
 	}
 
@@ -1175,9 +1168,8 @@ public final class CardRenderer {
 		while (fm.stringWidth(drawn) > maxWidth && drawn.length() > 4) {
 			drawn = drawn.substring(0, drawn.length() - 2);
 		}
-		if (!drawn.equals(text)) {
+		if (!drawn.equals(text))
 			drawn = drawn.substring(0, Math.max(1, drawn.length() - 1)) + "…";
-		}
 		g.drawString(drawn, cx - fm.stringWidth(drawn) / 2, cy + fm.getAscent() / 2 - 1);
 	}
 

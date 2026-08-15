@@ -74,9 +74,8 @@ public class GraduationService {
 			}
 			if (def.getTierRank() > prev) {
 				updates.put(slotKey, def.getTierRank());
-				if (def.getTierRank() <= Tuning.GRADUATION_MAX_RANK) {
+				if (def.getTierRank() <= Tuning.GRADUATION_MAX_RANK)
 					graduations.put(slotKey, def);
-				}
 			}
 		}
 		if (updates.isEmpty())
@@ -87,9 +86,8 @@ public class GraduationService {
 			Map<String, Integer> map = new HashMap<>(s.getSlotBestTierRank());
 			for (Map.Entry<String, Integer> entry : updates.entrySet()) {
 				Integer existing = map.get(entry.getKey());
-				if (existing == null || entry.getValue() > existing) {
+				if (existing == null || entry.getValue() > existing)
 					map.put(entry.getKey(), entry.getValue());
-				}
 			}
 			return s.withSlotBestTierRank(map);
 		});

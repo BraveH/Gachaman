@@ -64,9 +64,8 @@ public class TimelineService implements ChestService.ChestListener, ComplianceSe
 					if (!(o instanceof TaskOffer))
 						continue;
 					TaskOffer offer = (TaskOffer) o;
-					if (!first) {
+					if (!first)
 						sb.append(", ");
-					}
 					first = false;
 					sb.append(offer.getMonsterName())
 						.append(" (").append(offer.getDifficulty().getDisplayName()).append(')');
@@ -87,15 +86,12 @@ public class TimelineService implements ChestService.ChestListener, ComplianceSe
 					sb.append(", +").append(sum.getFragmentsEarned()).append(" fragment")
 						.append(sum.getFragmentsEarned() > 1 ? "s" : "");
 				}
-				if (sum.isFragmentDeedForged()) {
+				if (sum.isFragmentDeedForged())
 					sb.append(" — DEED FORGED");
-				}
-				if (sum.getDeedMilestoneEarned() > 0) {
+				if (sum.getDeedMilestoneEarned() > 0)
 					sb.append(" — deed milestone ").append(sum.getDeedMilestoneEarned());
-				}
-				if (sum.isCycleTriggered()) {
+				if (sum.isCycleTriggered())
 					sb.append(" — style cycle complete");
-				}
 				record(TimelineEvent.KIND_COMPLETE, sb.toString(), difficulty);
 				return;
 			}
@@ -125,30 +121,24 @@ public class TimelineService implements ChestService.ChestListener, ComplianceSe
 
 	private static String chestHeader(ChestService.ChestOpenResult result) {
 		StringBuilder sb = new StringBuilder();
-		if (result.getThemedSetTag() != null) {
+		if (result.getThemedSetTag() != null)
 			sb.append("Boss chest opened: ").append(result.getThemedSetTag());
-		}
 		else if (result.getTargetSlot() != null) {
 			sb.append("Slot chest opened: ").append(result.getTargetSlot());
 		}
 		else {
 			sb.append("Chest opened: ").append(pretty(result.getPurchasedTier().name()));
 		}
-		if (result.getPricePaid() > 0) {
+		if (result.getPricePaid() > 0)
 			sb.append(" (").append(result.getPricePaid()).append(" GC)");
-		}
-		if (result.isJackpotUpgraded()) {
+		if (result.isJackpotUpgraded())
 			sb.append(" — JACKPOT to ").append(pretty(result.getEffectiveTier().name()));
-		}
-		if (result.isPityBreak()) {
+		if (result.isPityBreak())
 			sb.append(" — PITY BREAK");
-		}
-		if (result.isStardustBlessed()) {
+		if (result.isStardustBlessed())
 			sb.append(" — stardust-blessed");
-		}
-		if (result.isDeedGranted()) {
+		if (result.isDeedGranted())
 			sb.append(" — SLOT DEED rolled");
-		}
 		return sb.toString();
 	}
 
@@ -184,9 +174,8 @@ public class TimelineService implements ChestService.ChestListener, ComplianceSe
 		for (ChestService.RolledSlot slot : result.getSlots()) {
 			StringBuilder card = new StringBuilder("Card: ").append(slotName(slot))
 				.append(" (").append(pretty(slot.getRarity().name())).append(')');
-			if (slot.getVariant() == Variant.SHINY) {
+			if (slot.getVariant() == Variant.SHINY)
 				card.append(" — SHINY!");
-			}
 			else if (slot.getVariant() == Variant.HOLOGRAM) {
 				card.append(" — HOLOGRAM!");
 			}
@@ -232,9 +221,8 @@ public class TimelineService implements ChestService.ChestListener, ComplianceSe
 
 	@Override
 	public void onTaintCleared(int cleared, int remaining) {
-		if (remaining == 0) {
+		if (remaining == 0)
 			record(TimelineEvent.KIND_CLEANSE, "All taint cleansed", null);
-		}
 	}
 
 	// --- Helpers ---

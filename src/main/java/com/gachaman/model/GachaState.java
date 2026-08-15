@@ -214,60 +214,42 @@ public class GachaState {
 	 */
 	public GachaState normalized() {
 		GachaStateBuilder b = toBuilder();
-		if (ownedCards == null) {
+		if (ownedCards == null)
 			b.ownedCards(new ArrayList<>());
-		}
-		if (loadout == null) {
+		if (loadout == null)
 			b.loadout(new HashMap<>());
-		}
-		if (deededSlots == null) {
+		if (deededSlots == null)
 			b.deededSlots(new HashSet<>());
-		}
-		if (pendingOffers == null) {
+		if (pendingOffers == null)
 			b.pendingOffers(new ArrayList<>());
-		}
-		if (tasksCompletedByDifficulty == null) {
+		if (tasksCompletedByDifficulty == null)
 			b.tasksCompletedByDifficulty(new HashMap<>());
-		}
-		if (chestsOpenedByTier == null) {
+		if (chestsOpenedByTier == null)
 			b.chestsOpenedByTier(new HashMap<>());
-		}
-		if (monsterStats == null) {
+		if (monsterStats == null)
 			b.monsterStats(new HashMap<>());
-		}
-		if (personalBests == null) {
+		if (personalBests == null)
 			b.personalBests(new HashMap<>());
-		}
-		if (completedSets == null) {
+		if (completedSets == null)
 			b.completedSets(new HashSet<>());
-		}
-		if (weeklyShopPurchases == null) {
+		if (weeklyShopPurchases == null)
 			b.weeklyShopPurchases(new HashMap<>());
-		}
-		if (bossKcClaims == null) {
+		if (bossKcClaims == null)
 			b.bossKcClaims(new HashSet<>());
-		}
-		if (queuedThemedChests == null) {
+		if (queuedThemedChests == null)
 			b.queuedThemedChests(new ArrayList<>());
-		}
-		if (firstsClaimed == null) {
+		if (firstsClaimed == null)
 			b.firstsClaimed(new HashSet<>());
-		}
-		if (speciesDiscovered == null) {
+		if (speciesDiscovered == null)
 			b.speciesDiscovered(new HashSet<>());
-		}
-		if (slotBestTierRank == null) {
+		if (slotBestTierRank == null)
 			b.slotBestTierRank(new HashMap<>());
-		}
-		if (timeline == null) {
+		if (timeline == null)
 			b.timeline(new ArrayList<>());
-		}
-		if (patrons == null) {
+		if (patrons == null)
 			b.patrons(new HashMap<>());
-		}
-		if (contractLog == null) {
+		if (contractLog == null)
 			b.contractLog(new ArrayList<>());
-		}
 		return b.build();
 	}
 }

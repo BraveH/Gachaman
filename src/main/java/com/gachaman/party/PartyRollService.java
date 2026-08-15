@@ -550,9 +550,8 @@ public class PartyRollService implements TaskService.Listener {
 	private List<Inbox> joinableInbox() {
 		List<Inbox> open = new ArrayList<>();
 		for (Inbox entry : inbox.values()) {
-			if (!entry.answered) {
+			if (!entry.answered)
 				open.add(entry);
-			}
 		}
 		return open;
 	}
@@ -655,9 +654,8 @@ public class PartyRollService implements TaskService.Listener {
 		for (Long id : roster) {
 			Stance stance = stances.get(id);
 			int response = stance == null ? PartyRollResponseMessage.AGREE : stance.getResponse();
-			if (response == PartyRollResponseMessage.AGREE && party.contains(id)) {
+			if (response == PartyRollResponseMessage.AGREE && party.contains(id))
 				agreed++;
-			}
 			Integer vote = votingLive ? votes.get(id) : null;
 			members.add(new ProposalMember(memberName(id),
 				stance == null ? 0 : stance.getCombatLevel(), response,
@@ -726,9 +724,8 @@ public class PartyRollService implements TaskService.Listener {
 			// every other host is waiting on an answer they will now never get
 			// from a player who is spoken for; tell them rather than time out
 			for (Inbox other : new ArrayList<>(inbox.values())) {
-				if (!other.answered) {
+				if (!other.answered)
 					excuse(other, PartyRollResponseMessage.BUSY);
-				}
 			}
 			evaluateProposal();
 			refreshPanel();
@@ -747,9 +744,8 @@ public class PartyRollService implements TaskService.Listener {
 			refreshPanel();
 			return;
 		}
-		if (!entry.answered) {
+		if (!entry.answered)
 			excuse(entry, PartyRollResponseMessage.DECLINE);
-		}
 		inbox.remove(id);
 		chat("You sit " + memberName(entry.proposerId) + "'s party roll out"
 			+ " — the others may still take a contract.");
@@ -763,9 +759,8 @@ public class PartyRollService implements TaskService.Listener {
 		long self = safeMemberIdOrZero();
 		for (Map.Entry<Long, Stance> e : entry.stances.entrySet()) {
 			Stance stance = e.getValue();
-			if (stance.getResponse() == PartyRollResponseMessage.AGREE) {
+			if (stance.getResponse() == PartyRollResponseMessage.AGREE)
 				agreed++;
-			}
 			// no vote column on a group this client has not joined: the votes are
 			// only broadcast to participants, so any number here would be a guess
 			members.add(new ProposalMember(memberName(e.getKey()), stance.getCombatLevel(),
@@ -831,9 +826,8 @@ public class PartyRollService implements TaskService.Listener {
 			// "Fighting Weight (a member's build cannot read the host's rule)" on
 			// the card while the roll it describes really did use Weakest Man and
 			// said so in chat. The card and the chat line must name one rule.
-			if (stance.getResponse() == PartyRollResponseMessage.AGREE) {
+			if (stance.getResponse() == PartyRollResponseMessage.AGREE)
 				protocols.add(stance.getRollProtocol());
-			}
 		}
 		// this client is in it, or would be joining it; harmless when its own
 		// stance is already in the map, since the gate is a minimum over protocols
@@ -957,9 +951,8 @@ public class PartyRollService implements TaskService.Listener {
 			}
 			stances.put(msg.getMemberId(), heard);
 			rememberPartner(msg.getMemberId(), msg.getAccountKey());
-			if (msg.getResponse() == PartyRollResponseMessage.DECLINE) {
+			if (msg.getResponse() == PartyRollResponseMessage.DECLINE)
 				chat(memberName(msg.getMemberId()) + " sits this party roll out.");
-			}
 			evaluateProposal();
 			refreshPanel();
 		});
@@ -995,18 +988,16 @@ public class PartyRollService implements TaskService.Listener {
 				allAnswered = false;
 				continue; // silent so far — plugin-less members never answer
 			}
-			if (stance.getResponse() == PartyRollResponseMessage.AGREE) {
+			if (stance.getResponse() == PartyRollResponseMessage.AGREE)
 				agreed.add(member.getMemberId());
-			}
 		}
 		boolean deadline = client.getTickCount() >= proposalExpiresAtTick;
 		if (!allAnswered && !deadline && !force) {
 			return; // keep waiting for stragglers until the deadline (or host start)
 		}
 		if (agreed.size() < 2) {
-			if (deadline || allAnswered) {
+			if (deadline || allAnswered)
 				cancelProposal("Not enough members agreed to the party roll.");
-			}
 			return;
 		}
 		Collections.sort(agreed);
@@ -1155,9 +1146,8 @@ public class PartyRollService implements TaskService.Listener {
 				return;
 			}
 			safeSend(new PartyRollCancelMessage(proposalId));
-			if (votingLive) {
+			if (votingLive)
 				cancelVoting("You cancelled the party roll.");
-			}
 			else {
 				cancelProposal("You cancelled the party roll.");
 			}
@@ -1181,9 +1171,8 @@ public class PartyRollService implements TaskService.Listener {
 			// only the proposal's host may cancel it remotely
 			if (msg.getProposalId() != proposalId || msg.getMemberId() != proposerId)
 				return;
-			if (votingLive) {
+			if (votingLive)
 				cancelVoting("The host cancelled the party roll.");
-			}
 			else if (proposalLive) {
 				cancelProposal("The host cancelled the party roll.");
 			}
@@ -1508,9 +1497,8 @@ public class PartyRollService implements TaskService.Listener {
 	private int votesFor(int index) {
 		int count = 0;
 		for (int vote : votes.values()) {
-			if (vote == index) {
+			if (vote == index)
 				count++;
-			}
 		}
 		return count;
 	}
@@ -1519,9 +1507,8 @@ public class PartyRollService implements TaskService.Listener {
 	private int[] tally() {
 		int[] counts = new int[partyOffers == null ? 0 : partyOffers.size()];
 		for (int vote : votes.values()) {
-			if (vote >= 0 && vote < counts.length) {
+			if (vote >= 0 && vote < counts.length)
 				counts[vote]++;
-			}
 		}
 		return counts;
 	}
@@ -1611,9 +1598,8 @@ public class PartyRollService implements TaskService.Listener {
 			voters.get(index).add(new Voter(memberName(entry.getKey()),
 				avatarOf(entry.getKey()), entry.getKey() == self));
 			String label = voteLabelFor(entry.getKey(), index);
-			if (label != null) {
+			if (label != null)
 				labels.put(entry.getKey(), label);
-			}
 		}
 		return new VoteView(labels, voters);
 	}
@@ -1759,9 +1745,8 @@ public class PartyRollService implements TaskService.Listener {
 				return;
 			// a roster the roll never included cannot be on the contract
 			List<Long> roster = new ArrayList<>(msg.getMemberIds());
-			if (rollOrder != null) {
+			if (rollOrder != null)
 				roster.retainAll(rollOrder);
-			}
 			applyResolve(index, roster, msg.getMode(), msg.isAnte());
 		});
 	}
@@ -1838,9 +1823,8 @@ public class PartyRollService implements TaskService.Listener {
 		}
 		List<AttackStyle> narrowed = new ArrayList<>(memberIds.size());
 		for (int i = 0; i < rollOrder.size() && i < partyStyles.size(); i++) {
-			if (memberIds.contains(rollOrder.get(i))) {
+			if (memberIds.contains(rollOrder.get(i)))
 				narrowed.add(partyStyles.get(i));
-			}
 		}
 		return narrowed;
 	}
@@ -1882,9 +1866,8 @@ public class PartyRollService implements TaskService.Listener {
 
 	@Override
 	public void onPartyProgress(ActiveTask task) {
-		if (taskLive && task != null && safeLocalMember() != null) {
+		if (taskLive && task != null && safeLocalMember() != null)
 			safeSend(new PartyKillsMessage(proposalId, task.getKillsDone()));
-		}
 	}
 
 	@Subscribe
@@ -1969,9 +1952,8 @@ public class PartyRollService implements TaskService.Listener {
 	public void onTaskCompleted(TaskService.TaskCompletionSummary summary) {
 		if (taskLive && summary != null && summary.getTask() != null
 			&& summary.getTask().getPartyLabel() != null) {
-			if (safeLocalMember() != null) {
+			if (safeLocalMember() != null)
 				safeSend(new PartyCompleteMessage(proposalId));
-			}
 			creditPatrons();
 			resetAll();
 		}
@@ -2017,9 +1999,8 @@ public class PartyRollService implements TaskService.Listener {
 				// live roster first (it tracks a mid-contract rename), the
 				// signature-time snapshot second (it survives a logout)
 				String name = PatronMark.normalizeName(liveDisplayName(id));
-				if (name == null) {
+				if (name == null)
 					name = PatronMark.normalizeName(partnerNameCache.get(id));
-				}
 				partners.put(key, name);
 			}
 			if (partners.isEmpty())
@@ -2061,9 +2042,8 @@ public class PartyRollService implements TaskService.Listener {
 	private void rememberNames(List<Long> memberIds) {
 		for (Long id : memberIds) {
 			String name = PatronMark.normalizeName(liveDisplayName(id));
-			if (name != null) {
+			if (name != null)
 				partnerNameCache.put(id, name);
-			}
 		}
 	}
 
@@ -2078,9 +2058,8 @@ public class PartyRollService implements TaskService.Listener {
 	 */
 	private void rememberPartner(long memberId, String accountKey) {
 		String key = AccountKey.normalize(accountKey);
-		if (key != null) {
+		if (key != null)
 			partnerKeyCache.put(memberId, key);
-		}
 	}
 
 	/**
@@ -2099,9 +2078,8 @@ public class PartyRollService implements TaskService.Listener {
 	static void rememberPartners(Map<Long, String> cache, Map<Long, Stance> heard) {
 		for (Map.Entry<Long, Stance> answer : heard.entrySet()) {
 			String key = AccountKey.normalize(answer.getValue().getAccountKey());
-			if (key != null) {
+			if (key != null)
 				cache.put(answer.getKey(), key);
-			}
 		}
 	}
 
@@ -2148,12 +2126,10 @@ public class PartyRollService implements TaskService.Listener {
 		// vote. Nothing legitimate is ever further out than its own TTL plus the
 		// non-host grace, so anything beyond that is a restarted clock, not patience.
 		// Subtraction rather than `>` for the same reason as voteExpired().
-		if (proposalLive && proposalExpiresAtTick - now > PROPOSAL_TTL_TICKS + NON_HOST_GRACE_TICKS) {
+		if (proposalLive && proposalExpiresAtTick - now > PROPOSAL_TTL_TICKS + NON_HOST_GRACE_TICKS)
 			proposalExpiresAtTick = now + PROPOSAL_TTL_TICKS + NON_HOST_GRACE_TICKS;
-		}
-		if (votingLive && voteExpiresAtTick - now > VOTE_TTL_TICKS + NON_HOST_GRACE_TICKS) {
+		if (votingLive && voteExpiresAtTick - now > VOTE_TTL_TICKS + NON_HOST_GRACE_TICKS)
 			voteExpiresAtTick = now + VOTE_TTL_TICKS + NON_HOST_GRACE_TICKS;
-		}
 		// inbox cards carry their own deadline: without this a host who logs off
 		// leaves a Join button on screen forever, and clicking it would answer a
 		// proposal nobody is collecting. Same clock-jump guard as the committed
@@ -2162,17 +2138,15 @@ public class PartyRollService implements TaskService.Listener {
 			boolean dropped = false;
 			for (Iterator<Inbox> it = inbox.values().iterator(); it.hasNext(); ) {
 				Inbox entry = it.next();
-				if (entry.expiresAtTick - now > PROPOSAL_TTL_TICKS + NON_HOST_GRACE_TICKS) {
+				if (entry.expiresAtTick - now > PROPOSAL_TTL_TICKS + NON_HOST_GRACE_TICKS)
 					entry.expiresAtTick = now + PROPOSAL_TTL_TICKS + NON_HOST_GRACE_TICKS;
-				}
 				if (now >= entry.expiresAtTick) {
 					it.remove();
 					dropped = true;
 				}
 			}
-			if (dropped) {
+			if (dropped)
 				refreshPanel();
-			}
 		}
 		// Redraw while anything is counting down. Every countdown on the panel —
 		// the cards, the pending line, the vote clock — is derived from the tick
@@ -2181,9 +2155,8 @@ public class PartyRollService implements TaskService.Listener {
 		// they read when the last unrelated event happened to fire. Every other
 		// tick rather than every one: a whole-panel rebuild under the pointer is
 		// the thing the player is about to click Join on.
-		if ((proposalLive || votingLive || !inbox.isEmpty()) && now % 2 == 0) {
+		if ((proposalLive || votingLive || !inbox.isEmpty()) && now % 2 == 0)
 			refreshPanel();
-		}
 		if (proposalLive && now >= proposalExpiresAtTick) {
 			if (safeMemberIdOrZero() == proposerId) {
 				// deadline: start with whoever agreed (min 2) or cancel
@@ -2221,15 +2194,12 @@ public class PartyRollService implements TaskService.Listener {
 		// below reading as far in the FUTURE — and a future stamp parks its timer
 		// for as long as the old count was high, so the carry clause would simply
 		// stop existing for an hour. Re-anchor rather than stall.
-		if (lastOthersProgressTick > now) {
+		if (lastOthersProgressTick > now)
 			lastOthersProgressTick = now;
-		}
-		if (resumedAtTick > now) {
+		if (resumedAtTick > now)
 			resumedAtTick = now;
-		}
-		if (othersGoneSinceTick > now) {
+		if (othersGoneSinceTick > now)
 			othersGoneSinceTick = now;
-		}
 		// A restarting client comes back under a BRAND NEW member id, and the only
 		// thing that has ever announced one is a KILL — onPartyProgress fires on
 		// progress and on nothing else. So a partner who restarts and then banks,
@@ -2247,9 +2217,8 @@ public class PartyRollService implements TaskService.Listener {
 		if (resumedAtTick >= 0 && now - resumedAtTick <= Tuning.PARTY_DEPART_GRACE_TICKS) {
 			GachaState resumeState = stateService.get();
 			ActiveTask resumeTask = resumeState == null ? null : resumeState.getActiveTask();
-			if (resumeTask != null && resumeTask.isParty() && safeLocalMember() != null) {
+			if (resumeTask != null && resumeTask.isParty() && safeLocalMember() != null)
 				safeSend(new PartyKillsMessage(proposalId, resumeTask.getKillsDone()));
-			}
 		}
 		// carry clause: all other participants gone, or nobody progressing
 		Set<Long> roster = rosterIds();
@@ -2260,9 +2229,8 @@ public class PartyRollService implements TaskService.Listener {
 		boolean anyOtherPresent = !others.isEmpty();
 		// latch the moment the last one left, so the grace measures how long they
 		// have been gone rather than restarting on every sweep
-		if (!knewOthers || anyOtherPresent) {
+		if (!knewOthers || anyOtherPresent)
 			othersGoneSinceTick = -1;
-		}
 		else if (othersGoneSinceTick < 0) {
 			othersGoneSinceTick = now;
 		}
@@ -2675,9 +2643,8 @@ public class PartyRollService implements TaskService.Listener {
 		for (List<String> theirs : perMember) {
 			if (theirs == null)
 				return Collections.emptySet();
-			if (shared == null) {
+			if (shared == null)
 				shared = new HashSet<>(theirs);
-			}
 			else {
 				shared.retainAll(theirs);
 			}
@@ -2701,9 +2668,8 @@ public class PartyRollService implements TaskService.Listener {
 	private void sendResponse(int response) {
 		Stance mine = localStance(response);
 		PartyMember local = safeLocalMember();
-		if (local != null) {
+		if (local != null)
 			stances.put(local.getMemberId(), mine);
-		}
 		sendStance(proposalId, response, mine);
 	}
 
@@ -2839,9 +2805,8 @@ public class PartyRollService implements TaskService.Listener {
 	 * business, and this refactor is not the place to find out.
 	 */
 	private void fromPeer(PartyMemberMessage msg, Runnable body) {
-		if (msg != null && !isSelfEcho(msg.getMemberId())) {
+		if (msg != null && !isSelfEcho(msg.getMemberId()))
 			clientThread.invokeLater(body);
-		}
 	}
 
 	private boolean safeSend(PartyMemberMessage msg) {

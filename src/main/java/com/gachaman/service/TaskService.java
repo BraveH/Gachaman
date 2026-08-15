@@ -230,9 +230,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	private volatile int antePercentArmed;
 
 	public void addListener(Listener listener) {
-		if (!listeners.contains(listener)) {
+		if (!listeners.contains(listener))
 			listeners.add(listener);
-		}
 	}
 
 	public void removeListener(Listener listener) {
@@ -848,9 +847,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		fireKillFeedback(new KillFeedback(kill.getNpcName(), awarded, true, tainted, finalKill,
 			newKills, task.getKillsRequired(), assistedPenalty, kill.getDeathLocation()));
 
-		if (docketNow) {
+		if (docketNow)
 			Listeners.fireHook(slayerLatchHook, Runnable::run, "slayer latch hook failed");
-		}
 
 		// The re-read stays INSIDE the loop deliberately: a listener is allowed to
 		// end the contract, and the listeners queued behind it must then observe
@@ -870,14 +868,12 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		for (Listener listener : listeners) {
 			GachaState live = stateService.get();
 			ActiveTask shared = live == null ? null : live.getActiveTask();
-			if (shared != null && shared.isParty()) {
+			if (shared != null && shared.isParty())
 				listener.onPartyProgress(shared);
-			}
 		}
 
-		if (finalKill) {
+		if (finalKill)
 			completeTask();
-		}
 	}
 
 	/**
@@ -1022,9 +1018,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	private int countKillsWithin(int windowTicks, int nowTick) {
 		int count = 0;
 		for (int t : recentKillTicks) {
-			if (nowTick - t <= windowTicks) {
+			if (nowTick - t <= windowTicks)
 				count++;
-			}
 		}
 		return count;
 	}
@@ -1058,9 +1053,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			return 0;
 		EnumSet<AttackStyle> seen = EnumSet.noneOf(AttackStyle.class);
 		for (AttackStyle style : styles) {
-			if (style != null) {
+			if (style != null)
 				seen.add(style);
-			}
 		}
 		return seen.size();
 	}
@@ -1084,9 +1078,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			// (self included), so every client pays the same and a mid-contract
 			// style re-roll cannot reprice a signed contract.
 			completionMult = Tuning.PARTY_REWARD_MULT;
-			if (distinctStyles(task.getPartyStyles()) > 1) {
+			if (distinctStyles(task.getPartyStyles()) > 1)
 				completionMult += Tuning.PARTY_STYLE_CLASH_BONUS;
-			}
 		}
 		else if (task.isPartyConvertedToSolo()) {
 			completionMult = Tuning.PARTY_CARRY_MULT;
@@ -1096,9 +1089,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		// to, so it is worth the same proportion of a shared contract as of a
 		// solo one. The taint halving still lands after all of this, inside the
 		// sink, exactly as it does for every other completion modifier.
-		if (task.isSlayerAligned()) {
+		if (task.isSlayerAligned())
 			completionMult *= Tuning.DOUBLE_DOCKET_MULT;
-		}
 
 		// Milestone contracts (every 5th/10th/50th/100th/250th) multiply the
 		// completion reward, Slayer-point style. Stacks multiplicatively with
@@ -1143,9 +1135,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		boolean newHaul = false;
 		String pbKey = task.getDifficulty().name();
 		PersonalBest pb = state.getPersonalBests().get(pbKey);
-		if (pb == null) {
+		if (pb == null)
 			pb = new PersonalBest(0, null, 0, null);
-		}
 		PersonalBest updatedPb = pb;
 		if (pb.getFastestTaskMs() == 0 || duration < pb.getFastestTaskMs()) {
 			updatedPb = updatedPb.withFastestTaskMs(duration).withFastestMonster(task.getMonsterName());
@@ -1176,9 +1167,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		// Deed Fragments: harder contracts during the first ten tasks pay
 		// fragments; ten forge the one-per-account bonus deed
 		int fragmentsEarned = 0;
-		if (!state.isFragmentDeedForged() && taskNumber <= Tuning.FRAGMENT_WINDOW_TASKS) {
+		if (!state.isFragmentDeedForged() && taskNumber <= Tuning.FRAGMENT_WINDOW_TASKS)
 			fragmentsEarned = Tuning.fragmentsFor(task.getDifficulty());
-		}
 		final int fragmentsEarnedFinal = fragmentsEarned;
 
 		// the applied charge is read INSIDE the clearing mutate so a purchase
@@ -1274,9 +1264,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		for (Listener listener : listeners) {
 			listener.onTaskCompleted(summary);
 		}
-		if (milestone > 0) {
+		if (milestone > 0)
 			ceremonyBus.submit(CeremonyBus.Type.DEED_CHOICE, milestone);
-		}
 		if (forgedNow) {
 			fanfare(CeremonyBus.Fanfare.Size.LARGE, "Deed forged from fragments!",
 				Tuning.FRAGMENTS_REQUIRED + " fragments fuse into a bonus Slot Deed — choose a slot.");

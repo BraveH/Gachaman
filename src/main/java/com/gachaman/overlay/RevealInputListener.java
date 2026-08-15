@@ -56,9 +56,8 @@ public class RevealInputListener implements MouseListener, MouseWheelListener, K
 		syncHover(e);
 		if (!shouldConsume())
 			return e;
-		if (e.getButton() == MouseEvent.BUTTON1) {
+		if (e.getButton() == MouseEvent.BUTTON1)
 			overlay.handleClick(e.getPoint());
-		}
 		e.consume();
 		return e;
 	}
@@ -131,9 +130,8 @@ public class RevealInputListener implements MouseListener, MouseWheelListener, K
 	public void keyPressed(KeyEvent e) {
 		if (e == null || !shouldConsume())
 			return;
-		if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+		if (e.getKeyCode() == KeyEvent.VK_ESCAPE)
 			overlay.handleEscape();
-		}
 		else if (e.getKeyCode() == KeyEvent.VK_SPACE) {
 			overlay.handleAdvance();
 		}

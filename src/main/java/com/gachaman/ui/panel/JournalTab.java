@@ -122,9 +122,8 @@ public class JournalTab extends JPanel {
 		FirstStamp[] stamps = FirstStamp.values();
 		int earned = 0;
 		for (FirstStamp stamp : stamps) {
-			if (claimed.contains(stamp.name())) {
+			if (claimed.contains(stamp.name()))
 				earned++;
-			}
 		}
 		section.add(new GachamanPanel.MeterBar((double) earned / stamps.length,
 			new Color(230, 190, 80), earned + " / " + stamps.length + " stamped"));

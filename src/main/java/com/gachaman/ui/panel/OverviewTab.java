@@ -134,9 +134,8 @@ public class OverviewTab extends JPanel {
 	}
 
 	void setInPartySupplier(BooleanSupplier supplier) {
-		if (supplier != null) {
+		if (supplier != null)
 			this.inParty = supplier;
-		}
 	}
 
 	void rebuild() {
@@ -159,9 +158,8 @@ public class OverviewTab extends JPanel {
 			&& state.getTotalTasksCompleted() < FRAGMENT_WINDOW_TASKS) {
 			addSection(buildFragmentSection(state));
 		}
-		if (state.getTaint() > 0) {
+		if (state.getTaint() > 0)
 			addSection(buildTaintSection(state));
-		}
 		addSection(buildPitySection(state));
 		// last on purpose: a player who does not care scrolls past everything
 		// that matters first, and it hides itself entirely when empty
@@ -324,9 +322,8 @@ public class OverviewTab extends JPanel {
 	private static void actionButton(JComponent parent, String text, String tooltip,
 		ActionListener action) {
 		JButton made = button(text);
-		if (tooltip != null) {
+		if (tooltip != null)
 			made.setToolTipText(tooltip);
-		}
 		made.addActionListener(action);
 		parent.add(made);
 	}
@@ -703,9 +700,8 @@ public class OverviewTab extends JPanel {
 				// NOT taskService::presentOffers — see viewRolledContracts above
 				actionButton(section, "View Rolled Contracts", null,
 					e -> clientThread.invokeLater(this::viewRolledContracts));
-				if (partyVote && rollService.canCancelRoll()) {
+				if (partyVote && rollService.canCancelRoll())
 					addCancelRoll(section, " (before a contract is accepted).");
-				}
 				addAnteControls(section, state, partyVote);
 				return section;
 			}

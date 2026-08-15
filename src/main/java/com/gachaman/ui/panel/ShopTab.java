@@ -176,9 +176,8 @@ public class ShopTab extends JPanel {
 		addSection(buildOddsSection(state));
 		addSection(buildSlotChestSection(state));
 		addSection(buildChargeSection(state));
-		if (!state.getQueuedThemedChests().isEmpty()) {
+		if (!state.getQueuedThemedChests().isEmpty())
 			addSection(buildThemedSection(state));
-		}
 		// Between the chests and the weekly rotation, because it is both: a chest,
 		// priced weekly, but paid for in a card rather than in the GC every section
 		// above it spends.
@@ -634,9 +633,8 @@ public class ShopTab extends JPanel {
 			@Override
 			public void mousePressed(MouseEvent e) {
 				boolean open = !openBands.contains(band);
-				if (open) {
+				if (open)
 					openBands.add(band);
-				}
 				else {
 					openBands.remove(band);
 				}
@@ -703,9 +701,8 @@ public class ShopTab extends JPanel {
 		for (int i = 0; i < shown; i++) {
 			html.append("<br>&nbsp;&nbsp;").append(escape(names.get(i)));
 		}
-		if (names.size() > shown) {
+		if (names.size() > shown)
 			html.append("<br>&nbsp;&nbsp;+").append(names.size() - shown).append(" more");
-		}
 		return html.append("</html>").toString();
 	}
 
@@ -933,9 +930,8 @@ public class ShopTab extends JPanel {
 		// client thread: serializes the purchase with kill/completion processing
 		final boolean voucherUsed = voucher;
 		clientThread.invokeLater(() -> {
-			if (taskService.purchaseCharge(compactor)) {
+			if (taskService.purchaseCharge(compactor))
 				timeline.onChargePurchased(compactor, voucherUsed);
-			}
 			else {
 				SwingUtilities.invokeLater(() -> info(this,
 					"Purchase failed — you need an active contract, no charge applied yet, and enough GC."));
@@ -1150,9 +1146,8 @@ public class ShopTab extends JPanel {
 					"Buy " + cardName + " for " + formatNumber(price) + " GC?")) {
 					return;
 				}
-				if (weeklyShop.purchase(index) == null) {
+				if (weeklyShop.purchase(index) == null)
 					info(this, "Purchase failed (already bought or not enough GC).");
-				}
 			});
 			section.add(buy);
 			gap(section, 5);
@@ -1193,15 +1188,13 @@ public class ShopTab extends JPanel {
 					+ formatNumber(CHEST_PRICE_GC.get(tier)) + " GC"
 					+ (remaining > 0 ? ", " + remaining + " left ever" : ""));
 			}
-			if (this.affordable) {
+			if (this.affordable)
 				setCursor(HAND);
-			}
 			addMouseListener(new MouseAdapter() {
 				@Override
 				public void mousePressed(MouseEvent e) {
-					if (ChestTile.this.affordable && cardDatabase.isReady()) {
+					if (ChestTile.this.affordable && cardDatabase.isReady())
 						tryOpenChest(ChestTile.this.tier);
-					}
 				}
 			});
 		}
@@ -1236,9 +1229,8 @@ public class ShopTab extends JPanel {
 			g2.drawString(chestName(tier), tx, 22);
 			g2.setFont(SMALL);
 			g2.setColor(affordable ? GOLD : MEDIUM_GRAY_COLOR);
-			if (remaining == 0) {
+			if (remaining == 0)
 				g2.drawString("Rusted away", tx, 38);
-			}
 			else {
 				int cards = CHEST_CARDS.get(tier);
 				g2.drawString(formatNumber(CHEST_PRICE_GC.get(tier)) + " GC  ·  "

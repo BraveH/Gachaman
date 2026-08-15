@@ -119,9 +119,8 @@ public class TimelineTab extends JPanel {
 		// and keep the caption live, which is the part the player is actually reading
 		// while they drag.
 		scrubber.addChangeListener(e -> {
-			if (scrubber.getValueIsAdjusting()) {
+			if (scrubber.getValueIsAdjusting())
 				updateScrubLabel();
-			}
 			else {
 				refreshList();
 			}
@@ -150,9 +149,8 @@ public class TimelineTab extends JPanel {
 		// events show first and the player scrubs BACK through time. While
 		// the tab is already visible, live state refreshes must not yank the
 		// thumb out of the player's hand.
-		if (!isShowing()) {
+		if (!isShowing())
 			scrubber.setValue(SLIDER_MAX);
-		}
 		GachaState state = stateService.get();
 		List<TimelineEvent> timeline = state == null ? null : state.getTimeline();
 		if (state == null) {
@@ -208,9 +206,8 @@ public class TimelineTab extends JPanel {
 		int shown = 0;
 		if (timeline != null) {
 			for (TimelineEvent event : timeline) {
-				if (event.getAt() >= from && event.getAt() <= scrub) {
+				if (event.getAt() >= from && event.getAt() <= scrub)
 					shown++;
-				}
 			}
 		}
 		scrubLabel.setText(scrubCaption(scrub, shown));
@@ -219,9 +216,8 @@ public class TimelineTab extends JPanel {
 	private void refreshList() {
 		GachaState state = stateService.get();
 		List<TimelineEvent> timeline = state == null ? List.of() : state.getTimeline();
-		if (timeline == null) {
+		if (timeline == null)
 			timeline = List.of();
-		}
 		long[] window = scrubWindow();
 		long from = window[0];
 		long scrub = window[1];
@@ -237,9 +233,8 @@ public class TimelineTab extends JPanel {
 				.append(GachamanPanel.escape(event.getText()))
 				.append("</font><br/>");
 		}
-		if (shown == 0) {
+		if (shown == 0)
 			html.append("<font color='#909090'>No events in this window — fate has been quiet.</font>");
-		}
 		list.setText(htmlWrap(html.toString()));
 		list.setCaretPosition(list.getDocument().getLength()); // newest visible
 		scrubLabel.setText(scrubCaption(scrub, shown));

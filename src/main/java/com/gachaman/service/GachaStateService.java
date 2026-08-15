@@ -51,9 +51,8 @@ public class GachaStateService {
 	}
 
 	public synchronized void unload() {
-		if (loaded && state != null) {
+		if (loaded && state != null)
 			store.save(state, true);
-		}
 		state = null;
 		loaded = false;
 	}
@@ -83,9 +82,8 @@ public class GachaStateService {
 
 	/** Force a save of the current snapshot (logout/shutdown checkpoints). */
 	public synchronized void checkpoint() {
-		if (loaded && state != null) {
+		if (loaded && state != null)
 			store.save(state, true);
-		}
 	}
 
 	public synchronized void addListener(Listener l) {

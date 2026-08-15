@@ -252,9 +252,8 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 			return;
 		}
 		stopScanTimer();
-		if (active || isShowing()) {
+		if (active || isShowing())
 			rebuildIfDirty(selected);
-		}
 		contentLayout.show(content, selected.name());
 	}
 
@@ -455,15 +454,13 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 			// no setRepeats(true) — that IS javax.swing.Timer's documented default,
 			// so the call only restated it. The poll still fires every SCAN_POLL_MS.
 		}
-		if (!scanTimer.isRunning()) {
+		if (!scanTimer.isRunning())
 			scanTimer.start();
-		}
 	}
 
 	private void stopScanTimer() {
-		if (scanTimer != null && scanTimer.isRunning()) {
+		if (scanTimer != null && scanTimer.isRunning())
 			scanTimer.stop();
-		}
 	}
 
 	/**
@@ -897,9 +894,8 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		panel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
 		panel.add(left, BorderLayout.CENTER);
-		if (right != null) {
+		if (right != null)
 			panel.add(right, BorderLayout.EAST);
-		}
 		return panel;
 	}
 
@@ -997,9 +993,8 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 			field.setBorder(new EmptyBorder(2, 5, 2, 5));
 		}
 		for (Component child : s.getComponents()) {
-			if (child instanceof JButton) {
+			if (child instanceof JButton)
 				child.setBackground(SUNKEN);
-			}
 		}
 	}
 
@@ -1016,9 +1011,8 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 			g.fillRoundRect(trackRect.x, cy - 3, trackRect.width, 6, 6, 6);
 			g.setColor(ColorScheme.BRAND_ORANGE);
 			int fill = thumbRect.x + thumbRect.width / 2 - trackRect.x;
-			if (fill > 0) {
+			if (fill > 0)
 				g.fillRoundRect(trackRect.x, cy - 3, Math.min(fill, trackRect.width), 6, 6, 6);
-			}
 		}
 
 		@Override

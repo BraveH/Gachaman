@@ -31,18 +31,16 @@ public class CardImageService {
 		if (cached != null) {
 			// re-attach EVERY caller's hook: onLoaded fires immediately when
 			// already loaded, so late callers never miss their repaint
-			if (onLoaded != null && cached instanceof AsyncBufferedImage) {
+			if (onLoaded != null && cached instanceof AsyncBufferedImage)
 				((AsyncBufferedImage) cached).onLoaded(onLoaded);
-			}
 			return cached;
 		}
 		AsyncBufferedImage async = itemManager.getImage(itemId);
 		if (async == null)
 			return null;
 		cache.put(itemId, async);
-		if (onLoaded != null) {
+		if (onLoaded != null)
 			async.onLoaded(onLoaded);
-		}
 		return async;
 	}
 

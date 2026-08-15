@@ -61,21 +61,16 @@ public class FirstsService implements TaskService.Listener, ComplianceService.Li
 	static List<FirstStamp> stampsForSlots(List<ChestService.RolledSlot> slots) {
 		List<FirstStamp> stamps = new ArrayList<>();
 		for (ChestService.RolledSlot slot : slots) {
-			if (slot.getRarity() == Rarity.UNCOMMON && !stamps.contains(FirstStamp.FIRST_UNCOMMON)) {
+			if (slot.getRarity() == Rarity.UNCOMMON && !stamps.contains(FirstStamp.FIRST_UNCOMMON))
 				stamps.add(FirstStamp.FIRST_UNCOMMON);
-			}
-			if (slot.getRarity() == Rarity.RARE && !stamps.contains(FirstStamp.FIRST_RARE)) {
+			if (slot.getRarity() == Rarity.RARE && !stamps.contains(FirstStamp.FIRST_RARE))
 				stamps.add(FirstStamp.FIRST_RARE);
-			}
-			if (slot.getRarity().atLeast(Rarity.EPIC) && !stamps.contains(FirstStamp.FIRST_EPIC)) {
+			if (slot.getRarity().atLeast(Rarity.EPIC) && !stamps.contains(FirstStamp.FIRST_EPIC))
 				stamps.add(FirstStamp.FIRST_EPIC);
-			}
-			if (slot.getVariant() == Variant.SHINY && !stamps.contains(FirstStamp.FIRST_SHINY)) {
+			if (slot.getVariant() == Variant.SHINY && !stamps.contains(FirstStamp.FIRST_SHINY))
 				stamps.add(FirstStamp.FIRST_SHINY);
-			}
-			if (slot.isDuplicate() && !stamps.contains(FirstStamp.FIRST_DUPE)) {
+			if (slot.isDuplicate() && !stamps.contains(FirstStamp.FIRST_DUPE))
 				stamps.add(FirstStamp.FIRST_DUPE);
-			}
 		}
 		return stamps;
 	}
@@ -97,12 +92,10 @@ public class FirstsService implements TaskService.Listener, ComplianceService.Li
 	@Override
 	public void onTaskCompleted(TaskService.TaskCompletionSummary summary) {
 		claim(FirstStamp.FIRST_TASK);
-		if (summary.isNewFastestPb() || summary.isNewHaulPb()) {
+		if (summary.isNewFastestPb() || summary.isNewHaulPb())
 			claim(FirstStamp.FIRST_RECORD);
-		}
-		if (summary.isCycleTriggered()) {
+		if (summary.isCycleTriggered())
 			claim(FirstStamp.FIRST_CYCLE);
-		}
 	}
 
 
@@ -143,8 +136,7 @@ public class FirstsService implements TaskService.Listener, ComplianceService.Li
 	public void onCardAssigned(OwnedCard card) {
 		// starter gear is auto-assigned on fresh load — never stamp without
 		// an actual player action
-		if (!"starter".equals(card.getProvenance())) {
+		if (!"starter".equals(card.getProvenance()))
 			claim(FirstStamp.FIRST_ASSIGN);
-		}
 	}
 }

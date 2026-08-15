@@ -131,16 +131,14 @@ public class PartyTab extends JPanel {
 				// own line reports nothing would be inventing their state
 				int onContract = 0;
 				for (PartyPresenceService.Row row : rows) {
-					if (row.getKillsRequired() > 0) {
+					if (row.getKillsRequired() > 0)
 						onContract++;
-					}
 				}
 				List<PartyPresenceService.Group> groups = PartyPresenceService.group(rows);
 				int shared = 0;
 				for (PartyPresenceService.Group group : groups) {
-					if (group.isShared()) {
+					if (group.isShared())
 						shared++;
-					}
 				}
 				// Two lines rather than three facts on one: at double digits the
 				// combined string ran past the 205px section and the tail was cut.
@@ -204,9 +202,8 @@ public class PartyTab extends JPanel {
 		boolean live = false;
 		for (int i = 0; i < members.size(); i++) {
 			PartyPresenceService.Row row = members.get(i);
-			if (i > 0) {
+			if (i > 0)
 				outer.add(Box.createVerticalStrut(2));
-			}
 			outer.add(memberHeader(row, w, marks, votes));
 			live |= row.isHeard() && row.isLoggedIn();
 			if (!group.isOnContract()) {
@@ -266,9 +263,8 @@ public class PartyTab extends JPanel {
 		left.setOpaque(false);
 		left.add(new Swatch(row.getStyle() == null ? MUTED : row.getStyle().getColor()),
 			BorderLayout.WEST);
-		if (row.getAvatar() != null) {
+		if (row.getAvatar() != null)
 			left.add(new Face(row.getAvatar(), live), BorderLayout.EAST);
-		}
 		header.add(left, BorderLayout.WEST);
 		String label = row.getName() + (row.isSelf() ? " (you)" : "")
 			+ (row.getCombatLevel() > 0 ? "  lvl " + row.getCombatLevel() : "")
@@ -412,9 +408,8 @@ public class PartyTab extends JPanel {
 				@Override
 				public void componentResized(ComponentEvent e) {
 					SwingUtilities.invokeLater(() -> {
-						if (measuredWidth(PartyTab.this) != builtWidth) {
+						if (measuredWidth(PartyTab.this) != builtWidth)
 							rebuild();
-						}
 					});
 				}
 			});

@@ -98,15 +98,13 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener {
 			spawn(KIND_OFF_TASK, world, plane, "x", now);
 			return;
 		}
-		if (feedback.isTainted()) {
+		if (feedback.isTainted())
 			spawn(KIND_TAINTED, world, plane, "TAINTED +1 taint", now);
-		}
 		else if (feedback.getGcAwarded() > 0) {
 			spawn(KIND_GC, world, plane, "+" + feedback.getGcAwarded() + " GC", now);
 		}
-		if (feedback.isFinalKill()) {
+		if (feedback.isFinalKill())
 			spawn(KIND_BURST, world, plane, null, now);
-		}
 	}
 
 

@@ -494,9 +494,8 @@ public class RevealOverlay extends Overlay
 	private static List<TaskOffer> castOffers(List<?> raw) {
 		List<TaskOffer> out = new ArrayList<>(raw.size());
 		for (Object o : raw) {
-			if (o instanceof TaskOffer) {
+			if (o instanceof TaskOffer)
 				out.add((TaskOffer) o);
-			}
 		}
 		return out;
 	}
@@ -594,9 +593,8 @@ public class RevealOverlay extends Overlay
 				log.debug("Gachaman: abandoning unpainted {} ceremony", active);
 			}
 		}
-		if (stale) {
+		if (stale)
 			abortActiveCeremony();
-		}
 	}
 
 	public void setPointer(Point p) {
@@ -630,18 +628,16 @@ public class RevealOverlay extends Overlay
 			switch (active) {
 				case CHEST_OPEN:
 				case THEMED_CHEST:
-					if (phase == PH_CHEST_WAIT) {
+					if (phase == PH_CHEST_WAIT)
 						action = closeLocked(ACT_COMMIT_DRAIN);
-					}
 					else if (phase == PH_CHEST_REVEAL) {
 						int n = cards.size();
 						for (int i = 0; i < n; i++) {
 							slotRect(i, n, cw, ch, rect);
 							if (!rect.contains(p.x, p.y))
 								continue;
-							if (flipAt[i] == 0 && rerollAt[i] == 0) {
+							if (flipAt[i] == 0 && rerollAt[i] == 0)
 								flipAt[i] = now;
-							}
 							else if (isFaceUpSteady(i, now) && canReroll[i]
 								&& rerollButtonHit(rect, p.x, p.y)) {
 								rerollIndex = i;
@@ -651,9 +647,8 @@ public class RevealOverlay extends Overlay
 					}
 					break;
 				case STYLE_ROLL:
-					if (phase == PH_SPIN_RESULT) {
+					if (phase == PH_SPIN_RESULT)
 						action = closeLocked(ACT_DRAIN);
-					}
 					break;
 				case TASK_OFFERS:
 					if (phase == PH_OFFERS_SETTLED) {
@@ -709,12 +704,10 @@ public class RevealOverlay extends Overlay
 
 		// All three hop to the client thread, and all three go through the same
 		// FIFO queue when they do, so this order survives the crossing.
-		if (rerollIndex >= 0) {
+		if (rerollIndex >= 0)
 			applyReroll(rerollIndex);
-		}
-		if (deedClicked != null) {
+		if (deedClicked != null)
 			applyDeedClaim(deedClicked);
-		}
 		executeAction(action, -1);
 	}
 
@@ -761,9 +754,8 @@ public class RevealOverlay extends Overlay
 								any = true;
 							}
 						}
-						if (any) {
+						if (any)
 							handled = true;
-						}
 						else if (escape) {
 							action = closeLocked(ACT_COMMIT_DRAIN);
 							handled = true;
@@ -835,9 +827,8 @@ public class RevealOverlay extends Overlay
 					// Space is deliberately not an answer. A binding choice must be
 					// aimed at, and the skip key is muscle memory from four other
 					// ceremonies where it costs nothing.
-					if (escape) {
+					if (escape)
 						action = closeLocked(ACT_CONSIGN_DECLINE);
-					}
 					handled = true;
 					break;
 				default:
@@ -1230,9 +1221,8 @@ public class RevealOverlay extends Overlay
 		}
 
 		executeAction(action, actionArg);
-		if (fanfareEnded) {
+		if (fanfareEnded)
 			ceremonyBus.drain();
-		}
 		return null;
 	}
 
@@ -1341,9 +1331,8 @@ public class RevealOverlay extends Overlay
 	/** Fired at flip COMPLETION (the face is fully visible at this instant). */
 	private void onFlipEffectsLocked(int i, long now, Rectangle cardRect) {
 		ChestService.RolledSlot slot = cards.get(i);
-		if (i == 0 && opened.isPityBreak()) {
+		if (i == 0 && opened.isPityBreak())
 			pityFlipMs = now;
-		}
 		boolean shock = slot.getRarity() == Rarity.LEGENDARY
 			|| slot.getVariant() == Variant.SHINY
 			|| slot.getVariant() == Variant.HOLOGRAM;
@@ -1369,9 +1358,8 @@ public class RevealOverlay extends Overlay
 			slotRect(i, n, cw, ch, rect);
 			boolean hovered = pointerValid && flipAt[i] == 0 && rerollAt[i] == 0
 				&& rect.contains(pointerX, pointerY);
-			if (hovered) {
+			if (hovered)
 				hoverCharge[i] = Math.min(1f, hoverCharge[i] + dt / HOVER_CHARGE_SEC);
-			}
 			else {
 				hoverCharge[i] = Math.max(0f, hoverCharge[i] - dt / 0.4f);
 			}
@@ -1408,9 +1396,8 @@ public class RevealOverlay extends Overlay
 		String title = chestThemed
 			? "THEMED CHEST" + (tag == null ? "" : " - " + tag.toUpperCase())
 			: shownTier.name() + " CHEST";
-		if (opened.isJackpotUpgraded() && dealt) {
+		if (opened.isJackpotUpgraded() && dealt)
 			title = title + "  (JACKPOT!)";
-		}
 		Color titleColor = !chestThemed && shownTier == Tuning.Chest.RUSTY
 			? new Color(176, 156, 128) : GOLD;
 		centre(g, title, cw / 2, 46, FONT_TITLE, titleColor);
@@ -1451,9 +1438,8 @@ public class RevealOverlay extends Overlay
 
 		if (tier == Tuning.Chest.RUSTY) {
 			// one feeble wobble, a creak, and the lid gives up — no drama
-			if (el >= 300 && el < 800) {
+			if (el >= 300 && el < 800)
 				shakeX = Math.sin(el * 0.07) * 2;
-			}
 		}
 		else if (tier == Tuning.Chest.BATTERED) {
 			if (ChestStrain.straining(el, tier)) {
@@ -1532,9 +1518,8 @@ public class RevealOverlay extends Overlay
 		// truer upgrade than crossfading the trim colour alone ever was
 		float mix = (float) clamp((el - 700) / 500.0);
 		ceremonyPlayer.draw(g, dx, dy, chestW, chestH, opened.getPurchasedTier(), 0, 1f);
-		if (mix > 0.01f) {
+		if (mix > 0.01f)
 			ceremonyPlayer.draw(g, dx, dy, chestW, chestH, opened.getEffectiveTier(), 0, mix);
-		}
 
 		if (el >= 750 && el < 1250) {
 			float flash = (float) Math.max(0, 0.7 * Math.exp(-(el - 750) / 200.0));
@@ -1627,9 +1612,8 @@ public class RevealOverlay extends Overlay
 			&& now - shockAt < SHOCKWAVE_MS) {
 			drawShockwave(g, cw, ch, now - shockAt);
 		}
-		if (pityFlipMs > 0 && now - pityFlipMs < PITY_GLOW_MS) {
+		if (pityFlipMs > 0 && now - pityFlipMs < PITY_GLOW_MS)
 			drawPityEdgeGlow(g, cw, ch, now - pityFlipMs);
-		}
 
 		String hint = phase == PH_CHEST_WAIT
 			? "Click anywhere to collect"
@@ -1661,9 +1645,8 @@ public class RevealOverlay extends Overlay
 
 		if (flipAt[i] == 0) {
 			// face-down; hover charge-up glow toward the TRUE rarity color
-			if (hoverCharge[i] > 0.01f) {
+			if (hoverCharge[i] > 0.01f)
 				CardRenderer.drawGlow(g, r.x, r.y, r.width, r.height, trueColor, hoverCharge[i]);
-			}
 			CardRenderer.drawBack(g, r.x, r.y, r.width, r.height, now);
 			if (opened.isStardustBlessed()) {
 				// subtle blessed shimmer on unrevealed backs
@@ -1698,16 +1681,13 @@ public class RevealOverlay extends Overlay
 		if (slot.isNearMiss()) {
 			drawChip(g, r.x + r.width - 8, r.y + r.height + 6, "+1 Stardust");
 			long ft = t - FLIP_MS;
-			if (ft >= 0 && ft < FIZZLE_MS) {
+			if (ft >= 0 && ft < FIZZLE_MS)
 				drawStardustFizzle(g, r, ft);
-			}
 		}
-		if (i == 0 && opened.isPityBreak()) {
+		if (i == 0 && opened.isPityBreak())
 			centre(g, "PITY BREAK", r.x + r.width / 2, r.y - 12, FONT_BODY, GOLD);
-		}
-		if (canReroll.length > i && canReroll[i] && phase == PH_CHEST_REVEAL) {
+		if (canReroll.length > i && canReroll[i] && phase == PH_CHEST_REVEAL)
 			drawRerollToken(g, r, now);
-		}
 	}
 
 	/**
@@ -1731,9 +1711,8 @@ public class RevealOverlay extends Overlay
 		g2.translate(cx, 0);
 		g2.scale(scaleX, 1);
 		g2.translate(-cx, 0);
-		if (face) {
+		if (face)
 			CardRenderer.drawFace(g2, r.x, r.y, r.width, r.height, cardViewFor(i), now);
-		}
 		else {
 			CardRenderer.drawBack(g2, r.x, r.y, r.width, r.height, now);
 		}
@@ -1753,16 +1732,14 @@ public class RevealOverlay extends Overlay
 			String tierLabel = capitalize(slot.getHologramTier());
 			name = holo != null ? holo.getName() : tierLabel + " Hologram";
 			subtitle = tierLabel + " tier - one slot, any item";
-			if (holo != null) {
+			if (holo != null)
 				art = cardImageService.hologramImage(holo, null);
-			}
 		}
 		else {
 			CardDefinition card = cardDatabase.card(slot.getCardId());
 			name = card != null ? card.getName() : "Card #" + slot.getCardId();
-			if (card != null) {
+			if (card != null)
 				art = cardImageService.cardImage(card, null);
-			}
 		}
 		// The record of the copies already owned, which is what the wear badge
 		// and the service pill both report: "this card of yours has carried N
@@ -2295,9 +2272,8 @@ public class RevealOverlay extends Overlay
 		String hint = phase == PH_OFFERS_UNROLL
 			? "Esc/Space to skip"
 			: (phase == PH_OFFERS_SETTLED ? "Click a contract to accept - Esc to decide later" : "");
-		if (!hint.isEmpty()) {
+		if (!hint.isEmpty())
 			centre(g, hint, cw / 2, ch - 26, FONT_BODY, HINT);
-		}
 
 		boolean burnPhase = phase == PH_OFFERS_ACCEPTED;
 		float burnT = burnPhase
@@ -2341,9 +2317,8 @@ public class RevealOverlay extends Overlay
 				continue;
 			}
 			drawOfferScroll(g, i, rect2, u);
-			if (accepted) {
+			if (accepted)
 				drawAcceptedStamp(g, rect2, now - phaseAt);
-			}
 		}
 	}
 
@@ -2590,9 +2565,8 @@ public class RevealOverlay extends Overlay
 			}
 		}
 
-		if (art.betConds.length > 0) {
+		if (art.betConds.length > 0)
 			drawSideBets(g, art.betConds, art.betRewards, fieldX, footerY, fieldW, pBot);
-		}
 	}
 
 	/**
@@ -2742,9 +2716,8 @@ public class RevealOverlay extends Overlay
 				cx = x;
 				y += rowH;
 			}
-			if (voter.getAvatar() != null) {
+			if (voter.getAvatar() != null)
 				drawVoterFace(g, voter.getAvatar(), cx, y + (rowH - FACE) / 2);
-			}
 			g.setFont(FONT_SMALL);
 			g.setColor(voter.isSelf() ? PARCH_REWARD : PARCH_INK);
 			g.drawString(name, cx + faceW, y + half);
@@ -2806,18 +2779,16 @@ public class RevealOverlay extends Overlay
 				line.append(word);
 				continue;
 			}
-			if (fm.stringWidth(line + " " + word) <= maxWidth) {
+			if (fm.stringWidth(line + " " + word) <= maxWidth)
 				line.append(' ').append(word);
-			}
 			else {
 				lines.add(line.toString());
 				line.setLength(0);
 				line.append(word);
 			}
 		}
-		if (line.length() > 0) {
+		if (line.length() > 0)
 			lines.add(line.toString());
-		}
 		return lines;
 	}
 
@@ -3138,9 +3109,8 @@ public class RevealOverlay extends Overlay
 					hovered ? new Color(220, 220, 230) : new Color(120, 120, 130));
 			}
 
-			if (chosen) {
+			if (chosen)
 				drawDeedBurst(g, r, now - phaseAt);
-			}
 		}
 	}
 
@@ -3282,9 +3252,8 @@ public class RevealOverlay extends Overlay
 		// the crate, closed, in its own tier's ceremony art. Skipped rather than
 		// squeezed when the canvas cannot hold it under the heading: the words are
 		// the offer, the picture is only the box it comes in.
-		if (crateCy - crateH / 2 > 104) {
+		if (crateCy - crateH / 2 > 104)
 			ceremonyPlayer.draw(g, mx, crateCy, crateW, crateH, tier, 0, 1f);
-		}
 
 		AttackStyle named = offer.getStyle();
 		centre(g, "Its price is your next style roll", mx, headY - 24,
@@ -3343,9 +3312,8 @@ public class RevealOverlay extends Overlay
 		String detail = fan.getDetail();
 		boolean detailed = detail != null && !detail.isEmpty();
 
-		if (size == CeremonyBus.Fanfare.Size.MEDIUM) {
+		if (size == CeremonyBus.Fanfare.Size.MEDIUM)
 			drawConfetti(g, cw, ch, el);
-		}
 		else if (size == CeremonyBus.Fanfare.Size.LARGE) {
 			drawFireworks(g, cw, ch, el);
 		}
@@ -3379,9 +3347,8 @@ public class RevealOverlay extends Overlay
 		g.fillRect(x + w, y + 8, 12, bannerH - 16);
 
 		int textX = x + 20 + iconW;
-		if (icon != null) {
+		if (icon != null)
 			g.drawImage(icon, x + 10, y + (bannerH - 32) / 2, 32, 32, null);
-		}
 		g.setFont(FONT_BODY);
 		g.setColor(GOLD);
 		g.drawString(title, textX, y + 22);

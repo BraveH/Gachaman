@@ -181,9 +181,8 @@ public class TierTable {
 		for (String word : tierKey.split("_")) {
 			if (word.isEmpty())
 				continue;
-			if (out.length() > 0) {
+			if (out.length() > 0)
 				out.append(' ');
-			}
 			out.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
 		}
 		return out.length() == 0 ? tierKey : out.toString();

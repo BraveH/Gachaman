@@ -159,9 +159,8 @@ public class LoadoutOverlay extends Overlay {
 			// drawn, hovered or clicked, which is the same fail-quiet direction every
 			// other unresolvable case in this plugin takes. socketRects is an EnumMap,
 			// so the draw order stays GearSlot's regardless of the file's key order.
-			if (s != null && s.getCol() >= 0 && s.getCol() < columns.length) {
+			if (s != null && s.getCol() >= 0 && s.getCol() < columns.length)
 				socketRects.put(slot, new Rectangle(columns[s.getCol()], s.getY(), SOCKET, SOCKET));
-			}
 		}
 	}
 
@@ -242,9 +241,8 @@ public class LoadoutOverlay extends Overlay {
 		boolean claimable = !deeded && state.getPendingDeeds() > 0;
 
 		BufferedImage tile = tileImage(!deeded, hovered);
-		if (tile != null) {
+		if (tile != null)
 			g.drawImage(tile, r.x, r.y, null);
-		}
 		else {
 			// procedural fallback until the tile sprite has loaded
 			g.setColor(deeded ? SOCKET_BG : SOCKET_BG_LOCKED);
@@ -375,9 +373,8 @@ public class LoadoutOverlay extends Overlay {
 		BufferedImage raw = sprite(spriteId);
 		if (raw == null)
 			return null;
-		if (raw.getWidth() > SOCKET || raw.getHeight() > SOCKET) {
+		if (raw.getWidth() > SOCKET || raw.getHeight() > SOCKET)
 			raw = scaled(raw, Math.min(raw.getWidth(), SOCKET), Math.min(raw.getHeight(), SOCKET));
-		}
 		silhouetteCache.put(spriteId, raw);
 		return raw;
 	}
@@ -388,9 +385,8 @@ public class LoadoutOverlay extends Overlay {
 		BufferedImage img = spriteCache.get(spriteId);
 		if (img == null) {
 			img = spriteManager.getSprite(spriteId, 0);
-			if (img != null) {
+			if (img != null)
 				spriteCache.put(spriteId, img);
-			}
 		}
 		return img;
 	}
@@ -460,9 +456,8 @@ public class LoadoutOverlay extends Overlay {
 			return HOLOGRAM_EDGE;
 		Rarity rarity = Rarity.COMMON;
 		CardDefinition card = cardDatabase.isReady() ? cardDatabase.card(owned.getCardId()) : null;
-		if (card != null) {
+		if (card != null)
 			rarity = card.getRarity();
-		}
 		return rarity.getColor();
 	}
 
@@ -495,9 +490,8 @@ public class LoadoutOverlay extends Overlay {
 			return;
 		boolean deeded = state.getDeededSlots().contains(slot.name());
 		if (!deeded) {
-			if (state.getPendingDeeds() > 0) {
+			if (state.getPendingDeeds() > 0)
 				chestService.claimDeed(slot);
-			}
 			return;
 		}
 		OwnedCard assigned = assignedCard(state, ownedByUuid(state), slot);

@@ -55,9 +55,8 @@ public class BossKcService {
 			if (!boss.getChatName().equalsIgnoreCase(chatName))
 				continue;
 			for (int milestone : boss.getKcMilestones()) {
-				if (kc >= milestone) {
+				if (kc >= milestone)
 					awardMilestone(boss, milestone);
-				}
 			}
 			return;
 		}

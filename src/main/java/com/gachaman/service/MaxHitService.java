@@ -41,9 +41,8 @@ public class MaxHitService {
 	static int spellBaseMaxHit(int magicLevel) {
 		int base = SPELL_MAX_HITS[0];
 		for (int i = 0; i < SPELL_LEVELS.length; i++) {
-			if (magicLevel >= SPELL_LEVELS[i]) {
+			if (magicLevel >= SPELL_LEVELS[i])
 				base = SPELL_MAX_HITS[i];
-			}
 		}
 		return base;
 	}
@@ -131,9 +130,8 @@ public class MaxHitService {
 			if (item == null || item.getId() <= 0)
 				continue;
 			ItemStats stats = itemManager.getItemStats(item.getId());
-			if (stats != null && stats.getEquipment() != null) {
+			if (stats != null && stats.getEquipment() != null)
 				out.add(stats.getEquipment());
-			}
 		}
 		return out;
 	}

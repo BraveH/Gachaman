@@ -104,9 +104,8 @@ public class SetPerkService implements GachaStateService.Listener {
 			SetTable.Perk perk = set.getPerk();
 			if (perk == null || !typeMatches(perk.getType(), context.getSource()))
 				continue;
-			if (scopeMatches(perk, context)) {
+			if (scopeMatches(perk, context))
 				factor *= 1.0 + perk.getMagnitudePercent() / 100.0;
-			}
 		}
 		return factor;
 	}

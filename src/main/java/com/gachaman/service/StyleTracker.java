@@ -243,9 +243,8 @@ public class StyleTracker {
 	private long lastMagicXp = -1;
 
 	public void addListener(AttackListener listener) {
-		if (!listeners.contains(listener)) {
+		if (!listeners.contains(listener))
 			listeners.add(listener);
-		}
 	}
 
 	public void removeListener(AttackListener listener) {
@@ -282,9 +281,8 @@ public class StyleTracker {
 
 	@Subscribe
 	public void onHitsplatApplied(HitsplatApplied event) {
-		if (event.getActor() == client.getLocalPlayer()) {
+		if (event.getActor() == client.getLocalPlayer())
 			lastDamagedTick = tick;
-		}
 	}
 
 	@Subscribe
@@ -348,9 +346,8 @@ public class StyleTracker {
 		if (anims("neverJudge").contains(animation)) {
 			// utility cast / consumable / block pose — not an attack, and the
 			// pending Cast mark (if any) survives untouched
-			if (anims("magicUtility").contains(animation)) {
+			if (anims("magicUtility").contains(animation))
 				lastUtilityMagicTick = tick;
-			}
 			return;
 		}
 		boolean markMatch = castMarkActiveOn(interacting);
@@ -421,9 +418,8 @@ public class StyleTracker {
 		if (previous < 0 || current <= previous || tick < settleUntilTick) {
 			return; // baseline settle or no gain
 		}
-		if (xpStyle == AttackStyle.MAGIC) {
+		if (xpStyle == AttackStyle.MAGIC)
 			maybePardonStanceVerdict();
-		}
 		else {
 			lastMeleeRangedXpTick = tick;
 		}

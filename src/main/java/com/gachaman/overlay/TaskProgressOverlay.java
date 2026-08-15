@@ -184,9 +184,8 @@ public class TaskProgressOverlay extends OverlayPanel {
 		if (total > 0) {
 			int done = 0;
 			for (int i = 0; i < total; i++) {
-				if (sideBets.get(i).isCompleted()) {
+				if (sideBets.get(i).isCompleted())
 					done++;
-				}
 			}
 			// rebuild the per-bet lines only when the task or a completion changes
 			if (sideBetLines == null || done != sideBetDone || total != sideBetTotal
@@ -320,9 +319,8 @@ public class TaskProgressOverlay extends OverlayPanel {
 
 		@Override
 		public void setPreferredSize(Dimension size) {
-			if (size != null) {
+			if (size != null)
 				this.preferredSize = size;
-			}
 		}
 	}
 }

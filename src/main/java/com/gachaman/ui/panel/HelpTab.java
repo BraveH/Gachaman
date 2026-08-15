@@ -123,9 +123,8 @@ public class HelpTab extends JPanel {
 	 * renderer that averaged them would quietly restyle the page.
 	 */
 	private void element(JPanel panel, int width, com.google.gson.JsonObject el) {
-		if (el.has("note")) {
+		if (el.has("note"))
 			panel.add(GachamanPanel.smallLine(el.get("note").getAsString(), MUTED));
-		}
 		else if (el.has("muted")) {
 			panel.add(textBlock(el.get("muted").getAsString(), MUTED, width - SECTION_PADDING));
 		}
@@ -138,9 +137,8 @@ public class HelpTab extends JPanel {
 		else {
 			widget(panel, width, el);
 		}
-		if (el.has("gap")) {
+		if (el.has("gap"))
 			panel.add(Box.createVerticalStrut(el.get("gap").getAsInt()));
-		}
 	}
 
 	private void widget(JPanel panel, int width, com.google.gson.JsonObject el) {

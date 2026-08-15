@@ -56,9 +56,8 @@ public class ServiceRecordService implements KillTracker.KillListener, TaskServi
 	@Override
 	public synchronized void onKill(KillTracker.Kill kill) {
 		GachaState state = stateService.get();
-		if (state != null) {
+		if (state != null)
 			creditKill(pending, state.getLoadout());
-		}
 	}
 
 	// --- TaskService.Listener ---
@@ -129,9 +128,8 @@ public class ServiceRecordService implements KillTracker.KillListener, TaskServi
 		if (loadout == null || loadout.isEmpty())
 			return;
 		for (String uuid : new HashSet<>(loadout.values())) {
-			if (uuid != null) {
+			if (uuid != null)
 				tally.merge(uuid, 1, Integer::sum);
-			}
 		}
 	}
 
@@ -205,9 +203,8 @@ public class ServiceRecordService implements KillTracker.KillListener, TaskServi
 		Map<Integer, Integer> best = new HashMap<>();
 		if (cards != null) {
 			for (OwnedCard card : cards) {
-				if (!card.isHologram()) {
+				if (!card.isHologram())
 					best.merge(card.getCardId(), card.getKillsServed(), Math::max);
-				}
 			}
 		}
 		return best;

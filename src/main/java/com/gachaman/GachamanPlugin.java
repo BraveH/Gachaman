@@ -209,9 +209,8 @@ public class GachamanPlugin extends Plugin {
 
 		@Override
 		public void onTaintCleared(int cleared, int remaining) {
-			if (remaining == 0 && cleared > 1) {
+			if (remaining == 0 && cleared > 1)
 				debugChat("<col=6ec86e>All taint cleansed.</col>");
-			}
 		}
 	};
 
@@ -430,9 +429,8 @@ public class GachamanPlugin extends Plugin {
 		// party UI hides entirely when the Party contracts setting is off
 		gachamanPanel.setInPartySupplier(() -> partyService.isInParty() && config.partyRollsEnabled());
 
-		if (client.getGameState() == GameState.LOGGED_IN) {
+		if (client.getGameState() == GameState.LOGGED_IN)
 			stateLoadPending = true;
-		}
 		log.info("Gachaman started");
 	}
 
@@ -559,9 +557,8 @@ public class GachamanPlugin extends Plugin {
 			// profile key must exist before load, or a fresh state could be
 			// created under (and later saved to) the wrong profile
 			stateLoadPending = false;
-			if (!stateService.isLoaded()) {
+			if (!stateService.isLoaded())
 				stateService.load(milestoneService.combatLevel());
-			}
 			cardDatabase.beginBuild(tierTable, setTable);
 			chestService.recoverPending(); // crash-interrupted reveal: auto-commit
 			// A Consignment offer that was on screen when the client died left the
@@ -590,9 +587,8 @@ public class GachamanPlugin extends Plugin {
 			// ceremonies parked while logged out present now
 			ceremonyBus.drain();
 			wasOnTutorial = TutorialGate.onTutorial(client);
-			if (!wasOnTutorial) {
+			if (!wasOnTutorial)
 				beginJourneyIfFresh();
-			}
 			return;
 		}
 
@@ -738,9 +734,8 @@ public class GachamanPlugin extends Plugin {
 		starters.addAll(ironmanGear.cardNames(accountType));
 		Set<Integer> ownedIds = new HashSet<>();
 		for (OwnedCard owned : state.getOwnedCards()) {
-			if (!owned.isHologram()) {
+			if (!owned.isHologram())
 				ownedIds.add(owned.getCardId());
-			}
 		}
 		List<OwnedCard> granted = new ArrayList<>();
 		for (String name : starters) {
@@ -800,9 +795,8 @@ public class GachamanPlugin extends Plugin {
 			if (mine.contains(name))
 				continue;
 			CardDefinition card = cardDatabase.cardByName(name);
-			if (card != null) {
+			if (card != null)
 				foreignIds.add(card.getCardId());
-			}
 		}
 		Set<String> revoked = new HashSet<>();
 		for (OwnedCard owned : state.getOwnedCards()) {
@@ -816,9 +810,8 @@ public class GachamanPlugin extends Plugin {
 		stateService.mutate(s -> {
 			List<OwnedCard> kept = new ArrayList<>();
 			for (OwnedCard owned : s.getOwnedCards()) {
-				if (!revoked.contains(owned.getUuid())) {
+				if (!revoked.contains(owned.getUuid()))
 					kept.add(owned);
-				}
 			}
 			Map<String, String> loadout = new HashMap<>(s.getLoadout());
 			loadout.values().removeIf(revoked::contains);
@@ -919,9 +912,8 @@ public class GachamanPlugin extends Plugin {
 			// re-derive permissions + show/hide every loadout surface
 			clientThread.invokeLater(() -> {
 				permissionService.refresh();
-				if (config.oneCardPerSlot()) {
+				if (config.oneCardPerSlot())
 					loadoutTabButton.create();
-				}
 				else {
 					loadoutTabButton.remove();
 					loadoutOverlay.setOpen(false);
@@ -951,9 +943,8 @@ public class GachamanPlugin extends Plugin {
 		String[] args = event.getArguments();
 		String npc = String.join(" ", args).trim(); // chat splits a name on spaces
 		if ("gachaparty".equalsIgnoreCase(command)) {
-			if (args.length > 0 && "no".equalsIgnoreCase(args[0])) {
+			if (args.length > 0 && "no".equalsIgnoreCase(args[0]))
 				partyRollService.decline();
-			}
 			else if (args.length > 0 && "start".equalsIgnoreCase(args[0])) {
 				partyRollService.forceStart(); // host only
 			}
@@ -1017,9 +1008,8 @@ public class GachamanPlugin extends Plugin {
 			case "gachachest": {
 				Tuning.Chest tier = chestArg(args);
 				stateService.mutate(s -> s.withGc(s.getGc() + Tuning.CHEST_PRICE_GC.get(tier)));
-				if (chestService.openChest(tier) == null) {
+				if (chestService.openChest(tier) == null)
 					debugChat("Chest could not open (rusted away / busy / DB not ready).");
-				}
 				break;
 			}
 			case "gachatask":
@@ -1080,9 +1070,8 @@ public class GachamanPlugin extends Plugin {
 				}
 				CardWear stage = CardWear.parse(args[0]);
 				int kills;
-				if (stage != null) {
+				if (stage != null)
 					kills = Tuning.wearKills(stage);
-				}
 				else {
 					try {
 						kills = Math.max(0, Integer.parseInt(args[0].trim()));
@@ -1129,9 +1118,8 @@ public class GachamanPlugin extends Plugin {
 		for (int i = 0; i < shown; i++) {
 			debugChat("  " + lines.get(i));
 		}
-		if (lines.size() > shown) {
+		if (lines.size() > shown)
 			debugChat(tailPrefix + "… and " + (lines.size() - shown) + " more");
-		}
 	}
 
 	/**
@@ -1184,9 +1172,8 @@ public class GachamanPlugin extends Plugin {
 	 * route everything else straight through debugChat.
 	 */
 	private void chatPing(String message) {
-		if (config.chatPings()) {
+		if (config.chatPings())
 			debugChat(message);
-		}
 	}
 
 	/**
@@ -1268,9 +1255,8 @@ public class GachamanPlugin extends Plugin {
 			return null;
 		Set<String> seen = new HashSet<>();
 		for (OwnedCard card : owned) {
-			if (card.isHologram() || remap.applyAsInt(card.getCardId()) < 0) {
+			if (card.isHologram() || remap.applyAsInt(card.getCardId()) < 0)
 				seen.add(cardKey(card));
-			}
 		}
 		boolean changed = false;
 		List<OwnedCard> healed = new ArrayList<>(owned.size());

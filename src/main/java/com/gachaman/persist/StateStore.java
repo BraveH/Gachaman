@@ -58,9 +58,8 @@ public class StateStore {
 		if (profile == null)
 			return;
 		pendingDisk.set(new String[]{profile, blob});
-		if (flushDiskNow) {
+		if (flushDiskNow)
 			executor.execute(this::flushDisk);
-		}
 		else if (!flushScheduled) {
 			flushScheduled = true;
 			executor.schedule(this::flushDisk, DISK_FLUSH_DELAY_MS, TimeUnit.MILLISECONDS);

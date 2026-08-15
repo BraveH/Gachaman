@@ -33,9 +33,8 @@ public class EquipBlockService {
 		if (!isEquipOption(entry.getOption()))
 			return;
 		int itemId = entry.getItemId();
-		if (itemId > 0 && permissionService.isForbidden(itemId)) {
+		if (itemId > 0 && permissionService.isForbidden(itemId))
 			client.getMenu().removeMenuEntry(entry);
-		}
 	}
 
 	@Subscribe

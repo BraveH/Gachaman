@@ -42,9 +42,8 @@ public class CreditSink {
 	private final List<Listener> listeners = new ArrayList<>();
 
 	public synchronized void registerModifier(Modifier modifier) {
-		if (!modifiers.contains(modifier)) {
+		if (!modifiers.contains(modifier))
 			modifiers.add(modifier);
-		}
 	}
 
 	public synchronized void unregisterModifier(Modifier modifier) {
@@ -85,9 +84,8 @@ public class CreditSink {
 				log.warn("GC modifier failed", e);
 			}
 		}
-		if (stateService.get().getTaint() > 0) {
+		if (stateService.get().getTaint() > 0)
 			factor *= Tuning.TAINT_INCOME_MULT;
-		}
 		long amount = baseAmount <= 0 ? 0 : Math.max(0, Math.round(baseAmount * factor));
 		final boolean[] applied = {false};
 		var next = stateService.mutate(s -> {
@@ -124,9 +122,8 @@ public class CreditSink {
 				log.warn("GC modifier failed", e);
 			}
 		}
-		if (stateService.get().getTaint() > 0) {
+		if (stateService.get().getTaint() > 0)
 			factor *= Tuning.TAINT_INCOME_MULT;
-		}
 		long amount = Math.max(0, Math.round(baseAmount * factor));
 		if (amount == 0)
 			return 0;

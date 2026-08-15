@@ -109,9 +109,8 @@ public class SlayerAlignment {
 		for (int i = 0; i < raw.length(); i++) {
 			char c = raw.charAt(i);
 			if (Character.isLetterOrDigit(c)) {
-				if (pendingSpace && sb.length() > 0) {
+				if (pendingSpace && sb.length() > 0)
 					sb.append(' ');
-				}
 				pendingSpace = false;
 				sb.append(Character.toLowerCase(c));
 			}

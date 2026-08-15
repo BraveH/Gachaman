@@ -32,18 +32,16 @@ public class PermissionService implements GachaStateService.Listener {
 	/** Re-derive permissions from the current state (config toggles etc.). */
 	public void refresh() {
 		GachaState state = stateService.get();
-		if (state != null) {
+		if (state != null)
 			rebuild(state);
-		}
 	}
 
 	public void start() {
 		stateService.addListener(this);
 		cardDatabase.onReady(() -> {
 			GachaState state = stateService.get();
-			if (state != null) {
+			if (state != null)
 				rebuild(state);
-			}
 		});
 	}
 
@@ -146,9 +144,8 @@ public class PermissionService implements GachaStateService.Listener {
 		ids.addAll(card.getItemIds());
 		if (owned.getVariant() == Variant.SHINY && card.getFamilyKey() != null) {
 			for (CardDefinition member : cardDatabase.family(card.getFamilyKey())) {
-				if (member.getTierRank() <= card.getTierRank()) {
+				if (member.getTierRank() <= card.getTierRank())
 					ids.addAll(member.getItemIds());
-				}
 			}
 		}
 	}
@@ -182,9 +179,8 @@ public class PermissionService implements GachaStateService.Listener {
 			return ids;
 		}
 		CardDefinition card = cardDatabase.card(owned.getCardId());
-		if (card != null && card.getSlot() == slot) {
+		if (card != null && card.getSlot() == slot)
 			addCardIds(ids, owned, card);
-		}
 		return ids;
 	}
 
@@ -202,9 +198,8 @@ public class PermissionService implements GachaStateService.Listener {
 				continue;
 			}
 			CardDefinition card = cardDatabase.card(owned.getCardId());
-			if (card != null) {
+			if (card != null)
 				addCardIds(allowed, owned, card);
-			}
 		}
 		publish(allowed, state);
 	}

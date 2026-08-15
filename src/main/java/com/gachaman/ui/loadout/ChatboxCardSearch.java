@@ -64,16 +64,14 @@ public class ChatboxCardSearch extends ChatboxTextInput {
 		clientThread.invokeLater(() -> {
 			// close any live input first (incl. a previous run of this search)
 			// so key/mouse listeners unregister cleanly before we rebuild
-			if (chatboxPanelManager.getCurrentInput() != null) {
+			if (chatboxPanelManager.getCurrentInput() != null)
 				chatboxPanelManager.close();
-			}
 			this.slot = gearSlot;
 			prompt(gearSlot.getDisplayName() + " slot — choose a card");
 			value("");
 			onClose(() -> {
-				if (this.slot == gearSlot) {
+				if (this.slot == gearSlot)
 					this.slot = null;
-				}
 			});
 			filterResults();
 			build(); // opens via chatboxPanelManager.openInput(this)
@@ -146,9 +144,8 @@ public class ChatboxCardSearch extends ChatboxTextInput {
 	/** Client thread. */
 	private void select(Result result) {
 		GearSlot target = slot;
-		if (target != null) {
+		if (target != null)
 			loadoutService.assign(target, result.uuid);
-		}
 		chatboxPanelManager.close();
 	}
 
@@ -174,9 +171,8 @@ public class ChatboxCardSearch extends ChatboxTextInput {
 			Result r = toResult(owned);
 			if (r == null || !r.name.toLowerCase(Locale.ROOT).contains(filter))
 				continue;
-			if (seen.add(r.name)) {
+			if (seen.add(r.name))
 				matched.add(r);
-			}
 		}
 		matched.sort(Comparator.comparing(a -> a.name.toLowerCase(Locale.ROOT)));
 		for (Result r : matched) {

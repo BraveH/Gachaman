@@ -136,9 +136,8 @@ public class LoadoutTab extends JPanel {
 				HologramDefinition holo = cardDatabase.holograms().get(assigned.getTierKey());
 				name = holo != null ? holo.getName() : "Hologram";
 				border = HOLO_BORDER;
-				if (holo != null) {
+				if (holo != null)
 					sprite = cardImageService.hologramImage(holo, this::repaint);
-				}
 			}
 			else {
 				CardDefinition def = cardDatabase.card(assigned.getCardId());
@@ -264,9 +263,8 @@ public class LoadoutTab extends JPanel {
 				}
 				if (!selected) {
 					setBackground(ColorScheme.DARKER_GRAY_COLOR);
-					if (value instanceof OwnedCard) {
+					if (value instanceof OwnedCard)
 						setForeground(Color.WHITE);
-					}
 				}
 				return this;
 			}
@@ -276,9 +274,8 @@ public class LoadoutTab extends JPanel {
 			String typed = search.getText() == null ? "" : search.getText().trim();
 			String filter = typed.toLowerCase();
 			model.clear();
-			if (current != null) {
+			if (current != null)
 				model.addElement("Unassign " + loadoutService.displayName(current));
-			}
 			int matches = 0;
 			for (OwnedCard owned : valid) {
 				if (filter.isEmpty()

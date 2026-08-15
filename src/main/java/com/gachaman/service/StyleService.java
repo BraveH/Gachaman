@@ -147,9 +147,8 @@ public class StyleService {
 		if (state == null || state.getAllowedStyle() == null)
 			return false;
 		double weight = 1.0;
-		if ("COMPACTOR".equals(appliedCharge)) {
+		if ("COMPACTOR".equals(appliedCharge))
 			weight = Tuning.COMPACTOR_WEIGHT;
-		}
 		else if ("EXTENDER".equals(appliedCharge)) {
 			weight = Tuning.EXTENDER_WEIGHT;
 		}

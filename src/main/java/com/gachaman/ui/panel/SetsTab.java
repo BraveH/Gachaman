@@ -54,9 +54,8 @@ public class SetsTab extends JPanel {
 		Set<Integer> ownedIds = new HashSet<>();
 		Set<String> ownedHoloTiers = new HashSet<>();
 		for (OwnedCard owned : state.getOwnedCards()) {
-			if (owned.isHologram()) {
+			if (owned.isHologram())
 				ownedHoloTiers.add(owned.getTierKey());
-			}
 			else {
 				ownedIds.add(owned.getCardId());
 			}
@@ -78,13 +77,11 @@ public class SetsTab extends JPanel {
 		for (CardDefinition member : members) {
 			boolean owned = ownedIds.contains(member.getCardId())
 				|| (member.getTierKey() != null && ownedHoloTiers.contains(member.getTierKey()));
-			if (owned) {
+			if (owned)
 				ownedCount++;
-			}
 			else {
-				if (missing.length() > 0) {
+				if (missing.length() > 0)
 					missing.append(", ");
-				}
 				missing.append(member.getName());
 			}
 		}
@@ -126,9 +123,8 @@ public class SetsTab extends JPanel {
 			row.add(GachamanPanel.wrapped(perkText,
 				completed ? COMPLETE_BAR : ColorScheme.LIGHT_GRAY_COLOR));
 		}
-		if (members.size() < set.getCardNames().size()) {
+		if (members.size() < set.getCardNames().size())
 			row.add(GachamanPanel.smallLine("(some members unresolved)", ColorScheme.MEDIUM_GRAY_COLOR));
-		}
 		if (!completed && missing.length() > 0) {
 			row.add(Box.createVerticalStrut(3));
 			// escaped: these are item-cache names going into an HTML label, and one

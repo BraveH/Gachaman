@@ -166,12 +166,10 @@ public class DossierTab extends JPanel {
 				html.append(GachamanPanel.DOT).append("<font color='").append(hex(PARTY_BLUE)).append("'>")
 					.append(GachamanPanel.escape(record.getParty())).append("</font>");
 			}
-			if (record.isCarried()) {
+			if (record.isCarried())
 				html.append(GachamanPanel.DOT).append("carried");
-			}
-			if (record.isRedemption()) {
+			if (record.isRedemption())
 				html.append(GachamanPanel.DOT).append("redemption");
-			}
 			html.append(GachamanPanel.DOT).append("<font color='")
 				.append(hex(record.isClean() ? CLEAN_GREEN : BAD_RED)).append("'>")
 				.append(record.isClean() ? "clean"

@@ -32,9 +32,8 @@ public class CombatBlockService {
 		MenuEntry entry = event.getMenuEntry();
 		if (!isOffensiveEntry(entry.getOption(), entry.getType()))
 			return;
-		if (isBlocked(entry)) {
+		if (isBlocked(entry))
 			client.getMenu().removeMenuEntry(entry);
-		}
 	}
 
 	@Subscribe

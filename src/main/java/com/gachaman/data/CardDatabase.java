@@ -75,9 +75,8 @@ public class CardDatabase {
 		"Training sword", "Training shield", "Training bow", "Training arrows"));
 
 	public synchronized void onReady(Runnable callback) {
-		if (ready) {
+		if (ready)
 			callback.run();
-		}
 		else {
 			readyCallbacks.add(callback);
 		}
@@ -114,9 +113,8 @@ public class CardDatabase {
 				statsReady = false;
 			}
 			if (!statsReady) {
-				if (++statsProbeAttempts < MAX_PROBE_ATTEMPTS) {
+				if (++statsProbeAttempts < MAX_PROBE_ATTEMPTS)
 					clientThread.invokeLater(() -> scanChunk(0));
-				}
 				else {
 					log.warn("Gachaman: item stats never became available; card DB unavailable this session");
 				}
@@ -147,15 +145,13 @@ public class CardDatabase {
 			}
 		}
 		scanProgressPercent = count == 0 ? 0 : (int) (end * 100L / count);
-		if (end < count) {
+		if (end < count)
 			clientThread.invokeLater(() -> scanChunk(end));
-		}
 		else {
 			List<CardDefinition> cards = groupAndFinalize(scanned);
 			scanned = null;
-			if (cards.size() >= MIN_SANE_CARD_COUNT) {
+			if (cards.size() >= MIN_SANE_CARD_COUNT)
 				saveCache(cards);
-			}
 			else {
 				log.warn("Gachaman card DB scan looks incomplete ({} cards) — using in-memory only, no cache", cards.size());
 			}
@@ -245,9 +241,8 @@ public class CardDatabase {
 			int power = (Integer) p[6];
 
 			Rarity rarity = rarityOverrides.lookup(clean);
-			if (rarity == null) {
+			if (rarity == null)
 				rarity = tierKey != null ? rarityForRank(rank) : rarityForPower(power);
-			}
 			boolean shinyEligible = familyKey != null
 				&& rank > familyMinRank.getOrDefault(familyKey, rank);
 
@@ -302,24 +297,21 @@ public class CardDatabase {
 			for (int itemId : card.getItemIds()) {
 				byItem.put(itemId, card.getCardId());
 			}
-			if (card.getFamilyKey() != null) {
+			if (card.getFamilyKey() != null)
 				families.computeIfAbsent(card.getFamilyKey(), k -> new ArrayList<>()).add(card);
-			}
 		}
 		families.values().forEach(list -> list.sort(Comparator.comparingInt(CardDefinition::getTierRank)));
 
 		// holograms: only tiers that exist on >= 2 distinct slots
 		Map<String, Set<GearSlot>> slotsPerTier = new HashMap<>();
 		for (CardDefinition card : cards) {
-			if (card.getTierKey() != null) {
+			if (card.getTierKey() != null)
 				slotsPerTier.computeIfAbsent(card.getTierKey(), k -> new HashSet<>()).add(card.getSlot());
-			}
 		}
 		Map<String, HologramDefinition> holos = new HashMap<>();
 		for (HologramDefinition holo : tierTable.getHolograms()) {
-			if (slotsPerTier.getOrDefault(holo.getTierKey(), Collections.emptySet()).size() >= 2) {
+			if (slotsPerTier.getOrDefault(holo.getTierKey(), Collections.emptySet()).size() >= 2)
 				holos.put(holo.getTierKey(), holo);
-			}
 		}
 
 		// set tag index: setKey -> member cards (matched by name)
@@ -329,9 +321,8 @@ public class CardDatabase {
 			List<String> unresolved = new ArrayList<>();
 			for (String cardName : set.getCardNames()) {
 				Integer cardId = byName.get(cardName.toLowerCase());
-				if (cardId != null) {
+				if (cardId != null)
 					members.add(byId.get(cardId));
-				}
 				else {
 					unresolved.add(cardName);
 				}
@@ -439,15 +430,12 @@ public class CardDatabase {
 		if (best <= 0)
 			return null;
 		int winners = 0;
-		if (melee == best) {
+		if (melee == best)
 			winners++;
-		}
-		if (arange == best) {
+		if (arange == best)
 			winners++;
-		}
-		if (amagic == best) {
+		if (amagic == best)
 			winners++;
-		}
 		if (winners != 1)
 			return null;
 		if (melee == best)
@@ -497,9 +485,8 @@ public class CardDatabase {
 					+ Math.max(0, e.getDrange())
 					+ Math.max(0, e.getStr()) + Math.max(0, e.getRstr())
 					+ Math.max(0, e.getPrayer()) + (int) Math.max(0, e.getMdmg());
-				if (total <= maxTotalBonus) {
+				if (total <= maxTotalBonus)
 					suspects.add(card.getName() + " (+" + total + ")");
-				}
 			}
 			catch (Exception ex) {
 				// skip unreadable entries

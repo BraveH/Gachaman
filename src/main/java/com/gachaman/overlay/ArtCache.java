@@ -44,9 +44,8 @@ final class ArtCache {
 			Image loaded = null;
 			try (InputStream in = ArtCache.class.getResourceAsStream(
 				"/com/gachaman/art/" + name + ".png")) {
-				if (in != null) {
+				if (in != null)
 					loaded = ImageIO.read(in);
-				}
 			}
 			catch (Exception e) {
 				// a truncated or corrupt PNG caches as a miss for the same
@@ -66,8 +65,7 @@ final class ArtCache {
 	 */
 	static void blit(Graphics2D g, String name, int x, int y, int w, int h) {
 		Image art = w > 0 && h > 0 ? get(name) : null;
-		if (art != null) {
+		if (art != null)
 			g.drawImage(art, x, y, w, h, null);
-		}
 	}
 }

@@ -146,9 +146,8 @@ class CeremonyPlayer {
 		g.drawImage(art, dx, dy,
 			(int) Math.round(at.get(2) * sx),
 			(int) Math.round(at.get(3) * sy), null);
-		if (old != null) {
+		if (old != null)
 			g.setComposite(old);
-		}
 		return true;
 	}
 }

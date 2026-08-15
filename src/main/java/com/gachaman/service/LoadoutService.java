@@ -159,9 +159,8 @@ public class LoadoutService {
 		}
 		Set<Integer> ids = new HashSet<>();
 		for (Item item : worn.getItems()) {
-			if (item != null && item.getId() > 0) {
+			if (item != null && item.getId() > 0)
 				ids.add(item.getId());
-			}
 		}
 		return ids;
 	}
@@ -260,9 +259,8 @@ public class LoadoutService {
 	public AttackStyle styleOf(OwnedCard owned) {
 		String tierKey = null;
 		String name = null;
-		if (owned.isHologram()) {
+		if (owned.isHologram())
 			tierKey = owned.getTierKey();
-		}
 		else {
 			CardDefinition def = cardDatabase.card(owned.getCardId());
 			if (def != null) {

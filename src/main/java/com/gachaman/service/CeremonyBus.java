@@ -82,9 +82,8 @@ public class CeremonyBus {
 	private FallbackHandler fallback;
 
 	public synchronized void addTap(Consumer<Request> tap) {
-		if (!taps.contains(tap)) {
+		if (!taps.contains(tap))
 			taps.add(tap);
-		}
 	}
 
 	public synchronized void removeTap(Consumer<Request> tap) {

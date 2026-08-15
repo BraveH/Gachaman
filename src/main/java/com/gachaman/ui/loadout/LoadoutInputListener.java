@@ -96,9 +96,8 @@ public class LoadoutInputListener implements MouseListener {
 
 	@Override
 	public MouseEvent mouseExited(MouseEvent event) {
-		if (event != null) {
+		if (event != null)
 			loadoutOverlay.setHoverCanvasPoint(null);
-		}
 		return event;
 	}
 

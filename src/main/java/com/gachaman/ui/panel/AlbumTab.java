@@ -27,7 +27,11 @@ import net.runelite.client.util.*;
 /**
  * The card album: every card in the database as a lazily rasterized thumbnail
  * grid, sorted rarity-ascending (Common first) then A-Z by default, with a
- * header button that flips the rarity direction. Unowned cards are darkened
+ * header dropdown offering that, its reverse, name order, and two orders that
+ * read the player's own album — newest unlock and best Service Record. Under
+ * those last two an unowned card sorts BELOW every owned one rather than
+ * leading a block of zeroes; see {@link #acquiredAt} and {@link #serviceOf}.
+ * Unowned cards are darkened
  * silhouettes named "???". Thumbnails are built off the EDT in SwingWorker
  * batches (only visible cells are requested) and cached in a small LRU so a
  * multi-thousand-card database stays light. Item sprites load asynchronously,
@@ -81,7 +85,7 @@ public class AlbumTab extends JPanel {
 	private final JComboBox<String> rarityFilter;
 	private final JComboBox<String> variantFilter;
 	private final JCheckBox ownedOnlyBox = new JCheckBox("Owned only");
-	private final JButton sortOrderButton = new JButton("Common first");
+	private final JComboBox<String> sortOrder = new JComboBox<>(SORT_LABELS);
 	private final JTextField searchField = new JTextField();
 	private final JLabel collectedLabel = new JLabel();
 	private final JLabel rarityCountsLabel = new JLabel();
@@ -89,15 +93,33 @@ public class AlbumTab extends JPanel {
 	private final JPanel holoPanel = box(BoxLayout.Y_AXIS);
 	private final GridPanel grid = new GridPanel();
 
+	/**
+	 * Sort orders, in the dropdown's own order. The INDEX is the mode — see
+	 * {@link #ensureSorted()} — so adding one here means adding its arm there,
+	 * and reordering these reorders the menu and nothing else.
+	 *
+	 * <p>The last two read the player's album rather than the card database,
+	 * which is what makes them different in kind from the rarity orders: an
+	 * unowned card has no unlock time and no Service Record, so it sorts to the
+	 * bottom rather than to the top of an ascending run of zeroes.
+	 */
+	private static final String[] SORT_LABELS = {
+		"Common first", "Legendary first", "Name A-Z", "Newest first", "Most kills"
+	};
+	private static final int SORT_NEWEST = 3;
+	private static final int SORT_KILLS = 4;
+
 	private List<CardDefinition> sorted = Collections.emptyList();
 	private Map<Integer, CardDefinition> sortedSource;
-	/** False = rarity ascending (Common first), true = Legendary first. */
-	private boolean sortDescending;
-	/** Direction {@link #sorted} was built with, to detect toggle flips. */
-	private boolean sortedDescending;
+	/** Index into {@link #SORT_LABELS}. */
+	private int sortMode;
+	/** Mode {@link #sorted} was built with, to detect a change of order. */
+	private int sortedMode = -1;
 	private Map<Integer, Variant> ownedVariantByCardId = Collections.emptyMap();
 	/** Card id -> best Service Record among the owned copies of that card. */
 	private Map<Integer, Integer> serviceByCardId = Collections.emptyMap();
+	/** Card id -> the MOST RECENT unlock time among the owned copies. */
+	private Map<Integer, Long> acquiredByCardId = Collections.emptyMap();
 
 	@Inject
 	public AlbumTab(GachaStateService stateService, CardDatabase cardDatabase,
@@ -153,27 +175,23 @@ public class AlbumTab extends JPanel {
 		north.add(filterGrid);
 		north.add(Box.createVerticalStrut(4));
 
-		sortOrderButton.setFont(FontManager.getRunescapeSmallFont());
-		sortOrderButton.setFocusable(false);
-		sortOrderButton.setFocusPainted(false);
-		sortOrderButton.setBackground(ColorScheme.DARKER_GRAY_COLOR.darker());
-		sortOrderButton.setForeground(Color.WHITE);
-		sortOrderButton.setToolTipText("Toggle rarity sort order");
-		// Sized to the LONGER of the two captions it toggles between, measured
-		// rather than guessed: the button is pinned to a fixed width so the
-		// search field beside it can take the rest, and the hardcoded 94 was
-		// narrower than "Legendary first" plus the look-and-feel's own insets —
-		// so the button ellipsised the moment you pressed it.
-		Insets buttonInsets = sortOrderButton.getInsets();
+		GachamanPanel.styleCombo(sortOrder);
+		sortOrder.setToolTipText("Sort order");
+		// Still pinned to a fixed width so the search field beside it takes the
+		// rest, and still MEASURED rather than guessed — the hardcoded width this
+		// replaced was narrower than its own longest caption, so the control
+		// ellipsised the moment you changed it. A combo also needs room for the
+		// arrow, hence the wider pad than the button wanted.
 		FontMetrics sortMetrics =
-			sortOrderButton.getFontMetrics(FontManager.getRunescapeSmallFont());
-		int sortWidth = Math.max(sortMetrics.stringWidth("Common first"),
-			sortMetrics.stringWidth("Legendary first"))
-			+ buttonInsets.left + buttonInsets.right + 8;
-		Dimension sortSize = new Dimension(sortWidth, 24);
-		sortOrderButton.setPreferredSize(sortSize);
-		sortOrderButton.setMinimumSize(sortSize);
-		sortOrderButton.setMaximumSize(sortSize);
+			sortOrder.getFontMetrics(FontManager.getRunescapeSmallFont());
+		int sortWidth = 0;
+		for (String label : SORT_LABELS) {
+			sortWidth = Math.max(sortWidth, sortMetrics.stringWidth(label));
+		}
+		Dimension sortSize = new Dimension(sortWidth + 32, 24);
+		sortOrder.setPreferredSize(sortSize);
+		sortOrder.setMinimumSize(sortSize);
+		sortOrder.setMaximumSize(sortSize);
 
 		searchField.setFont(FontManager.getRunescapeSmallFont());
 		searchField.setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -187,7 +205,7 @@ public class AlbumTab extends JPanel {
 		searchRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
 		searchRow.add(searchField);
 		searchRow.add(Box.createHorizontalStrut(4));
-		searchRow.add(sortOrderButton);
+		searchRow.add(sortOrder);
 		north.add(searchRow);
 		north.add(Box.createVerticalStrut(5));
 
@@ -204,9 +222,8 @@ public class AlbumTab extends JPanel {
 		rarityFilter.addActionListener(e -> applyFilters());
 		variantFilter.addActionListener(e -> applyFilters());
 		ownedOnlyBox.addActionListener(e -> applyFilters());
-		sortOrderButton.addActionListener(e -> {
-			sortDescending = !sortDescending;
-			sortOrderButton.setText(sortDescending ? "Legendary first" : "Common first");
+		sortOrder.addActionListener(e -> {
+			sortMode = Math.max(0, sortOrder.getSelectedIndex());
 			ensureSorted();
 			applyFilters();
 		});
@@ -230,22 +247,32 @@ public class AlbumTab extends JPanel {
 
 	void rebuild() {
 		GachaState state = stateService.get();
-		ensureSorted();
 
 		Map<Integer, Variant> ownedVariants = new HashMap<>();
+		Map<Integer, Long> acquired = new HashMap<>();
 		if (state != null) {
 			for (OwnedCard owned : state.getOwnedCards()) {
 				if (owned.isHologram())
 					continue;
 				Variant existing = ownedVariants.get(owned.getCardId());
-				if (existing == null || (existing == Variant.NORMAL && owned.getVariant() == Variant.SHINY)) {
+				if (existing == null || (existing == Variant.NORMAL && owned.getVariant() == Variant.SHINY))
 					ownedVariants.put(owned.getCardId(), owned.getVariant());
-				}
+				// the MOST RECENT copy wins: "Newest first" answers "what have I
+				// just pulled", and a duplicate arriving today is news even when
+				// the first copy is a year old
+				acquired.merge(owned.getCardId(), owned.getAcquiredAtMs(), Math::max);
 			}
 		}
 		ownedVariantByCardId = ownedVariants;
+		acquiredByCardId = acquired;
 		serviceByCardId = ServiceRecordService.bestByCardId(
 			state == null ? null : state.getOwnedCards());
+
+		// AFTER the album maps above, never before: the newest and most-kills
+		// orders read them, and sorting first would order this rebuild by the
+		// PREVIOUS one's album — invisible on a cold start and wrong on the very
+		// rebuild a new pull triggers, which is exactly when someone is looking.
+		ensureSorted();
 
 		updateHeader(state);
 		rebuildHoloSection(state);
@@ -259,21 +286,52 @@ public class AlbumTab extends JPanel {
 			return;
 		}
 		Map<Integer, CardDefinition> source = cardDatabase.all();
-		if (source == sortedSource && sortedDescending == sortDescending)
+		int mode = sortMode;
+		// The rarity and name orders depend only on the card database, so an
+		// unchanged database plus an unchanged mode means the answer cannot have
+		// moved. The album orders CANNOT be cached that way — the database is the
+		// same object the moment a card is pulled, so caching on it would freeze
+		// "Newest first" on the last pull the player saw before choosing it.
+		boolean readsAlbum = mode == SORT_NEWEST || mode == SORT_KILLS;
+		if (!readsAlbum && source == sortedSource && sortedMode == mode)
 			return;
-		final boolean descending = sortDescending;
 		List<CardDefinition> cards = new ArrayList<>(source.values());
-		// rarity ascending (Common first) by default, toggleable to
-		// descending; name A-Z within a rarity either way
+		// Name A-Z is the tie-break under every order, so it is also the whole of
+		// its own arm: mode 2 simply contributes nothing and falls through.
 		cards.sort((a, b) -> {
-			int cmp = Integer.compare(a.getRarity().ordinal(), b.getRarity().ordinal());
-			if (cmp != 0)
-				return descending ? -cmp : cmp;
-			return a.getName().compareToIgnoreCase(b.getName());
+			int cmp = mode <= 1
+				? (mode == 1 ? -1 : 1)
+					* Integer.compare(a.getRarity().ordinal(), b.getRarity().ordinal())
+				: mode == SORT_NEWEST ? Long.compare(acquiredAt(b), acquiredAt(a))
+				: mode == SORT_KILLS ? Integer.compare(serviceOf(b), serviceOf(a))
+				: 0;
+			return cmp != 0 ? cmp : a.getName().compareToIgnoreCase(b.getName());
 		});
 		sorted = cards;
 		sortedSource = source;
-		sortedDescending = descending;
+		sortedMode = mode;
+	}
+
+	/**
+	 * Unlock time of a card's newest copy, or MIN_VALUE when it is not owned —
+	 * so under a newest-first order the whole unowned tail sinks below every
+	 * card the player actually has, rather than a run of zeroes floating to the
+	 * top of the album the moment the order is chosen.
+	 */
+	private long acquiredAt(CardDefinition card) {
+		Long at = acquiredByCardId.get(card.getCardId());
+		return at == null ? Long.MIN_VALUE : at;
+	}
+
+	/**
+	 * Best Service Record among a card's copies. Unowned is -1 rather than 0,
+	 * which keeps it strictly below an owned card that has served no kills yet —
+	 * "I have it, it has done nothing" and "I do not have it" are different
+	 * answers and the order should not conflate them.
+	 */
+	private int serviceOf(CardDefinition card) {
+		Integer kills = serviceByCardId.get(card.getCardId());
+		return kills == null ? -1 : kills;
 	}
 
 	/**
@@ -310,9 +368,8 @@ public class AlbumTab extends JPanel {
 		StringBuilder html = new StringBuilder("<html>");
 		boolean first = true;
 		for (Rarity rarity : Rarity.values()) {
-			if (!first) {
+			if (!first)
 				html.append("&nbsp;&nbsp;");
-			}
 			first = false;
 			// #rrggbb and rgb(r,g,b) parse to the same Color in Swing's CSS, and
 			// GachamanPanel.hex is what Dossier, Patrons and Timeline already use
@@ -333,9 +390,8 @@ public class AlbumTab extends JPanel {
 		Set<String> seenTiers = new LinkedHashSet<>();
 		List<OwnedCard> holos = new ArrayList<>();
 		for (OwnedCard owned : state.getOwnedCards()) {
-			if (owned.isHologram() && seenTiers.add(owned.getTierKey())) {
+			if (owned.isHologram() && seenTiers.add(owned.getTierKey()))
 				holos.add(owned);
-			}
 		}
 		if (holos.isEmpty())
 			return;
@@ -652,9 +708,8 @@ public class AlbumTab extends JPanel {
 				}
 				long now = System.currentTimeMillis();
 				Rectangle clip = g2.getClipBounds();
-				if (clip == null) {
+				if (clip == null)
 					clip = new Rectangle(0, 0, getWidth(), getHeight());
-				}
 				int c = cols();
 				int cellW = getWidth() / c;
 				int rowH = THUMB_H + GAP;
@@ -672,25 +727,21 @@ public class AlbumTab extends JPanel {
 						BufferedImage thumb = cache.get(keyOf(entry));
 						if (thumb != null) {
 							g2.drawImage(thumb, x, y, null);
-							if (hasLiveEffect(entry)) {
+							if (hasLiveEffect(entry))
 								paintLiveEffect(g2, x, y, entry, now);
-							}
-							if (entry.owned) {
+							if (entry.owned)
 								paintWikiBadge(g2, x, y);
-							}
 						}
 						else {
 							g2.setColor(PLACEHOLDER);
 							g2.fillRoundRect(x, y, THUMB_W, THUMB_H, 12, 12);
-							if (missing.size() < BATCH_MAX) {
+							if (missing.size() < BATCH_MAX)
 								missing.add(entry);
-							}
 						}
 					}
 				}
-				if (!missing.isEmpty()) {
+				if (!missing.isEmpty())
 					scheduleRaster(missing);
-				}
 				updateEffectTimer();
 			}
 			finally {
@@ -700,9 +751,8 @@ public class AlbumTab extends JPanel {
 
 		private void updateEffectTimer() {
 			if (isShowing() && hasVisibleEffectCells()) {
-				if (!effectTimer.isRunning()) {
+				if (!effectTimer.isRunning())
 					effectTimer.start();
-				}
 			}
 			else if (effectTimer.isRunning()) {
 				effectTimer.stop();
@@ -786,9 +836,8 @@ public class AlbumTab extends JPanel {
 				protected void process(List<Object[]> chunks) {
 					for (Object[] chunk : chunks) {
 						String key = (String) chunk[0];
-						if (versionOf(key) == (Integer) chunk[2]) {
+						if (versionOf(key) == (Integer) chunk[2])
 							cache.put(key, (BufferedImage) chunk[1]);
-						}
 						// else: a sprite finished loading mid-raster; drop the
 						// stale raster and let the repaint re-request the cell
 					}
@@ -860,9 +909,8 @@ public class AlbumTab extends JPanel {
 				return fetchArt(key, resolved);
 			Set<Integer> ids = entry.card.getItemIds();
 			List<Integer> candidates = ids == null ? new ArrayList<>() : new ArrayList<>(ids);
-			if (!candidates.contains(cardId)) {
+			if (!candidates.contains(cardId))
 				candidates.add(cardId);
-			}
 			Collections.sort(candidates);
 			BufferedImage fallback = null;
 			for (int itemId : candidates) {

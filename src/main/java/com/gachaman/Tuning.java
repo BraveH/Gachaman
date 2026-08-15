@@ -33,9 +33,8 @@ public final class Tuning {
 	private static <K extends Enum<K>, V> Map<K, V> table(K[] keys, V... values) {
 		Map<K, V> map = new EnumMap<>(keys[0].getDeclaringClass());
 		for (int i = 0; i < values.length; i++) {
-			if (values[i] != null) {
+			if (values[i] != null)
 				map.put(keys[i], values[i]);
-			}
 		}
 		return map;
 	}
@@ -296,9 +295,8 @@ public final class Tuning {
 	public static int maxRankForLevel(int level) {
 		int rank = 1;
 		for (int i = 0; i < TIER_RANK_LEVELS.length; i++) {
-			if (level >= TIER_RANK_LEVELS[i]) {
+			if (level >= TIER_RANK_LEVELS[i])
 				rank = i + 1;
-			}
 		}
 		return rank;
 	}

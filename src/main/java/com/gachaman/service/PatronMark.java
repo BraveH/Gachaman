@@ -218,9 +218,8 @@ public final class PatronMark {
 	public static int tierFor(int count) {
 		int tier = 0;
 		for (int threshold : Tuning.PATRON_TIERS) {
-			if (count >= threshold) {
+			if (count >= threshold)
 				tier++;
-			}
 		}
 		return tier;
 	}

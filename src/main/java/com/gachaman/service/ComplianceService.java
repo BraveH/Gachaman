@@ -93,9 +93,8 @@ public class ComplianceService implements StyleTracker.AttackListener {
 	private int currentTick;
 
 	public void addListener(Listener listener) {
-		if (!listeners.contains(listener)) {
+		if (!listeners.contains(listener))
 			listeners.add(listener);
-		}
 	}
 
 	public void removeListener(Listener listener) {

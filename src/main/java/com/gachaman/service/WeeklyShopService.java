@@ -65,9 +65,8 @@ public class WeeklyShopService {
 		Set<Integer> pickedIds = new HashSet<>();
 		while (offers.size() < 3 && offers.size() < all.size()) {
 			CardDefinition pick = all.get(weekRng.nextInt(all.size()));
-			if (pickedIds.add(pick.getCardId())) {
+			if (pickedIds.add(pick.getCardId()))
 				offers.add(pick);
-			}
 		}
 
 		Set<Integer> purchased = state.getWeeklyShopPurchases()

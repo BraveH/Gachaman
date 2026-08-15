@@ -136,9 +136,8 @@ final class ChestStrain {
 			long d = el - b;
 			if (d >= 0 && d < KICK_MS) {
 				double k = 1.0 - d / (double) KICK_MS;
-				if (k > best) {
+				if (k > best)
 					best = k;
-				}
 			}
 		}
 		return best;

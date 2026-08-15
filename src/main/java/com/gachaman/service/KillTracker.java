@@ -125,9 +125,8 @@ public class KillTracker {
 	private int lastPlayerDamagedTick = -1;
 
 	public void addListener(KillListener listener) {
-		if (!listeners.contains(listener)) {
+		if (!listeners.contains(listener))
 			listeners.add(listener);
-		}
 	}
 
 	public void removeListener(KillListener listener) {
@@ -143,17 +142,15 @@ public class KillTracker {
 	public void onGameTick(GameTick event) {
 		tick++;
 		emitReadyKills();
-		if (tick % SWEEP_INTERVAL == 0) {
+		if (tick % SWEEP_INTERVAL == 0)
 			engagements.values().removeIf(e -> tick - e.lastRefreshTick > ENGAGEMENT_TICKS * 4);
-		}
 	}
 
 	@Subscribe
 	public void onInteractingChanged(InteractingChanged event) {
 		// instanceof already excludes null, so this covers "stopped interacting"
-		if (event.getSource() == client.getLocalPlayer() && event.getTarget() instanceof NPC) {
+		if (event.getSource() == client.getLocalPlayer() && event.getTarget() instanceof NPC)
 			refresh((NPC) event.getTarget());
-		}
 	}
 
 	@Subscribe
@@ -172,9 +169,8 @@ public class KillTracker {
 				|| type == HitsplatID.BLEED
 				|| type == HitsplatID.BURN
 				|| type == HitsplatID.DOOM;
-			if (hpDamage && hitsplat.getAmount() > 0) {
+			if (hpDamage && hitsplat.getAmount() > 0)
 				lastPlayerDamagedTick = tick;
-			}
 			return;
 		}
 		if (!(event.getActor() instanceof NPC))
@@ -308,9 +304,8 @@ public class KillTracker {
 				best = pending;
 			}
 		}
-		if (best != null) {
+		if (best != null)
 			best.lootSeen = true;
-		}
 	}
 
 	/**
@@ -388,9 +383,8 @@ public class KillTracker {
 		}
 		engagement.lastRefreshTick = tick;
 		String name = npc.getName();
-		if (name != null) {
+		if (name != null)
 			engagement.name = Text.removeTags(name);
-		}
 		engagement.combatLevel = npc.getCombatLevel();
 		return engagement;
 	}

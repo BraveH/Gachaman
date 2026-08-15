@@ -188,18 +188,16 @@ public class WeaponTypeService {
 			Set<AttackStyle> styles = EnumSet.noneOf(AttackStyle.class);
 			if (raw.offerIn != null) {
 				for (AttackStyle style : raw.offerIn) {
-					if (style != null) {
+					if (style != null)
 						styles.add(style);
-					}
 				}
 			}
 			WeaponType type = new WeaponType(raw.key, raw.displayName, raw.dbrow,
 				Collections.unmodifiableSet(styles), raw.offerable, raw.reason);
 			loaded.add(type);
 			keys.put(type.key, type);
-			if (type.dbrow != NO_DBROW) {
+			if (type.dbrow != NO_DBROW)
 				rows.put(type.dbrow, type);
-			}
 		}
 		this.types = Collections.unmodifiableList(loaded);
 		this.byRow = Collections.unmodifiableMap(rows);
@@ -402,9 +400,8 @@ public class WeaponTypeService {
 	public List<WeaponType> pool(AttackStyle style) {
 		List<WeaponType> pool = new ArrayList<>();
 		for (WeaponType type : types) {
-			if (type.offerable && type.offerIn.contains(style)) {
+			if (type.offerable && type.offerIn.contains(style))
 				pool.add(type);
-			}
 		}
 		return Collections.unmodifiableList(pool);
 	}

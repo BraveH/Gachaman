@@ -114,9 +114,8 @@ public final class TaskGenerator {
 		MonsterTable.Monster monster = rng.pick(distinct.isEmpty() ? eligible : distinct);
 
 		int kills = rng.between(difficulty.getMinKills(), difficulty.getMaxKills());
-		if (redemption) {
+		if (redemption)
 			kills = (int) Math.ceil(kills * Tuning.REDEMPTION_KILL_MULT);
-		}
 		int perKill = redemption ? 0 : Tuning.PER_KILL_GC.get(difficulty);
 		int completion = Tuning.COMPLETION_GC.get(difficulty);
 

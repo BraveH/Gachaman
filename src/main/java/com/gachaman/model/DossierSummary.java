@@ -37,12 +37,10 @@ public class DossierSummary {
 					continue;
 				}
 				contracts++;
-				if (record.isClean()) {
+				if (record.isClean())
 					clean++;
-				}
-				if (record.isParty()) {
+				if (record.isParty())
 					party++;
-				}
 				kills += record.getKills();
 				gc += record.getGc();
 				duration += Math.max(0, record.getDurationMs());
