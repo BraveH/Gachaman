@@ -28,9 +28,8 @@ public class FirstsService implements TaskService.Listener, ComplianceService.Li
 	/** Claim-once core. Returns true when newly claimed. */
 	public synchronized boolean claim(FirstStamp stamp) {
 		GachaState state = stateService.get();
-		if (state == null || alreadyClaimed(state.getFirstsClaimed(), stamp)) {
+		if (state == null || alreadyClaimed(state.getFirstsClaimed(), stamp))
 			return false;
-		}
 		// stamp + bounty land in ONE mutate: an unload/profile switch can
 		// never mark the once-ever stamp claimed while swallowing its GC
 		CreditSink.AwardResult result = creditSink.awardWith(Tuning.FIRSTS_GC.get(stamp),
@@ -50,7 +49,7 @@ public class FirstsService implements TaskService.Listener, ComplianceService.Li
 		return true;
 	}
 
-	static boolean alreadyClaimed(@Nullable Set<String> claimed, FirstStamp stamp) {
+	static boolean alreadyClaimed(Set<String> claimed, FirstStamp stamp) {
 		return claimed != null && claimed.contains(stamp.name());
 	}
 
@@ -85,9 +84,8 @@ public class FirstsService implements TaskService.Listener, ComplianceService.Li
 
 	@Override
 	public void onKillFeedback(TaskService.KillFeedback feedback) {
-		if (client != null && TutorialGate.onTutorial(client)) {
+		if (client != null && TutorialGate.onTutorial(client))
 			return;
-		}
 		claim(FirstStamp.FIRST_KILL);
 	}
 

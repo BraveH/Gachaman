@@ -8,6 +8,7 @@ import com.gachaman.data.*;
 import com.gachaman.model.*;
 import com.gachaman.service.*;
 import com.gachaman.ui.*;
+import com.google.gson.*;
 import java.awt.*;
 import java.awt.image.*;
 import java.util.*;
@@ -61,6 +62,9 @@ public class LoadoutOverlay extends Overlay {
 	private static final Color HOLOGRAM_EDGE = new Color(120, 220, 255);
 	private static final Color DEED_RIBBON = new Color(255, 200, 60);
 	private static final Color BADGE_PLUS = new Color(45, 33, 8);
+	/** The refused-unassign flash: long enough to read, short enough to forget. */
+	private static final Color REFUSED_EDGE = new Color(220, 70, 60);
+	private static final long REFUSED_FLASH_MS = 1200L;
 
 	private static final BasicStroke STROKE_1 = new BasicStroke(1f);
 	private static final BasicStroke STROKE_2 = new BasicStroke(2f);
@@ -84,6 +88,14 @@ public class LoadoutOverlay extends Overlay {
 	private final GachamanConfig config;
 
 	private final Map<GearSlot, Rectangle> socketRects = new EnumMap<>(GearSlot.class);
+
+	/**
+	 * The board's layout and silhouette sprites, by GearSlot name — the same
+	 * table the sidebar's LoadoutTab lays its grid out from, so the two views of
+	 * this board cannot disagree about where a socket goes. Empty only if the
+	 * resource failed to load. See {@link BoardLayout}.
+	 */
+	private final Map<String, BoardLayout.Socket> sockets;
 
 	/** Raw sprites by sprite id; entries appear once SpriteManager has them. */
 	private final Map<Integer, BufferedImage> spriteCache = new HashMap<>();
@@ -110,11 +122,16 @@ public class LoadoutOverlay extends Overlay {
 	@Setter
 	private volatile Point hoverCanvasPoint;
 
+	// Written on the client thread by the click handler, read by the renderer.
+	@Nullable
+	private volatile GearSlot refusedSlot;
+	private volatile long refusedAtMs;
+
 	@Inject
 	public LoadoutOverlay(Client client, ClientThread clientThread, GachaStateService stateService,
 		LoadoutService loadoutService, ChestService chestService, CardDatabase cardDatabase,
 		CardImageService cardImageService, ChatboxCardSearch cardSearch, SpriteManager spriteManager,
-		GachamanConfig config) {
+		Gson gson, GachamanConfig config) {
 		this.config = config;
 		this.client = client;
 		this.clientThread = clientThread;
@@ -131,25 +148,21 @@ public class LoadoutOverlay extends Overlay {
 		setPriority(PRIORITY_MED);
 		setMovable(true);
 
-		// classic equipment tab arrangement
-		int left = 20;
-		int mid = (BOARD_W - SOCKET) / 2;
-		int right = BOARD_W - SOCKET - 20;
-		socketRects.put(GearSlot.HEAD, socket(mid, 28));
-		socketRects.put(GearSlot.CAPE, socket(left, 72));
-		socketRects.put(GearSlot.AMULET, socket(mid, 72));
-		socketRects.put(GearSlot.AMMO, socket(right, 72));
-		socketRects.put(GearSlot.WEAPON, socket(left, 116));
-		socketRects.put(GearSlot.BODY, socket(mid, 116));
-		socketRects.put(GearSlot.SHIELD, socket(right, 116));
-		socketRects.put(GearSlot.LEGS, socket(mid, 160));
-		socketRects.put(GearSlot.HANDS, socket(left, 204));
-		socketRects.put(GearSlot.FEET, socket(mid, 204));
-		socketRects.put(GearSlot.RING, socket(right, 204));
-	}
-
-	private static Rectangle socket(int x, int y) {
-		return new Rectangle(x, y, SOCKET, SOCKET);
+		// classic equipment tab arrangement, read from loadout-board.json. The
+		// three columns are derived here rather than stored, so the resource holds
+		// a column INDEX and the board stays correct if BOARD_W or SOCKET moves.
+		this.sockets = BoardLayout.load(gson);
+		int[] columns = {20, (BOARD_W - SOCKET) / 2, BOARD_W - SOCKET - 20};
+		for (GearSlot slot : GearSlot.values()) {
+			BoardLayout.Socket s = sockets.get(slot.name());
+			// A slot the resource does not name simply gets no socket: it cannot be
+			// drawn, hovered or clicked, which is the same fail-quiet direction every
+			// other unresolvable case in this plugin takes. socketRects is an EnumMap,
+			// so the draw order stays GearSlot's regardless of the file's key order.
+			if (s != null && s.getCol() >= 0 && s.getCol() < columns.length) {
+				socketRects.put(slot, new Rectangle(columns[s.getCol()], s.getY(), SOCKET, SOCKET));
+			}
+		}
 	}
 
 	public void toggle() {
@@ -210,9 +223,7 @@ public class LoadoutOverlay extends Overlay {
 		}
 
 		if (state.getPendingDeeds() > 0) {
-			float pulse = (float) (0.5 + 0.5 * Math.sin(now / 240.0));
-			g.setColor(new Color(DEED_RIBBON.getRed(), DEED_RIBBON.getGreen(), DEED_RIBBON.getBlue(),
-				(int) (110 + 145 * pulse)));
+			g.setColor(ribbonPulse(now, 110, 145));
 			g.fillRoundRect(14, BOARD_H - 18, BOARD_W - 28, 14, 7, 7);
 			g.setColor(BADGE_PLUS);
 			g.setFont(ribbonFont);
@@ -254,6 +265,13 @@ public class LoadoutOverlay extends Overlay {
 			g.setColor(borderColorFor(assigned, now));
 			g.setStroke(STROKE_1);
 			g.drawRect(r.x + 1, r.y + 1, r.width - 3, r.height - 3);
+			// drawn over the rarity outline, not instead of it: the card is
+			// still in the socket and still exactly what it was
+			if (slot == refusedSlot && now - refusedAtMs < REFUSED_FLASH_MS) {
+				g.setColor(REFUSED_EDGE);
+				g.setStroke(STROKE_2);
+				g.drawRect(r.x, r.y, r.width - 1, r.height - 1);
+			}
 		}
 		else if (deeded) {
 			BufferedImage silhouette = silhouetteImage(slot);
@@ -279,13 +297,24 @@ public class LoadoutOverlay extends Overlay {
 		else {
 			drawPadlock(g, r, claimable);
 			if (claimable) {
-				float pulse = (float) (0.5 + 0.5 * Math.sin(now / 240.0));
-				g.setColor(new Color(DEED_RIBBON.getRed(), DEED_RIBBON.getGreen(),
-					DEED_RIBBON.getBlue(), (int) (90 + 160 * pulse)));
+				g.setColor(ribbonPulse(now, 90, 160));
 				g.setStroke(STROKE_1);
 				g.drawRect(r.x + 1, r.y + 1, r.width - 3, r.height - 3);
 			}
 		}
+	}
+
+	/**
+	 * DEED_RIBBON pulsing on a 240ms sine, from {@code base} alpha to
+	 * {@code base + span}. The board's only animation, and both users of it — the
+	 * footer ribbon and the claimable-socket outline — come through here so they
+	 * cannot drift out of phase with each other. The two differ only in how deep
+	 * the pulse runs, which is what the arguments carry.
+	 */
+	private static Color ribbonPulse(long now, int base, int span) {
+		float pulse = (float) (0.5 + 0.5 * Math.sin(now / 240.0));
+		return new Color(DEED_RIBBON.getRed(), DEED_RIBBON.getGreen(), DEED_RIBBON.getBlue(),
+			(int) (base + span * pulse));
 	}
 
 	/** Small gold add badge in the socket corner: assignment stays obvious. */
@@ -324,17 +353,15 @@ public class LoadoutOverlay extends Overlay {
 	private BufferedImage tileImage(boolean locked, boolean hovered) {
 		if (tileBase == null) {
 			BufferedImage raw = sprite(SpriteID.EQUIPMENT_SLOT_TILE);
-			if (raw == null) {
+			if (raw == null)
 				return null;
-			}
 			tileBase = scaled(raw, SOCKET, SOCKET);
 			tileDark = tinted(tileBase, LOCKED_TILE_FACTOR);
 			tileHover = tinted(tileBase, HOVER_TILE_FACTOR);
 			tileDarkHover = tinted(tileDark, HOVER_TILE_FACTOR);
 		}
-		if (locked) {
+		if (locked)
 			return hovered ? tileDarkHover : tileDark;
-		}
 		return hovered ? tileHover : tileBase;
 	}
 
@@ -343,13 +370,11 @@ public class LoadoutOverlay extends Overlay {
 	private BufferedImage silhouetteImage(GearSlot slot) {
 		int spriteId = silhouetteSpriteId(slot);
 		BufferedImage prepared = silhouetteCache.get(spriteId);
-		if (prepared != null) {
+		if (prepared != null)
 			return prepared;
-		}
 		BufferedImage raw = sprite(spriteId);
-		if (raw == null) {
+		if (raw == null)
 			return null;
-		}
 		if (raw.getWidth() > SOCKET || raw.getHeight() > SOCKET) {
 			raw = scaled(raw, Math.min(raw.getWidth(), SOCKET), Math.min(raw.getHeight(), SOCKET));
 		}
@@ -370,32 +395,14 @@ public class LoadoutOverlay extends Overlay {
 		return img;
 	}
 
-	private static int silhouetteSpriteId(GearSlot slot) {
-		switch (slot) {
-			case HEAD:
-				return SpriteID.EQUIPMENT_SLOT_HEAD;
-			case CAPE:
-				return SpriteID.EQUIPMENT_SLOT_CAPE;
-			case AMULET:
-				return SpriteID.EQUIPMENT_SLOT_NECK;
-			case WEAPON:
-				return SpriteID.EQUIPMENT_SLOT_WEAPON;
-			case BODY:
-				return SpriteID.EQUIPMENT_SLOT_TORSO;
-			case SHIELD:
-				return SpriteID.EQUIPMENT_SLOT_SHIELD;
-			case LEGS:
-				return SpriteID.EQUIPMENT_SLOT_LEGS;
-			case HANDS:
-				return SpriteID.EQUIPMENT_SLOT_HANDS;
-			case FEET:
-				return SpriteID.EQUIPMENT_SLOT_FEET;
-			case RING:
-				return SpriteID.EQUIPMENT_SLOT_RING;
-			case AMMO:
-			default:
-				return SpriteID.EQUIPMENT_SLOT_AMMUNITION;
-		}
+	/**
+	 * The silhouette sprite for a slot, from the same resource the layout comes
+	 * from. AMMUNITION is the fallback for a slot the file does not name, which is
+	 * exactly what the switch this replaces returned from its {@code default} arm.
+	 */
+	private int silhouetteSpriteId(GearSlot slot) {
+		BoardLayout.Socket s = sockets.get(slot.name());
+		return s == null ? SpriteID.EQUIPMENT_SLOT_AMMUNITION : s.getSprite();
 	}
 
 	/** Nearest-neighbour scale into a fresh ARGB image (bake-time only). */
@@ -434,9 +441,8 @@ public class LoadoutOverlay extends Overlay {
 
 	@Nullable
 	private Integer iconItemIdFor(OwnedCard owned) {
-		if (!cardDatabase.isReady()) {
+		if (!cardDatabase.isReady())
 			return null;
-		}
 		if (owned.isHologram()) {
 			HologramDefinition holo = cardDatabase.holograms().get(owned.getTierKey());
 			CardDefinition rep = holo == null ? null
@@ -448,12 +454,10 @@ public class LoadoutOverlay extends Overlay {
 	}
 
 	private Color borderColorFor(OwnedCard owned, long now) {
-		if (owned.getVariant() == Variant.SHINY) {
+		if (owned.getVariant() == Variant.SHINY)
 			return CardRenderer.prismaticColor(now, 0);
-		}
-		if (owned.isHologram()) {
+		if (owned.isHologram())
 			return HOLOGRAM_EDGE;
-		}
 		Rarity rarity = Rarity.COMMON;
 		CardDefinition card = cardDatabase.isReady() ? cardDatabase.card(owned.getCardId()) : null;
 		if (card != null) {
@@ -466,9 +470,8 @@ public class LoadoutOverlay extends Overlay {
 
 	/** True when the canvas point is inside the visible board. */
 	public boolean containsCanvasPoint(Point canvasPoint) {
-		if (!open || canvasPoint == null) {
+		if (!open || canvasPoint == null)
 			return false;
-		}
 		Rectangle bounds = getBounds();
 		return bounds != null && bounds.width > 0 && bounds.height > 0
 			&& bounds.contains(canvasPoint);
@@ -476,9 +479,8 @@ public class LoadoutOverlay extends Overlay {
 
 	/** Handle a left click at the given canvas point; hops to the client thread. */
 	public void handleClick(Point canvasPoint) {
-		if (!containsCanvasPoint(canvasPoint)) {
+		if (!containsCanvasPoint(canvasPoint))
 			return;
-		}
 		Rectangle bounds = getBounds();
 		final Point rel = new Point(canvasPoint.x - bounds.x, canvasPoint.y - bounds.y);
 		clientThread.invokeLater(() -> handleClickOnClientThread(rel));
@@ -486,13 +488,11 @@ public class LoadoutOverlay extends Overlay {
 
 	private void handleClickOnClientThread(Point rel) {
 		GachaState state = stateService.get();
-		if (state == null) {
+		if (state == null)
 			return;
-		}
 		GearSlot slot = slotAt(rel);
-		if (slot == null) {
+		if (slot == null)
 			return;
-		}
 		boolean deeded = state.getDeededSlots().contains(slot.name());
 		if (!deeded) {
 			if (state.getPendingDeeds() > 0) {
@@ -501,20 +501,26 @@ public class LoadoutOverlay extends Overlay {
 			return;
 		}
 		OwnedCard assigned = assignedCard(state, ownedByUuid(state), slot);
-		if (assigned != null) {
-			loadoutService.unassign(slot);
-		}
-		else {
+		if (assigned == null) {
 			cardSearch.openFor(slot);
+			return;
+		}
+		if (!loadoutService.unassign(slot)) {
+			// The guard refused: this card is still unlocking gear on the
+			// player's back. The reason is a chat line from LoadoutService,
+			// because the board carries no text — but a socket that simply
+			// keeps its card is indistinguishable from a misclick that missed,
+			// so it flashes to say the click did land and the answer was no.
+			refusedSlot = slot;
+			refusedAtMs = System.currentTimeMillis();
 		}
 	}
 
 	@Nullable
 	private GearSlot slotAt(Point rel) {
 		for (Map.Entry<GearSlot, Rectangle> entry : socketRects.entrySet()) {
-			if (entry.getValue().contains(rel)) {
+			if (entry.getValue().contains(rel))
 				return entry.getKey();
-			}
 		}
 		return null;
 	}
@@ -522,9 +528,8 @@ public class LoadoutOverlay extends Overlay {
 	@Nullable
 	private GearSlot hoveredSlot() {
 		Point canvas = hoverCanvasPoint;
-		if (canvas == null || !containsCanvasPoint(canvas)) {
+		if (canvas == null || !containsCanvasPoint(canvas))
 			return null;
-		}
 		Rectangle bounds = getBounds();
 		return slotAt(new Point(canvas.x - bounds.x, canvas.y - bounds.y));
 	}

@@ -34,6 +34,32 @@ public class GachaState {
 	double cycleProgress;
 	int cycleTarget;
 	long styleRolledAtMs;
+	/**
+	 * WeaponType key the wheel named alongside the style; kills landed with a
+	 * weapon in that category pay Tuning.WEAPON_BONUS_MULT. Null means no
+	 * preference is live, which is simply no bonus — never a penalty.
+	 */
+	String preferredWeaponType;
+	/**
+	 * A style roll has come due but has NOT been taken, because a Consignment
+	 * offer is being put to the player first. Phrased as OWED for the same
+	 * reason as firstColoursChestOwed: a save written before this field existed
+	 * deserializes false, and false must mean "nothing owed".
+	 *
+	 * <p>Losing this flag is self-healing rather than lossy — advanceCycle never
+	 * resets cycleProgress (only roll() does), so a dropped deferred roll leaves
+	 * the state cycle-overdue and the next advanceCycle returns true again.
+	 */
+	boolean styleRollOwed;
+	/**
+	 * UTC day key the Consignment was last ANSWERED on — accepting and declining
+	 * both spend it, an abort spends nothing.
+	 *
+	 * <p>Shaped {@code "2026-D227"} (year, then day-of-year), not an ISO date: the
+	 * format is lifted verbatim from the Charter Office's key so the two cannot
+	 * drift apart. See {@code ConsignmentService.dayKey}.
+	 */
+	String consignmentDayKey;
 
 	// --- Tasks ---
 	ActiveTask activeTask;
@@ -62,6 +88,15 @@ public class GachaState {
 	Set<String> bossKcClaims;
 	/** Queued free themed chests: setTag list, opened via the shop panel. */
 	List<String> queuedThemedChests;
+	/**
+	 * The Toll: the week key its named card was picked for, and that card's
+	 * uuid. Persisted rather than recomputed from a seed the way the weekly
+	 * shop does it — the shop draws from the immutable card database, but the
+	 * Toll draws from the player's ALBUM, which grows during the week, so every
+	 * new card would shift the indices and silently re-pick a different Toll.
+	 */
+	String tollWeekKey;
+	String tollCardUuid;
 
 	// --- Early game ---
 	/** One-time Firsts Journal stamps already claimed (FirstsService keys). */

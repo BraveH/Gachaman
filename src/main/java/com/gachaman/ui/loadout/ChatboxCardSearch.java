@@ -83,9 +83,8 @@ public class ChatboxCardSearch extends ChatboxTextInput {
 	@Override
 	protected void update() {
 		Widget container = chatboxPanelManager.getContainerWidget();
-		if (container == null) {
+		if (container == null)
 			return;
-		}
 		container.deleteAllChildren();
 
 		Widget promptWidget = container.createChild(-1, WidgetType.TEXT);
@@ -156,9 +155,8 @@ public class ChatboxCardSearch extends ChatboxTextInput {
 	private void filterResults() {
 		results.clear();
 		GearSlot target = slot;
-		if (target == null || !cardDatabase.isReady()) {
+		if (target == null || !cardDatabase.isReady())
 			return;
-		}
 		String filter = getValue() == null ? "" : getValue().toLowerCase(Locale.ROOT).trim();
 		List<OwnedCard> valid;
 		try {
@@ -168,25 +166,22 @@ public class ChatboxCardSearch extends ChatboxTextInput {
 			log.warn("validFor({}) failed", target, e);
 			return;
 		}
-		if (valid == null) {
+		if (valid == null)
 			return;
-		}
 		Set<String> seen = new HashSet<>();
 		List<Result> matched = new ArrayList<>();
 		for (OwnedCard owned : valid) {
 			Result r = toResult(owned);
-			if (r == null || !r.name.toLowerCase(Locale.ROOT).contains(filter)) {
+			if (r == null || !r.name.toLowerCase(Locale.ROOT).contains(filter))
 				continue;
-			}
 			if (seen.add(r.name)) {
 				matched.add(r);
 			}
 		}
 		matched.sort(Comparator.comparing(a -> a.name.toLowerCase(Locale.ROOT)));
 		for (Result r : matched) {
-			if (results.size() >= MAX_RESULTS) {
+			if (results.size() >= MAX_RESULTS)
 				break;
-			}
 			results.add(r);
 		}
 	}
@@ -195,19 +190,16 @@ public class ChatboxCardSearch extends ChatboxTextInput {
 	private Result toResult(OwnedCard owned) {
 		if (owned.isHologram()) {
 			HologramDefinition holo = cardDatabase.holograms().get(owned.getTierKey());
-			if (holo == null) {
+			if (holo == null)
 				return null;
-			}
 			CardDefinition rep = cardDatabase.cardByName(holo.getRepresentativeItemName());
-			if (rep == null) {
+			if (rep == null)
 				return null;
-			}
 			return new Result(owned.getUuid(), holo.getName(), rep.getCardId(), holo.getRarity());
 		}
 		CardDefinition card = cardDatabase.card(owned.getCardId());
-		if (card == null) {
+		if (card == null)
 			return null;
-		}
 		String name = owned.getVariant() == Variant.SHINY ? card.getName() + " (Shiny)" : card.getName();
 		return new Result(owned.getUuid(), name, card.getCardId(), card.getRarity());
 	}

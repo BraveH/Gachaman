@@ -132,9 +132,8 @@ public class ComplianceService implements StyleTracker.AttackListener {
 	 */
 	public int convictingAttackTick(int fromTick, int toTick) {
 		for (ForbiddenAttack attack : recentForbiddenAttacks) {
-			if (attack.tick >= fromTick && attack.tick <= toTick) {
+			if (attack.tick >= fromTick && attack.tick <= toTick)
 				return attack.tick;
-			}
 		}
 		return -1;
 	}
@@ -227,9 +226,8 @@ public class ComplianceService implements StyleTracker.AttackListener {
 	}
 
 	static long penaltyFor(ActiveTask task) {
-		if (task == null) {
+		if (task == null)
 			return Tuning.VIOLATION_ATTACK_PENALTY_NO_TASK;
-		}
 		return Math.max(Tuning.VIOLATION_ATTACK_PENALTY_FLOOR,
 			(long) task.getPerKillGc() * Tuning.VIOLATION_ATTACK_PENALTY_MULT);
 	}
@@ -257,9 +255,8 @@ public class ComplianceService implements StyleTracker.AttackListener {
 	/** Called on each compliant credited kill; works one taint off. */
 	public void workOffTaint() {
 		GachaState state = stateService.get();
-		if (state == null || state.getTaint() <= 0) {
+		if (state == null || state.getTaint() <= 0)
 			return;
-		}
 		var next = stateService.mutate(s -> s.withTaint(Math.max(0, s.getTaint() - 1)));
 		if (next != null) {
 			// taint points are fungible against the global counter, so retire the
@@ -284,9 +281,8 @@ public class ComplianceService implements StyleTracker.AttackListener {
 	/** Redemption task completion clears everything. */
 	public void clearAllTaint() {
 		GachaState state = stateService.get();
-		if (state == null || state.getTaint() <= 0) {
+		if (state == null || state.getTaint() <= 0)
 			return;
-		}
 		int cleared = state.getTaint();
 		stateService.mutate(s -> s.withTaint(0));
 		// the counter is empty, so no conviction is answerable for anything any

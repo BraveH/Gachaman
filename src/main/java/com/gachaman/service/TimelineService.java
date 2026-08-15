@@ -4,7 +4,6 @@ import com.gachaman.*;
 import com.gachaman.data.*;
 import com.gachaman.model.*;
 import java.util.*;
-import javax.annotation.*;
 import javax.inject.*;
 import lombok.*;
 import lombok.extern.slf4j.*;
@@ -23,14 +22,13 @@ public class TimelineService implements ChestService.ChestListener, ComplianceSe
 
 	// --- Core recording ---
 
-	public void record(String kind, String text, @Nullable String meta) {
+	public void record(String kind, String text, String meta) {
 		recordAll(List.of(new TimelineEvent(System.currentTimeMillis(), kind, text, meta)));
 	}
 
 	public void recordAll(List<TimelineEvent> events) {
-		if (events.isEmpty()) {
+		if (events.isEmpty())
 			return;
-		}
 		stateService.mutate(s -> {
 			List<TimelineEvent> timeline = s.getTimeline() == null
 				? new ArrayList<>() : new ArrayList<>(s.getTimeline());
@@ -47,9 +45,8 @@ public class TimelineService implements ChestService.ChestListener, ComplianceSe
 	public void onCeremony(CeremonyBus.Request request) {
 		switch (request.getType()) {
 			case STYLE_ROLL: {
-				if (!(request.getPayload() instanceof StyleService.StyleRollResult)) {
+				if (!(request.getPayload() instanceof StyleService.StyleRollResult))
 					return;
-				}
 				StyleService.StyleRollResult roll = (StyleService.StyleRollResult) request.getPayload();
 				AttackStyle rolled = roll.getRolled();
 				String was = roll.getPrevious() == null ? ""
@@ -59,15 +56,13 @@ public class TimelineService implements ChestService.ChestListener, ComplianceSe
 				return;
 			}
 			case TASK_OFFERS: {
-				if (!(request.getPayload() instanceof List)) {
+				if (!(request.getPayload() instanceof List))
 					return;
-				}
 				StringBuilder sb = new StringBuilder("Contracts rolled: ");
 				boolean first = true;
 				for (Object o : (List<?>) request.getPayload()) {
-					if (!(o instanceof TaskOffer)) {
+					if (!(o instanceof TaskOffer))
 						continue;
-					}
 					TaskOffer offer = (TaskOffer) o;
 					if (!first) {
 						sb.append(", ");
@@ -80,9 +75,8 @@ public class TimelineService implements ChestService.ChestListener, ComplianceSe
 				return;
 			}
 			case TASK_COMPLETE: {
-				if (!(request.getPayload() instanceof TaskService.TaskCompletionSummary)) {
+				if (!(request.getPayload() instanceof TaskService.TaskCompletionSummary))
 					return;
-				}
 				TaskService.TaskCompletionSummary sum =
 					(TaskService.TaskCompletionSummary) request.getPayload();
 				String monster = sum.getTask() == null ? "?" : sum.getTask().getMonsterName();
@@ -106,9 +100,8 @@ public class TimelineService implements ChestService.ChestListener, ComplianceSe
 				return;
 			}
 			case FANFARE: {
-				if (!(request.getPayload() instanceof CeremonyBus.Fanfare)) {
+				if (!(request.getPayload() instanceof CeremonyBus.Fanfare))
 					return;
-				}
 				CeremonyBus.Fanfare fanfare = (CeremonyBus.Fanfare) request.getPayload();
 				String detail = fanfare.getDetail() == null || fanfare.getDetail().isEmpty()
 					? "" : " — " + fanfare.getDetail();
@@ -267,9 +260,8 @@ public class TimelineService implements ChestService.ChestListener, ComplianceSe
 
 	/** RUSTY -> Rusty, LEGENDARY -> Legendary. */
 	private static String pretty(String constant) {
-		if (constant == null || constant.isEmpty()) {
+		if (constant == null || constant.isEmpty())
 			return "?";
-		}
 		return constant.charAt(0) + constant.substring(1).toLowerCase(Locale.ROOT);
 	}
 }

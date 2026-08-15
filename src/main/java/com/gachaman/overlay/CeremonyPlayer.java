@@ -95,9 +95,8 @@ class CeremonyPlayer {
 	/** The frame index this many ms into the ceremony, clamped to the last one. */
 	int frameAt(Tuning.Chest tier, long el) {
 		int n = frames(tier);
-		if (n == 0) {
+		if (n == 0)
 			return -1;
-		}
 		int i = (int) (el * index().fps / 1000L);
 		return Math.max(0, Math.min(n - 1, i));
 	}
@@ -115,9 +114,8 @@ class CeremonyPlayer {
 	boolean draw(Graphics2D g, int cx, int cy, int w, int h, Tuning.Chest tier, int frame,
 		float alpha) {
 		List<List<Integer>> offsets = index().tiers.get(tier.name().toLowerCase(Locale.ROOT));
-		if (offsets == null || frame < 0 || frame >= offsets.size()) {
+		if (offsets == null || frame < 0 || frame >= offsets.size())
 			return false;
-		}
 		String key = tier.name() + frame;
 		Image art = frames.computeIfAbsent(key, k -> {
 			try (InputStream in = CeremonyPlayer.class.getResourceAsStream(
@@ -129,9 +127,8 @@ class CeremonyPlayer {
 				return null;
 			}
 		});
-		if (art == null) {
+		if (art == null)
 			return false;
-		}
 		double sx = w / (double) ART_W;
 		double sy = h / (double) ART_H;
 		List<Integer> at = offsets.get(frame);

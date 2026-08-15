@@ -42,9 +42,8 @@ public final class IronmanGear {
 
 	/** The account type varbit, or {@link #NORMAL} if it cannot be read. */
 	public static int accountType(Client client) {
-		if (client == null) {
+		if (client == null)
 			return NORMAL;
-		}
 		try {
 			return client.getVarbitValue(VarbitID.IRONMAN);
 		}
@@ -59,9 +58,8 @@ public final class IronmanGear {
 	 * never heard of (granting nothing beats granting the wrong set).
 	 */
 	public List<String> cardNames(int accountType) {
-		if (accountType <= NORMAL || accountType >= sets.size()) {
+		if (accountType <= NORMAL || accountType >= sets.size())
 			return Collections.emptyList();
-		}
 		return Collections.unmodifiableList(sets.get(accountType));
 	}
 

@@ -94,9 +94,8 @@ public class MonsterTable {
 	 */
 	private static Monster withNormalisedQuests(Monster monster) {
 		List<String> quests = monster.getQuests();
-		if (quests != null && quests.isEmpty()) {
+		if (quests != null && quests.isEmpty())
 			return monster;
-		}
 		List<String> safe = quests == null
 			? Collections.emptyList()
 			: Collections.unmodifiableList(new ArrayList<>(quests));

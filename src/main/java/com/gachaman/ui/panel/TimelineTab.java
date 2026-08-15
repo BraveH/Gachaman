@@ -229,9 +229,8 @@ public class TimelineTab extends JPanel {
 		StringBuilder html = new StringBuilder();
 		int shown = 0;
 		for (TimelineEvent event : timeline) {
-			if (event.getAt() < from || event.getAt() > scrub) {
+			if (event.getAt() < from || event.getAt() > scrub)
 				continue;
-			}
 			shown++;
 			html.append("<font color='").append(hex(colorFor(event))).append("'>[")
 				.append(LINE_FORMAT.format(new Date(event.getAt()))).append("] ")

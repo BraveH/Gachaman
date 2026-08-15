@@ -74,9 +74,8 @@ public class CreditSink {
 	 */
 	public synchronized AwardResult awardWith(long baseAmount, GcContext context,
 		UnaryOperator<GachaState> extraMutation) {
-		if (stateService.get() == null) {
+		if (stateService.get() == null)
 			return new AwardResult(0, null);
-		}
 		double factor = 1.0;
 		for (Modifier modifier : modifiers) {
 			try {
@@ -103,9 +102,8 @@ public class CreditSink {
 			}
 			return mutated;
 		});
-		if (next == null || !applied[0]) {
+		if (next == null || !applied[0])
 			return new AwardResult(0, next);
-		}
 		if (amount > 0) {
 			Listeners.fire(listeners, l -> l.onGcAwarded(amount, context, next.getGc()),
 				"GC listener failed");
@@ -115,9 +113,8 @@ public class CreditSink {
 
 	/** Award GC (may be reduced by taint / boosted by perks). Returns the net amount. */
 	public synchronized long award(long baseAmount, GcContext context) {
-		if (baseAmount <= 0 || stateService.get() == null) {
+		if (baseAmount <= 0 || stateService.get() == null)
 			return 0;
-		}
 		double factor = 1.0;
 		for (Modifier modifier : modifiers) {
 			try {
@@ -131,9 +128,8 @@ public class CreditSink {
 			factor *= Tuning.TAINT_INCOME_MULT;
 		}
 		long amount = Math.max(0, Math.round(baseAmount * factor));
-		if (amount == 0) {
+		if (amount == 0)
 			return 0;
-		}
 		var newState = stateService.mutate(s -> s
 			.withGc(s.getGc() + amount)
 			.withLifetimeGcEarned(s.getLifetimeGcEarned() + amount));
@@ -148,18 +144,16 @@ public class CreditSink {
 	 * income, it is undoing a wrongful deduction.
 	 */
 	public synchronized long refund(long amount) {
-		if (amount <= 0 || stateService.get() == null) {
+		if (amount <= 0 || stateService.get() == null)
 			return 0;
-		}
 		stateService.mutate(s -> s.withGc(s.getGc() + amount));
 		return amount;
 	}
 
 	/** Deduct GC (violation penalties, purchases). Returns amount actually deducted. */
 	public synchronized long deduct(long amount) {
-		if (amount <= 0 || stateService.get() == null) {
+		if (amount <= 0 || stateService.get() == null)
 			return 0;
-		}
 		long current = stateService.get().getGc();
 		long actual = Math.min(current, amount);
 		stateService.mutate(s -> s.withGc(s.getGc() - actual));
@@ -168,9 +162,8 @@ public class CreditSink {
 
 	/** Try to spend exactly amount; false (and no change) when unaffordable. */
 	public synchronized boolean spend(long amount) {
-		if (stateService.get() == null || stateService.get().getGc() < amount) {
+		if (stateService.get() == null || stateService.get().getGc() < amount)
 			return false;
-		}
 		stateService.mutate(s -> s.withGc(s.getGc() - amount));
 		return true;
 	}

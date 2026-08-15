@@ -30,9 +30,8 @@ public class CombatBlockService {
 	@Subscribe
 	public void onMenuEntryAdded(MenuEntryAdded event) {
 		MenuEntry entry = event.getMenuEntry();
-		if (!isOffensiveEntry(entry.getOption(), entry.getType())) {
+		if (!isOffensiveEntry(entry.getOption(), entry.getType()))
 			return;
-		}
 		if (isBlocked(entry)) {
 			client.getMenu().removeMenuEntry(entry);
 		}
@@ -40,9 +39,8 @@ public class CombatBlockService {
 
 	@Subscribe
 	public void onMenuOptionClicked(MenuOptionClicked event) {
-		if (!isOffensiveEntry(event.getMenuOption(), event.getMenuAction())) {
+		if (!isOffensiveEntry(event.getMenuOption(), event.getMenuAction()))
 			return;
-		}
 		if (isBlocked(event.getMenuEntry())) {
 			event.consume();
 			warn();
@@ -51,9 +49,8 @@ public class CombatBlockService {
 
 	private boolean isBlocked(MenuEntry entry) {
 		GachaState state = stateService.get();
-		if (state == null || TutorialGate.onTutorial(client)) {
+		if (state == null || TutorialGate.onTutorial(client))
 			return false;
-		}
 		ActiveTask task = state.getActiveTask();
 		NPC npc = entry.getNpc();
 		if (npc == null) {
@@ -72,9 +69,8 @@ public class CombatBlockService {
 
 	private void warn() {
 		int tick = client.getTickCount();
-		if (tick == lastWarnTick) {
+		if (tick == lastWarnTick)
 			return;
-		}
 		lastWarnTick = tick;
 		GachaState state = stateService.get();
 		String message = state != null && state.getActiveTask() != null
@@ -93,9 +89,8 @@ public class CombatBlockService {
 	 * Alchemy on items is a different action type and stays untouched).
 	 */
 	static boolean isOffensiveEntry(String option, MenuAction action) {
-		if ("Attack".equals(option)) {
+		if ("Attack".equals(option))
 			return true;
-		}
 		return option != null && option.startsWith("Cast")
 			&& (action == MenuAction.WIDGET_TARGET_ON_NPC
 			|| action == MenuAction.WIDGET_TARGET_ON_PLAYER);

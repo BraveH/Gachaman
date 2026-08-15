@@ -4,7 +4,6 @@ import com.gachaman.*;
 import com.gachaman.data.*;
 import com.gachaman.model.*;
 import java.util.*;
-import javax.annotation.*;
 import java.util.stream.*;
 import net.runelite.api.*;
 
@@ -32,7 +31,7 @@ public final class TaskGenerator {
 	/** Quest-gated roll with no max-hit estimate: BIG_HIT falls to its floor. */
 	public static List<TaskOffer> generateOffers(List<MonsterTable.Monster> pool, int playerCb,
 		int playerSlayerLevel, boolean membersWorld,
-		@Nullable Set<String> completedQuests, boolean tainted, GachaRng rng) {
+		Set<String> completedQuests, boolean tainted, GachaRng rng) {
 		return generateOffers(pool, playerCb, playerSlayerLevel, membersWorld,
 			completedQuests, tainted, 0, false, rng);
 	}
@@ -52,7 +51,7 @@ public final class TaskGenerator {
 	 */
 	public static List<TaskOffer> generateOffers(List<MonsterTable.Monster> pool, int playerCb,
 		int playerSlayerLevel, boolean membersWorld,
-		@Nullable Set<String> completedQuests, boolean tainted,
+		Set<String> completedQuests, boolean tainted,
 		int maxHit, boolean anyoneLockedToMelee, GachaRng rng) {
 		// slayer-task-only monsters are unfulfillable contracts (a Gachaman
 		// task is not a slayer task); slayer-level-gated ones need the level;
@@ -96,11 +95,10 @@ public final class TaskGenerator {
 	 * different orders must still agree monster for monster.
 	 */
 	static boolean questsSatisfied(MonsterTable.Monster monster,
-		@Nullable Set<String> completedQuests) {
+		Set<String> completedQuests) {
 		List<String> required = monster.getQuests();
-		if (required == null || required.isEmpty()) {
+		if (required == null || required.isEmpty())
 			return true;
-		}
 		// null = gating off; empty = a player who has finished nothing
 		return completedQuests == null || completedQuests.containsAll(required);
 	}

@@ -49,12 +49,10 @@ public class SlayerAlignment {
 	 */
 	@Nullable
 	public String liveTarget() {
-		if (client == null || configManager == null) {
+		if (client == null || configManager == null)
 			return null;
-		}
-		if (client.getVarpValue(VarPlayerID.SLAYER_COUNT) <= 0) {
+		if (client.getVarpValue(VarPlayerID.SLAYER_COUNT) <= 0)
 			return null;
-		}
 		String name = configManager.getRSProfileConfiguration(
 			SlayerConfig.GROUP_NAME, SlayerConfig.TASK_NAME_KEY);
 		return name == null || name.isEmpty() ? null : name;
@@ -81,36 +79,31 @@ public class SlayerAlignment {
 	 * wrongly paid one, which is the correct direction to fail; the sidebar
 	 * tooltip states the limitation with this exact example.
 	 */
-	static boolean matches(@Nullable String contractMonster, @Nullable String slayerTarget) {
+	static boolean matches(String contractMonster, String slayerTarget) {
 		String contract = normalize(contractMonster);
 		String target = normalize(slayerTarget);
-		if (contract.isEmpty() || target.isEmpty()) {
+		if (contract.isEmpty() || target.isEmpty())
 			return false;
-		}
 		for (String candidate : singularCandidates(target)) {
-			if (candidate.isEmpty()) {
+			if (candidate.isEmpty())
 				continue;
-			}
-			if (contract.equals(candidate)) {
+			if (contract.equals(candidate))
 				return true;
-			}
 			// One-directional, word-boundary prefix: an assignment BROADER than
 			// the contract genuinely covers it ("Kalphites" covers "Kalphite
 			// Worker", "Elves" covers "Elf archer"), while the reverse is not a
 			// real relationship. The trailing space is LOAD-BEARING — a bare
 			// startsWith would make "Rats" match "Ratcatcher".
-			if (contract.startsWith(candidate + " ")) {
+			if (contract.startsWith(candidate + " "))
 				return true;
-			}
 		}
 		return false;
 	}
 
 	/** Lowercase, letters/digits/spaces only, whitespace collapsed, no edge spaces. */
-	static String normalize(@Nullable String raw) {
-		if (raw == null) {
+	static String normalize(String raw) {
+		if (raw == null)
 			return "";
-		}
 		StringBuilder sb = new StringBuilder(raw.length());
 		boolean pendingSpace = false;
 		for (int i = 0; i < raw.length(); i++) {

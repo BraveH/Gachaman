@@ -82,10 +82,9 @@ public final class PatronMark {
 	 * either way and only the label is missing.
 	 */
 	@Nullable
-	public static String normalizeName(@Nullable String raw) {
-		if (raw == null) {
+	public static String normalizeName(String raw) {
+		if (raw == null)
 			return null;
-		}
 		// U+00A0. Jagex names use it as the word separator, and it reads as a
 		// normal space but would key separately — written as a code point
 		// because a literal one in source is invisible and one editor pass
@@ -100,19 +99,18 @@ public final class PatronMark {
 
 	/** The partner's record, or null when they are not in the ledger. */
 	@Nullable
-	public static PatronRecord recordFor(@Nullable Map<String, PatronRecord> ledger,
-		@Nullable String accountKey) {
+	public static PatronRecord recordFor(Map<String, PatronRecord> ledger,
+		String accountKey) {
 		String key = AccountKey.normalize(accountKey);
-		if (ledger == null || ledger.isEmpty() || key == null) {
+		if (ledger == null || ledger.isEmpty() || key == null)
 			return null;
-		}
 		PatronRecord record = ledger.get(key);
 		return record == null || record.getCount() <= 0 ? null : record;
 	}
 
 	/** Shared contracts finished with one partner; 0 for anyone uncounted. */
-	public static int countFor(@Nullable Map<String, PatronRecord> ledger,
-		@Nullable String accountKey) {
+	public static int countFor(Map<String, PatronRecord> ledger,
+		String accountKey) {
 		PatronRecord record = recordFor(ledger, accountKey);
 		return record == null ? 0 : record.getCount();
 	}
@@ -123,7 +121,7 @@ public final class PatronMark {
 	 * Junk is dropped rather than rendered: a record with no count is not a
 	 * partner, and a key that is not a key came from a hand-edited save.
 	 */
-	public static List<PatronRecord> ranked(@Nullable Map<String, PatronRecord> ledger) {
+	public static List<PatronRecord> ranked(Map<String, PatronRecord> ledger) {
 		List<Map.Entry<String, PatronRecord>> entries = sortedEntries(ledger);
 		List<PatronRecord> out = new ArrayList<>(entries.size());
 		for (Map.Entry<String, PatronRecord> entry : entries) {
@@ -137,19 +135,19 @@ public final class PatronMark {
 	 * you, or null when nobody has. Always {@link #ranked}'s first entry.
 	 */
 	@Nullable
-	public static String topKey(@Nullable Map<String, PatronRecord> ledger) {
+	public static String topKey(Map<String, PatronRecord> ledger) {
 		List<Map.Entry<String, PatronRecord>> entries = sortedEntries(ledger);
 		return entries.isEmpty() ? null : entries.get(0).getKey();
 	}
 
 	/** Distinct counted partners — the Patrons page's headline, and its gate. */
-	public static int partnerCount(@Nullable Map<String, PatronRecord> ledger) {
+	public static int partnerCount(Map<String, PatronRecord> ledger) {
 		return sortedEntries(ledger).size();
 	}
 
 	/** Shared contracts across every partner. Not a contract count: a shared
 	 * contract with three partners is three marks and reads as three here. */
-	public static int totalMarks(@Nullable Map<String, PatronRecord> ledger) {
+	public static int totalMarks(Map<String, PatronRecord> ledger) {
 		int total = 0;
 		for (Map.Entry<String, PatronRecord> entry : sortedEntries(ledger)) {
 			total += entry.getValue().getCount();
@@ -173,11 +171,10 @@ public final class PatronMark {
 	 * Never writes into the map it was handed: the state object it came from
 	 * is shared and immutable by contract.
 	 */
-	public static Map<String, PatronRecord> credit(@Nullable Map<String, PatronRecord> current,
-		@Nullable Map<String, String> partners, int cap, long nowMs) {
-		if (partners == null || partners.isEmpty()) {
+	public static Map<String, PatronRecord> credit(Map<String, PatronRecord> current,
+		Map<String, String> partners, int cap, long nowMs) {
+		if (partners == null || partners.isEmpty())
 			return current;
-		}
 		Map<String, PatronRecord> next = current == null
 			? new LinkedHashMap<>() : new LinkedHashMap<>(current);
 		// two raw keys can normalize to ONE partner (they differ only in case),
@@ -239,7 +236,7 @@ public final class PatronMark {
 	}
 
 	/** What to draw for a partner whose client never told us their name. */
-	public static String displayName(@Nullable PatronRecord record) {
+	public static String displayName(PatronRecord record) {
 		String name = record == null ? null : normalizeName(record.getName());
 		return name == null ? "An unnamed patron" : name;
 	}
@@ -253,25 +250,22 @@ public final class PatronMark {
 
 	/** Counted, key-valid entries in {@link #DISPLAY_ORDER}. */
 	private static List<Map.Entry<String, PatronRecord>> sortedEntries(
-		@Nullable Map<String, PatronRecord> ledger) {
-		if (ledger == null || ledger.isEmpty()) {
+		Map<String, PatronRecord> ledger) {
+		if (ledger == null || ledger.isEmpty())
 			return Collections.emptyList();
-		}
 		List<Map.Entry<String, PatronRecord>> entries = new ArrayList<>(ledger.size());
 		for (Map.Entry<String, PatronRecord> entry : ledger.entrySet()) {
 			// a null VALUE is reachable: Gson deserializes {"abc…":null} happily
-			if (entry.getValue() == null || entry.getValue().getCount() <= 0) {
+			if (entry.getValue() == null || entry.getValue().getCount() <= 0)
 				continue;
-			}
 			// CANONICAL, not merely normalizable. recordFor looks the partner up
 			// with the normalized key, so a stored "…AA" would be listed here and
 			// found by nothing — the Patrons page would name a top patron the
 			// party page could not draw a pip for. credit() only ever writes
 			// canonical keys, so a non-canonical one came from a hand-edited save
 			// and the honest reading of it is "not one of ours"
-			if (!entry.getKey().equals(AccountKey.normalize(entry.getKey()))) {
+			if (!entry.getKey().equals(AccountKey.normalize(entry.getKey())))
 				continue;
-			}
 			entries.add(entry);
 		}
 		entries.sort(DISPLAY_ORDER);
@@ -302,23 +296,21 @@ public final class PatronMark {
 				victim = entry.getKey();
 			}
 		}
-		if (victim == null || lowest > 1) {
+		if (victim == null || lowest > 1)
 			return false;
-		}
 		ledger.remove(victim);
 		return true;
 	}
 
 	/** Nulls last, then case-insensitive, then case-sensitive, so no two tie. */
-	private static int nameOrder(@Nullable String a, @Nullable String b) {
-		if (a == null || b == null) {
+	private static int nameOrder(String a, String b) {
+		if (a == null || b == null)
 			return a == b ? 0 : (a == null ? 1 : -1);
-		}
 		int cmp = a.compareToIgnoreCase(b);
 		return cmp != 0 ? cmp : a.compareTo(b);
 	}
 
-	private static int keyOrder(String a, @Nullable String b) {
+	private static int keyOrder(String a, String b) {
 		return b == null ? -1 : a.compareTo(b);
 	}
 

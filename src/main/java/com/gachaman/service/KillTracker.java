@@ -177,9 +177,8 @@ public class KillTracker {
 			}
 			return;
 		}
-		if (!(event.getActor() instanceof NPC)) {
+		if (!(event.getActor() instanceof NPC))
 			return;
-		}
 		NPC npc = (NPC) event.getActor();
 		if (event.getHitsplat().isOthers()) {
 			// another player attacked this NPC — even a 0-damage splash voids
@@ -188,9 +187,8 @@ public class KillTracker {
 			otherDamaged.add(npc.getIndex());
 			return;
 		}
-		if (!event.getHitsplat().isMine()) {
+		if (!event.getHitsplat().isMine())
 			return;
-		}
 		Engagement engagement = refresh(npc);
 		engagement.maxHit = Math.max(engagement.maxHit, event.getHitsplat().getAmount());
 	}
@@ -204,9 +202,8 @@ public class KillTracker {
 			return;
 		}
 		String text = Text.removeTags(event.getMessage()).toLowerCase(Locale.ROOT);
-		if (!text.contains(KILL_CREDIT_WARNING)) {
+		if (!text.contains(KILL_CREDIT_WARNING))
 			return;
-		}
 		// the warning refers to the monster just attacked: the current target,
 		// falling back to the most recently refreshed engagement
 		Player local = client.getLocalPlayer();
@@ -243,9 +240,8 @@ public class KillTracker {
 		NPC npc = (NPC) event.getActor();
 		Engagement engagement = engagements.remove(npc.getIndex());
 		boolean suspected = otherDamaged.remove(npc.getIndex()) | warnedAssist.remove(npc.getIndex());
-		if (engagement == null || tick - engagement.lastRefreshTick > ENGAGEMENT_TICKS) {
+		if (engagement == null || tick - engagement.lastRefreshTick > ENGAGEMENT_TICKS)
 			return;
-		}
 		boolean tookDamage = lastPlayerDamagedTick >= engagement.startTick;
 		PendingKill pending = new PendingKill();
 		pending.kill = new Kill(engagement.name, engagement.combatLevel, npc.getIndex(), tick,
@@ -286,9 +282,8 @@ public class KillTracker {
 	@Subscribe
 	public void onServerNpcLoot(ServerNpcLoot event) {
 		lootPipelineLive = true;
-		if (event.getComposition() == null) {
+		if (event.getComposition() == null)
 			return;
-		}
 		int npcId = event.getComposition().getId();
 		// Composition, not index — this event carries no index, so several pendings of
 		// the same monster are indistinguishable and one of them has to be chosen.
@@ -326,24 +321,21 @@ public class KillTracker {
 	 */
 	static boolean finalAssisted(boolean lootSeen, boolean suspected, boolean pipelineLive,
 		boolean guaranteedDrop) {
-		if (lootSeen) {
+		if (lootSeen)
 			return false;
-		}
 		return suspected || (pipelineLive && guaranteedDrop);
 	}
 
 	private void emitReadyKills() {
-		if (pendingKills.isEmpty()) {
+		if (pendingKills.isEmpty())
 			return;
-		}
 		Iterator<PendingKill> it = pendingKills.iterator();
 		while (it.hasNext()) {
 			PendingKill pending = it.next();
 			boolean settled = pending.despawnTick >= 0 && tick - pending.despawnTick >= LOOT_SETTLE_TICKS;
 			boolean timedOut = tick - pending.deathTick >= PENDING_TIMEOUT_TICKS;
-			if (!settled && !timedOut) {
+			if (!settled && !timedOut)
 				continue;
-			}
 			it.remove();
 			emit(pending);
 		}

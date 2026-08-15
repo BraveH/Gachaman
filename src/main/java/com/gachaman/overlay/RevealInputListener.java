@@ -32,9 +32,8 @@ public class RevealInputListener implements MouseListener, MouseWheelListener, K
 	}
 
 	private void syncHover(MouseEvent e) {
-		if (e == null) {
+		if (e == null)
 			return;
-		}
 		if (!shouldConsume()) {
 			overlay.setPointer(null);
 			return;
@@ -44,22 +43,19 @@ public class RevealInputListener implements MouseListener, MouseWheelListener, K
 
 	@Override
 	public MouseEvent mouseClicked(MouseEvent e) {
-		if (e == null || !shouldConsume()) {
+		if (e == null || !shouldConsume())
 			return e;
-		}
 		e.consume();
 		return e;
 	}
 
 	@Override
 	public MouseEvent mousePressed(MouseEvent e) {
-		if (e == null) {
+		if (e == null)
 			return e;
-		}
 		syncHover(e);
-		if (!shouldConsume()) {
+		if (!shouldConsume())
 			return e;
-		}
 		if (e.getButton() == MouseEvent.BUTTON1) {
 			overlay.handleClick(e.getPoint());
 		}
@@ -69,83 +65,72 @@ public class RevealInputListener implements MouseListener, MouseWheelListener, K
 
 	@Override
 	public MouseEvent mouseReleased(MouseEvent e) {
-		if (e == null || !shouldConsume()) {
+		if (e == null || !shouldConsume())
 			return e;
-		}
 		e.consume();
 		return e;
 	}
 
 	@Override
 	public MouseEvent mouseEntered(MouseEvent e) {
-		if (e == null || !shouldConsume()) {
+		if (e == null || !shouldConsume())
 			return e;
-		}
 		e.consume();
 		return e;
 	}
 
 	@Override
 	public MouseEvent mouseExited(MouseEvent e) {
-		if (e == null || !shouldConsume()) {
+		if (e == null || !shouldConsume())
 			return e;
-		}
 		e.consume();
 		return e;
 	}
 
 	@Override
 	public MouseEvent mouseDragged(MouseEvent e) {
-		if (e == null) {
+		if (e == null)
 			return e;
-		}
 		syncHover(e);
-		if (!shouldConsume()) {
+		if (!shouldConsume())
 			return e;
-		}
 		e.consume();
 		return e;
 	}
 
 	@Override
 	public MouseEvent mouseMoved(MouseEvent e) {
-		if (e == null) {
+		if (e == null)
 			return e;
-		}
 		syncHover(e);
-		if (!shouldConsume()) {
+		if (!shouldConsume())
 			return e;
-		}
 		e.consume();
 		return e;
 	}
 
 	@Override
 	public MouseWheelEvent mouseWheelMoved(MouseWheelEvent e) {
-		if (e == null) {
+		if (e == null)
 			return e;
-		}
 		syncHover(e);
-		if (!shouldConsume()) {
+		if (!shouldConsume())
 			return e;
-		}
 		e.consume();
 		return e;
 	}
 
 	@Override
 	public void keyTyped(KeyEvent e) {
-		if (e == null || !shouldConsume()) {
+		if (e == null || !shouldConsume())
 			return;
-		}
 		e.consume();
 	}
 
 	@Override
 	public void keyPressed(KeyEvent e) {
-		if (e == null || !shouldConsume()) {
+		if (e == null || !shouldConsume())
 			return;
-		}
 		if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
 			overlay.handleEscape();
 		}
@@ -157,9 +142,8 @@ public class RevealInputListener implements MouseListener, MouseWheelListener, K
 
 	@Override
 	public void keyReleased(KeyEvent e) {
-		if (e == null || !shouldConsume()) {
+		if (e == null || !shouldConsume())
 			return;
-		}
 		e.consume();
 	}
 }

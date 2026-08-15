@@ -130,6 +130,10 @@ public class GachamanPlugin extends Plugin {
 	private SlayerAlignment slayerAlignment;
 	@Inject
 	private IronmanGear ironmanGear;
+	@Inject
+	private ConsignmentService consignmentService;
+	@Inject
+	private TollService tollService;
 
 	// overlays & UI
 	@Inject
@@ -377,6 +381,21 @@ public class GachamanPlugin extends Plugin {
 		// ceremonies
 		ceremonyBus.addRenderer(revealOverlay);
 
+		// The Consignment's offer screen. Without this the service has no
+		// presenter and offerOrRoll() silently takes the ordinary roll every
+		// time — no error, no log, just a feature that is never there. It is
+		// wired here rather than injected into ConsignmentService because the
+		// overlay already depends on the service (it reads the live offer to
+		// draw it), and injecting the overlay back would close a Guice cycle.
+		consignmentService.setPresenter(revealOverlay);
+
+		// The Toll's pull. Same shape and the same reason: ChestService owns the
+		// tier-scoped opener, and handing it over as a hook keeps TollService
+		// free of a dependency on the chest — an unwired hook refuses the
+		// purchase and takes nothing, which is what kept the tree green while
+		// openTollChest was still unwritten.
+		tollService.setDealer(chestService::openTollChest);
+
 		// overlays
 		for (Overlay overlay : overlays()) {
 			overlayManager.add(overlay);
@@ -545,6 +564,14 @@ public class GachamanPlugin extends Plugin {
 			}
 			cardDatabase.beginBuild(tierTable, setTable);
 			chestService.recoverPending(); // crash-interrupted reveal: auto-commit
+			// A Consignment offer that was on screen when the client died left the
+			// style roll OWED and unspent — deliberately, so the roll is never lost.
+			// Take it now, as an ordinary wheel spin, since the offer it belonged to
+			// is gone. This has to live here and not in StyleTracker's LOGGED_IN
+			// branch: state is still null at LOGGED_IN (the profile key does not
+			// exist yet, which is the whole reason this block is deferred to a later
+			// GameTick), so a drain fired there would find nothing and no-op.
+			consignmentService.drainOwedRoll(styleTracker.currentTick());
 			// crash-interrupted party session: the vote and the shared-contract
 			// session died with the old process, but the party-flagged offers and
 			// the contract itself came back off disk. Orphaned offers are demoted
@@ -603,22 +630,19 @@ public class GachamanPlugin extends Plugin {
 	private void assignWornGear() {
 		var state = stateService.get();
 		ItemContainer worn = client.getItemContainer(InventoryID.WORN);
-		if (state == null || worn == null) {
+		if (state == null || worn == null)
 			return;
-		}
 		// snapshot: assign() mutates through the service, so the loadout read
 		// here goes stale — `assigned` is tracked by hand below. The owned-card
 		// list does not, since assigning never mints or removes a card.
 		Set<String> assigned = new HashSet<>(state.getLoadout().values());
 		for (Item item : worn.getItems()) {
-			if (item == null || item.getId() <= 0) {
+			if (item == null || item.getId() <= 0)
 				continue;
-			}
 			CardDefinition card = cardDatabase.cardForItem(item.getId());
 			// no card = cosmetic or untracked; no deed = the slot permits nothing
-			if (card == null || !permissionService.isSlotDeeded(card.getSlot())) {
+			if (card == null || !permissionService.isSlotDeeded(card.getSlot()))
 				continue;
-			}
 			for (OwnedCard owned : state.getOwnedCards()) {
 				if (!owned.isHologram() && owned.getCardId() == card.getCardId()
 					&& !assigned.contains(owned.getUuid())
@@ -644,9 +668,8 @@ public class GachamanPlugin extends Plugin {
 	 */
 	private void beginJourneyIfFresh() {
 		var state = stateService.get();
-		if (state == null || state.getAllowedStyle() != null) {
+		if (state == null || state.getAllowedStyle() != null)
 			return;
-		}
 		styleService.roll(styleTracker.currentTick());
 		// after the roulette, so the two ceremonies queue in the order the
 		// player reads them: colours, then kit
@@ -665,9 +688,8 @@ public class GachamanPlugin extends Plugin {
 	 */
 	private void redeemFirstColoursChestIfOwed() {
 		var state = stateService.get();
-		if (state == null || !state.isFirstColoursChestOwed() || state.getAllowedStyle() == null) {
+		if (state == null || !state.isFirstColoursChestOwed() || state.getAllowedStyle() == null)
 			return;
-		}
 		AttackStyle style = AttackStyle.valueOf(state.getAllowedStyle());
 		chestService.openFirstColoursChest(cardDatabase.weaponCardIdsForStyle(style));
 	}
@@ -680,9 +702,8 @@ public class GachamanPlugin extends Plugin {
 	 */
 	private void grantStarterCards() {
 		var state = stateService.get();
-		if (state == null) {
+		if (state == null)
 			return;
-		}
 		// migrate: ammo joined the default deeded slots
 		if (!state.getDeededSlots().contains(GearSlot.AMMO.name())) {
 			stateService.mutate(s -> {
@@ -700,9 +721,8 @@ public class GachamanPlugin extends Plugin {
 		int accountType = IronmanGear.accountType(client);
 		revokeForeignIronmanCards(accountType);
 		state = stateService.get();
-		if (state == null) {
+		if (state == null)
 			return;
-		}
 
 		// every save owns the starter cards (idempotent: grants only what's
 		// missing; names absent from the card DB are skipped with a log line).
@@ -772,15 +792,13 @@ public class GachamanPlugin extends Plugin {
 	 */
 	private void revokeForeignIronmanCards(int accountType) {
 		var state = stateService.get();
-		if (state == null) {
+		if (state == null)
 			return;
-		}
 		Set<String> mine = new HashSet<>(ironmanGear.cardNames(accountType));
 		Set<Integer> foreignIds = new HashSet<>();
 		for (String name : ironmanGear.allCardNames()) {
-			if (mine.contains(name)) {
+			if (mine.contains(name))
 				continue;
-			}
 			CardDefinition card = cardDatabase.cardByName(name);
 			if (card != null) {
 				foreignIds.add(card.getCardId());
@@ -793,9 +811,8 @@ public class GachamanPlugin extends Plugin {
 				revoked.add(owned.getUuid());
 			}
 		}
-		if (revoked.isEmpty()) {
+		if (revoked.isEmpty())
 			return;
-		}
 		stateService.mutate(s -> {
 			List<OwnedCard> kept = new ArrayList<>();
 			for (OwnedCard owned : s.getOwnedCards()) {
@@ -813,13 +830,11 @@ public class GachamanPlugin extends Plugin {
 
 	private void autoAssignStarter(GearSlot slot, String cardName) {
 		var state = stateService.get();
-		if (cardName == null || state == null || state.getLoadout().containsKey(slot.name())) {
+		if (cardName == null || state == null || state.getLoadout().containsKey(slot.name()))
 			return;
-		}
 		CardDefinition card = cardDatabase.cardByName(cardName);
-		if (card == null) {
+		if (card == null)
 			return;
-		}
 		Set<String> assigned = new HashSet<>(state.getLoadout().values());
 		for (OwnedCard owned : state.getOwnedCards()) {
 			if (!owned.isHologram() && owned.getCardId() == card.getCardId()
@@ -857,6 +872,14 @@ public class GachamanPlugin extends Plugin {
 		// parked ceremonies from the previous account must never replay into
 		// this one (their rewards are already persisted per-profile)
 		ceremonyBus.clear();
+		// ...and the Consignment keeps its own copy of the live offer, which
+		// clear() cannot reach. Left alone, an offer raised on the previous
+		// profile survives into this one as a stale `live` that the Overview
+		// would render ("the house is making its offer now") for an account that
+		// was never asked. Every other route out of an offer — accept, decline,
+		// abort, reset — is covered from inside the service; this path is the one
+		// that tears the queue down without going through any of them.
+		consignmentService.abandon();
 	}
 
 	@Subscribe
@@ -890,9 +913,8 @@ public class GachamanPlugin extends Plugin {
 
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event) {
-		if (!GachamanConfig.GROUP.equals(event.getGroup())) {
+		if (!GachamanConfig.GROUP.equals(event.getGroup()))
 			return;
-		}
 		if ("oneCardPerSlot".equals(event.getKey())) {
 			// re-derive permissions + show/hide every loadout surface
 			clientThread.invokeLater(() -> {
@@ -978,9 +1000,8 @@ public class GachamanPlugin extends Plugin {
 			gachamanPanel.refresh();
 			return;
 		}
-		if (!config.debugCommands()) {
+		if (!config.debugCommands())
 			return;
-		}
 		// Locale.ROOT, not the default locale: in Turkish and Azeri "I" folds to
 		// the dotless "ı", so a player who typed "::GachaGive" under a tr/az
 		// client got "gachagıve" and fell through to the default arm. The same
@@ -1206,9 +1227,8 @@ public class GachamanPlugin extends Plugin {
 	 * the thing this method exists to prevent.
 	 */
 	private void healStaleCardIds() {
-		if (!cardDatabase.isReady()) {
+		if (!cardDatabase.isReady())
 			return;
-		}
 		stateService.mutate(s -> {
 			List<OwnedCard> healed = healCardIds(s.getOwnedCards(), id -> {
 				if (cardDatabase.card(id) != null) {
@@ -1244,9 +1264,8 @@ public class GachamanPlugin extends Plugin {
 	 * in either order — the stale copy is the one that goes.
 	 */
 	static List<OwnedCard> healCardIds(List<OwnedCard> owned, IntUnaryOperator remap) {
-		if (owned == null || owned.isEmpty()) {
+		if (owned == null || owned.isEmpty())
 			return null;
-		}
 		Set<String> seen = new HashSet<>();
 		for (OwnedCard card : owned) {
 			if (card.isHologram() || remap.applyAsInt(card.getCardId()) < 0) {

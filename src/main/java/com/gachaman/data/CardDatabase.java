@@ -85,9 +85,8 @@ public class CardDatabase {
 
 	/** Kick off build (idempotent). Call after the client is logged in. */
 	public void beginBuild(TierTable tiers, SetTable sets) {
-		if (ready || scanned != null) {
+		if (ready || scanned != null)
 			return;
-		}
 		this.tierTable = tiers;
 		this.setTable = sets;
 
@@ -129,21 +128,17 @@ public class CardDatabase {
 		for (int id = startId; id < end; id++) {
 			try {
 				ItemComposition comp = itemManager.getItemComposition(id);
-				if (comp == null || comp.getNote() != -1 || comp.getPlaceholderTemplateId() != -1) {
+				if (comp == null || comp.getNote() != -1 || comp.getPlaceholderTemplateId() != -1)
 					continue;
-				}
 				String name = comp.getName();
-				if (name == null || name.isEmpty() || "null".equalsIgnoreCase(name)) {
+				if (name == null || name.isEmpty() || "null".equalsIgnoreCase(name))
 					continue;
-				}
 				ItemStats stats = itemManager.getItemStats(id);
-				if (stats == null || !stats.isEquipable() || stats.getEquipment() == null) {
+				if (stats == null || !stats.isEquipable() || stats.getEquipment() == null)
 					continue;
-				}
 				int slotIndex = stats.getEquipment().getSlot();
-				if (GearSlot.fromSlotIndex(slotIndex) == null) {
+				if (GearSlot.fromSlotIndex(slotIndex) == null)
 					continue;
-				}
 				int power = powerScore(stats);
 				scanned.add(new ScannedItem(id, name, slotIndex, power, hasCombatStats(stats)));
 			}
@@ -200,9 +195,8 @@ public class CardDatabase {
 		Map<String, Boolean> groupCombat = new HashMap<>();
 		for (ScannedItem item : items) {
 			String clean = cleanName(item.getRawName());
-			if (clean.isEmpty()) {
+			if (clean.isEmpty())
 				continue;
-			}
 			String key = clean + " " + item.getSlotIndex();
 			groups.computeIfAbsent(key, k -> new TreeSet<>()).add(item.getItemId());
 			groupSlot.put(key, item.getSlotIndex());
@@ -264,31 +258,24 @@ public class CardDatabase {
 	}
 
 	static Rarity rarityForRank(int rank) {
-		if (rank <= 2) {
+		if (rank <= 2)
 			return Rarity.COMMON;
-		}
-		if (rank <= 5) {
+		if (rank <= 5)
 			return Rarity.UNCOMMON;
-		}
-		if (rank <= 7) {
+		if (rank <= 7)
 			return Rarity.RARE;
-		}
 		return Rarity.EPIC;
 	}
 
 	static Rarity rarityForPower(int power) {
-		if (power < 10) {
+		if (power < 10)
 			return Rarity.COMMON;
-		}
-		if (power < 35) {
+		if (power < 35)
 			return Rarity.UNCOMMON;
-		}
-		if (power < 70) {
+		if (power < 70)
 			return Rarity.RARE;
-		}
-		if (power < 110) {
+		if (power < 110)
 			return Rarity.EPIC;
-		}
 		return Rarity.LEGENDARY;
 	}
 
@@ -297,9 +284,8 @@ public class CardDatabase {
 		name = BARROWS_DEGRADE.matcher(name).replaceAll("");
 		while (true) {
 			String stripped = TRAILING_PAREN.matcher(name).replaceAll("");
-			if (stripped.equals(name)) {
+			if (stripped.equals(name))
 				break;
-			}
 			name = stripped;
 		}
 		return name.trim();
@@ -413,22 +399,19 @@ public class CardDatabase {
 	 * cache version and force every existing install into a full item rescan to
 	 * answer a question that is asked once per account.
 	 */
-	public Set<Integer> weaponCardIdsForStyle(@Nullable AttackStyle style) {
+	public Set<Integer> weaponCardIdsForStyle(AttackStyle style) {
 		Set<Integer> ids = new HashSet<>();
-		if (style == null) {
+		if (style == null)
 			return ids;
-		}
 		for (CardDefinition card : byCardId.values()) {
-			if (card.getSlot() != GearSlot.WEAPON || card.getRarity() != Rarity.COMMON) {
+			if (card.getSlot() != GearSlot.WEAPON || card.getRarity() != Rarity.COMMON)
 				continue;
-			}
 			try {
 				// cardId IS the lowest item id of the merged variant group, so it
 				// is always a concrete item (same idiom as lowStatSuspects)
 				ItemStats stats = itemManager.getItemStats(card.getCardId());
-				if (stats == null || stats.getEquipment() == null) {
+				if (stats == null || stats.getEquipment() == null)
 					continue;
-				}
 				ItemEquipmentStats e = stats.getEquipment();
 				if (dominantStyle(e.getAstab(), e.getAslash(), e.getAcrush(),
 					e.getArange(), e.getAmagic()) == style) {
@@ -453,9 +436,8 @@ public class CardDatabase {
 		int arange, int amagic) {
 		int melee = Math.max(astab, Math.max(aslash, acrush));
 		int best = Math.max(melee, Math.max(arange, amagic));
-		if (best <= 0) {
+		if (best <= 0)
 			return null;
-		}
 		int winners = 0;
 		if (melee == best) {
 			winners++;
@@ -466,12 +448,10 @@ public class CardDatabase {
 		if (amagic == best) {
 			winners++;
 		}
-		if (winners != 1) {
+		if (winners != 1)
 			return null;
-		}
-		if (melee == best) {
+		if (melee == best)
 			return AttackStyle.MELEE;
-		}
 		return arange == best
 			? AttackStyle.RANGED
 			: AttackStyle.MAGIC;
@@ -502,14 +482,12 @@ public class CardDatabase {
 	public List<String> lowStatSuspects(int maxTotalBonus) {
 		List<String> suspects = new ArrayList<>();
 		for (CardDefinition card : byCardId.values()) {
-			if (card.getTierKey() != null || COMBAT_ALLOWLIST.contains(card.getName())) {
+			if (card.getTierKey() != null || COMBAT_ALLOWLIST.contains(card.getName()))
 				continue;
-			}
 			try {
 				ItemStats stats = itemManager.getItemStats(card.getCardId());
-				if (stats == null || stats.getEquipment() == null) {
+				if (stats == null || stats.getEquipment() == null)
 					continue;
-				}
 				ItemEquipmentStats e = stats.getEquipment();
 				int total = Math.max(0, e.getAstab()) + Math.max(0, e.getAslash())
 					+ Math.max(0, e.getAcrush()) + Math.max(0, e.getAmagic())
@@ -549,9 +527,8 @@ public class CardDatabase {
 	@Nullable
 	private List<CardDefinition> loadCache() {
 		File f = cacheFile();
-		if (!f.exists()) {
+		if (!f.exists())
 			return null;
-		}
 		try (InputStreamReader r = new InputStreamReader(
 			new GZIPInputStream(Files.newInputStream(f.toPath())), StandardCharsets.UTF_8)) {
 			List<CardDefinition> cards = gson.fromJson(r,
@@ -569,9 +546,8 @@ public class CardDatabase {
 		File f = cacheFile();
 		try {
 			File dir = f.getParentFile();
-			if (!dir.exists() && !dir.mkdirs()) {
+			if (!dir.exists() && !dir.mkdirs())
 				return;
-			}
 			try (Writer w = new OutputStreamWriter(
 				new GZIPOutputStream(Files.newOutputStream(f.toPath())), StandardCharsets.UTF_8)) {
 				gson.toJson(cards, w);

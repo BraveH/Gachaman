@@ -52,9 +52,8 @@ public final class AccountKey {
 	 */
 	@Nullable
 	public static String of(long accountHash) {
-		if (accountHash == NO_ACCOUNT || accountHash == 0L) {
+		if (accountHash == NO_ACCOUNT || accountHash == 0L)
 			return null;
-		}
 		MessageDigest digest;
 		try {
 			digest = MessageDigest.getInstance("SHA-256");
@@ -82,19 +81,16 @@ public final class AccountKey {
 	 * grow somebody else's save file, and a mixed-case one would key twice.
 	 */
 	@Nullable
-	public static String normalize(@Nullable String raw) {
-		if (raw == null) {
+	public static String normalize(String raw) {
+		if (raw == null)
 			return null;
-		}
 		String key = raw.trim().toLowerCase(Locale.ROOT);
-		if (key.length() != KEY_LENGTH) {
+		if (key.length() != KEY_LENGTH)
 			return null;
-		}
 		for (int i = 0; i < KEY_LENGTH; i++) {
 			char c = key.charAt(i);
-			if ((c < '0' || c > '9') && (c < 'a' || c > 'f')) {
+			if ((c < '0' || c > '9') && (c < 'a' || c > 'f'))
 				return null;
-			}
 		}
 		return key;
 	}
@@ -103,7 +99,7 @@ public final class AccountKey {
 	 * Whether two claims name the same account. Two unknowns are NOT the same
 	 * account — that is the whole reason this is not {@code Objects.equals}.
 	 */
-	public static boolean same(@Nullable String a, @Nullable String b) {
+	public static boolean same(String a, String b) {
 		String left = normalize(a);
 		String right = normalize(b);
 		return left != null && left.equals(right);

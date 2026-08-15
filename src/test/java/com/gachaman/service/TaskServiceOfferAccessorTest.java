@@ -68,11 +68,16 @@ public class TaskServiceOfferAccessorTest
 		CreditSink creditSink = new CreditSink(stateService);
 		ComplianceService complianceService = new ComplianceService(stateService, creditSink, null, null);
 		ceremonyBus = new CeremonyBus();
-		StyleService styleService = new StyleService(stateService, complianceService, ceremonyBus,
+		StyleService styleService = StyleFixture.styleService(stateService, complianceService, ceremonyBus,
 			new GachaRng(1L));
 		MonsterTable monsterTable = MonsterTable.load(new Gson());
 		taskService = new TaskService(null, stateService, creditSink, complianceService,
-			styleService, ceremonyBus, new GachaRng(1L), monsterTable, null, null);
+			styleService, ceremonyBus, new GachaRng(1L), monsterTable, null, null,
+			// The three collaborators added with the Preferred Weapon and the
+			// Consignment are unwired here: no contract in this file pays per kill,
+			// so the award branch (the only reader of the weapon pair) is never
+			// reached, and no completion here tips the style cycle.
+			null, null, null);
 	}
 
 	private static List<TaskOffer> twoOffers(boolean partyRoll)

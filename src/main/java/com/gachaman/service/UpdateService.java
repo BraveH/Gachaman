@@ -102,9 +102,8 @@ public class UpdateService {
 		}
 		String version = data.getVersion();
 		String seen = configManager.getConfiguration(GachamanConfig.GROUP, SEEN_VERSION_KEY);
-		if (version.equals(seen)) {
+		if (version.equals(seen))
 			return;
-		}
 		configManager.setConfiguration(GachamanConfig.GROUP, SEEN_VERSION_KEY, version);
 		if (seen == null) {
 			return; // a first install is not an update, and has no changelog to read
@@ -126,18 +125,16 @@ public class UpdateService {
 		}
 		try {
 			for (PluginHubManifest.JarData jar : externalPluginClient.get().downloadManifestLite().getJars()) {
-				if (!internalName.equals(jar.getInternalName())) {
+				if (!internalName.equals(jar.getInternalName()))
 					continue;
-				}
 				String hubHash = jar.getJarHash();
 				if (hubHash == null || hubHash.equals(mine.getJarHash())) {
 					return; // already running it
 				}
 				// hold the nag until they can actually read it; leaving
 				// announcedHash unset means a logged-out player gets it next poll
-				if (hubHash.equals(announcedHash) || client.getGameState() != GameState.LOGGED_IN) {
+				if (hubHash.equals(announcedHash) || client.getGameState() != GameState.LOGGED_IN)
 					return;
-				}
 				announcedHash = hubHash;
 				chat("A new version of <col=ff9040>Gachaman</col> is on the Plugin Hub."
 					+ " Restart your client to update.");

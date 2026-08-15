@@ -21,9 +21,8 @@ public class MilestoneService {
 	@Subscribe
 	public void onStatChanged(StatChanged event) {
 		GachaState state = stateService.get();
-		if (state == null) {
+		if (state == null)
 			return;
-		}
 		int cb = combatLevel();
 		int last = state.getLastTokenCombatLevel();
 		if (cb >= last + Tuning.TOKEN_CB_INTERVAL) {

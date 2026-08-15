@@ -5,6 +5,7 @@ import com.gachaman.data.*;
 import com.gachaman.model.*;
 import com.gachaman.service.*;
 import com.gachaman.ui.*;
+import com.google.gson.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.*;
@@ -30,22 +31,19 @@ public class LoadoutTab extends JPanel {
 	private static final int SLOT_W = 64;
 	private static final int SLOT_H = 56;
 
-	/** (gridx, gridy) placement per slot, mirroring the equipment tab shape. */
-	private static final Map<GearSlot, int[]> SLOT_GRID = new EnumMap<>(GearSlot.class);
-
-	static {
-		SLOT_GRID.put(GearSlot.HEAD, new int[]{1, 0});
-		SLOT_GRID.put(GearSlot.CAPE, new int[]{0, 1});
-		SLOT_GRID.put(GearSlot.AMULET, new int[]{1, 1});
-		SLOT_GRID.put(GearSlot.AMMO, new int[]{2, 1});
-		SLOT_GRID.put(GearSlot.WEAPON, new int[]{0, 2});
-		SLOT_GRID.put(GearSlot.BODY, new int[]{1, 2});
-		SLOT_GRID.put(GearSlot.SHIELD, new int[]{2, 2});
-		SLOT_GRID.put(GearSlot.LEGS, new int[]{1, 3});
-		SLOT_GRID.put(GearSlot.HANDS, new int[]{0, 4});
-		SLOT_GRID.put(GearSlot.FEET, new int[]{1, 4});
-		SLOT_GRID.put(GearSlot.RING, new int[]{2, 4});
-	}
+	/**
+	 * (gridx, gridy) placement per slot, mirroring the equipment tab shape —
+	 * read from loadout-board.json, which is the SAME table the in-game
+	 * LoadoutOverlay lays its sockets out from. Two hand-written copies of one
+	 * arrangement is one edit away from a board that disagrees with itself about
+	 * where the ring goes; see {@link BoardLayout}.
+	 *
+	 * <p>An instance field loaded in the constructor rather than the static block
+	 * this replaces: the Gson is injected, so it does not exist until Guice has
+	 * built this panel, and a data table must never load from a static
+	 * initialiser.
+	 */
+	private final Map<String, BoardLayout.Socket> sockets;
 
 	private final GachaStateService stateService;
 	private final CardDatabase cardDatabase;
@@ -57,7 +55,8 @@ public class LoadoutTab extends JPanel {
 	@Inject
 	public LoadoutTab(GachaStateService stateService, CardDatabase cardDatabase,
 		CardImageService cardImageService, PermissionService permissionService,
-		ChestService chestService, LoadoutService loadoutService) {
+		ChestService chestService, LoadoutService loadoutService, Gson gson) {
+		this.sockets = BoardLayout.load(gson);
 		this.stateService = stateService;
 		this.cardDatabase = cardDatabase;
 		this.cardImageService = cardImageService;
@@ -104,9 +103,13 @@ public class LoadoutTab extends JPanel {
 		// shield and ammo column simply lost its right edge. 3 * (64 + 4) = 204.
 		gbc.insets = new Insets(2, 2, 2, 2);
 		for (GearSlot slot : GearSlot.values()) {
-			int[] pos = SLOT_GRID.get(slot);
-			gbc.gridx = pos[0];
-			gbc.gridy = pos[1];
+			BoardLayout.Socket cell = sockets.get(slot.name());
+			// a slot the resource does not name is left off the grid rather than
+			// stacked at (0,0) on top of another one
+			if (cell == null)
+				continue;
+			gbc.gridx = cell.getCol();
+			gbc.gridy = cell.getRow();
 			grid.add(buildSlotComponent(state, slot), gbc);
 		}
 		gridSection.add(grid);
@@ -164,9 +167,8 @@ public class LoadoutTab extends JPanel {
 
 	private void handleSlotPress(SlotComponent component, GearSlot slot, MouseEvent e) {
 		GachaState state = stateService.get();
-		if (state == null) {
+		if (state == null)
 			return;
-		}
 		boolean deeded = permissionService.isSlotDeeded(slot)
 			|| state.getDeededSlots().contains(slot.name());
 		if (!deeded) {
@@ -182,13 +184,36 @@ public class LoadoutTab extends JPanel {
 			if (assigned != null) {
 				JPopupMenu menu = new JPopupMenu();
 				JMenuItem unassign = new JMenuItem("Unassign " + loadoutService.displayName(assigned));
-				unassign.addActionListener(a -> loadoutService.unassign(slot));
+				unassign.addActionListener(a -> unassignOrExplain(slot));
 				menu.add(unassign);
 				menu.show(component, e.getX(), e.getY());
 			}
 			return;
 		}
 		showAssignMenu(component, slot, e.getX(), e.getY());
+	}
+
+	/**
+	 * Clear a slot, and put the guard's refusal in front of the player when it
+	 * says no. Both unassign routes on this page — the right-click menu item
+	 * and the picker's Unassign row — come through here, so neither can be the
+	 * one that silently swallows a refusal.
+	 *
+	 * <p>The chat line has already gone out from LoadoutService; this is the
+	 * dialog on top of it, because a click made in the sidebar is answered in
+	 * the sidebar. The assign refusal a few lines below sets that expectation.
+	 *
+	 * <p>No hop to the client thread, deliberately. The guard reads the worn
+	 * container, but it is advisory rather than a boundary — the worst a stale
+	 * read can do is refuse (or allow) a beat late — and both routes already
+	 * mutate and checkpoint state from this thread, so a hop would be new
+	 * machinery buying an answer nobody can act on faster than a game tick.
+	 */
+	private void unassignOrExplain(GearSlot slot) {
+		if (!loadoutService.unassign(slot)) {
+			GachamanPanel.info(this, "That card is still unlocking what you are wearing."
+				+ " Take the item off first.");
+		}
 	}
 
 	/**
@@ -302,7 +327,7 @@ public class LoadoutTab extends JPanel {
 			}
 			else if (value instanceof String && ((String) value).startsWith("Unassign")) {
 				popup.setVisible(false);
-				loadoutService.unassign(slot);
+				unassignOrExplain(slot);
 			}
 		};
 		list.addMouseListener(new MouseAdapter() {
@@ -342,9 +367,8 @@ public class LoadoutTab extends JPanel {
 
 	@Nullable
 	private BufferedImage iconFor(OwnedCard owned) {
-		if (!cardDatabase.isReady()) {
+		if (!cardDatabase.isReady())
 			return null;
-		}
 		if (owned.isHologram()) {
 			HologramDefinition holo = cardDatabase.holograms().get(owned.getTierKey());
 			return holo == null ? null : cardImageService.hologramImage(holo, null);
@@ -368,7 +392,7 @@ public class LoadoutTab extends JPanel {
 		private final BufferedImage sprite;
 
 		SlotComponent(GearSlot slot, boolean deeded, boolean assigned, boolean deedAvailable,
-			@Nullable String cardName, @Nullable Color borderColor, @Nullable BufferedImage sprite) {
+			String cardName, Color borderColor, BufferedImage sprite) {
 			this.slot = slot;
 			this.deeded = deeded;
 			this.assigned = assigned;
@@ -378,16 +402,12 @@ public class LoadoutTab extends JPanel {
 			this.sprite = sprite;
 			setPreferredSize(new Dimension(SLOT_W, SLOT_H));
 			setMinimumSize(new Dimension(SLOT_W, SLOT_H));
-			if (!deeded) {
-				setToolTipText(slot.getDisplayName() + " — locked"
-					+ (deedAvailable ? " (click to use a Slot Deed)" : " (find a Slot Deed)"));
-			}
-			else if (assigned && cardName != null) {
-				setToolTipText(slot.getDisplayName() + ": " + cardName);
-			}
-			else {
-				setToolTipText(slot.getDisplayName() + " — empty (click to assign)");
-			}
+			// every arm opens with the slot name, so only the tail varies
+			setToolTipText(slot.getDisplayName() + (!deeded
+				? " — locked" + (deedAvailable ? " (click to use a Slot Deed)" : " (find a Slot Deed)")
+				: assigned && cardName != null
+					? ": " + cardName
+					: " — empty (click to assign)"));
 		}
 
 		@Override
@@ -414,8 +434,7 @@ public class LoadoutTab extends JPanel {
 			else if (!assigned) {
 				g2.setColor(ColorScheme.MEDIUM_GRAY_COLOR);
 				g2.setFont(FontManager.getRunescapeBoldFont().deriveFont(18f));
-				FontMetrics fm = g2.getFontMetrics();
-				g2.drawString("+", (w - fm.stringWidth("+")) / 2, h / 2 + 2);
+				centred(g2, "+", w, h / 2 + 2);
 				drawSlotName(g2, w, h, ColorScheme.MEDIUM_GRAY_COLOR);
 			}
 			else {
@@ -426,9 +445,8 @@ public class LoadoutTab extends JPanel {
 				}
 				g2.setFont(FontManager.getRunescapeSmallFont());
 				g2.setColor(borderColor != null ? borderColor : Color.WHITE);
-				String label = cardName == null ? slot.getDisplayName() : truncate(g2, cardName, w - 6);
-				FontMetrics fm = g2.getFontMetrics();
-				g2.drawString(label, (w - fm.stringWidth(label)) / 2, h - 5);
+				centred(g2, cardName == null ? slot.getDisplayName() : truncate(g2, cardName, w - 6),
+					w, h - 5);
 			}
 			g2.dispose();
 		}
@@ -436,9 +454,18 @@ public class LoadoutTab extends JPanel {
 		private void drawSlotName(Graphics2D g2, int w, int h, Color color) {
 			g2.setFont(FontManager.getRunescapeSmallFont());
 			g2.setColor(color);
-			String label = truncate(g2, slot.getDisplayName(), w - 6);
+			centred(g2, truncate(g2, slot.getDisplayName(), w - 6), w, h - 5);
+		}
+
+		/**
+		 * Draw text horizontally centred in a {@code w}-wide cell on the given
+		 * baseline — the measure-then-draw pair every label in this component
+		 * repeated verbatim, in the current font and colour so callers keep setting
+		 * those themselves.
+		 */
+		private static void centred(Graphics2D g2, String text, int w, int baselineY) {
 			FontMetrics fm = g2.getFontMetrics();
-			g2.drawString(label, (w - fm.stringWidth(label)) / 2, h - 5);
+			g2.drawString(text, (w - fm.stringWidth(text)) / 2, baselineY);
 		}
 
 		private static void drawPadlock(Graphics2D g2, int cx, int cy, Color color) {
@@ -456,9 +483,8 @@ public class LoadoutTab extends JPanel {
 
 		private static String truncate(Graphics2D g2, String text, int maxWidth) {
 			FontMetrics fm = g2.getFontMetrics();
-			if (fm.stringWidth(text) <= maxWidth) {
+			if (fm.stringWidth(text) <= maxWidth)
 				return text;
-			}
 			String drawn = text;
 			while (drawn.length() > 2 && fm.stringWidth(drawn + "…") > maxWidth) {
 				drawn = drawn.substring(0, drawn.length() - 1);

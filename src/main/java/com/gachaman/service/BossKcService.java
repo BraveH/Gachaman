@@ -31,14 +31,12 @@ public class BossKcService {
 
 	@Subscribe
 	public void onChatMessage(ChatMessage event) {
-		if (event.getType() != ChatMessageType.GAMEMESSAGE && event.getType() != ChatMessageType.SPAM) {
+		if (event.getType() != ChatMessageType.GAMEMESSAGE && event.getType() != ChatMessageType.SPAM)
 			return;
-		}
 		String message = Text.removeTags(event.getMessage());
 		Matcher matcher = KC_PATTERN.matcher(message);
-		if (!matcher.find()) {
+		if (!matcher.find())
 			return;
-		}
 		String chatName = matcher.group(1);
 		int kc;
 		try {
@@ -51,13 +49,11 @@ public class BossKcService {
 	}
 
 	void handleKc(String chatName, int kc) {
-		if (stateService.get() == null) {
+		if (stateService.get() == null)
 			return;
-		}
 		for (BossTable.Boss boss : bossTable.getBosses()) {
-			if (!boss.getChatName().equalsIgnoreCase(chatName)) {
+			if (!boss.getChatName().equalsIgnoreCase(chatName))
 				continue;
-			}
 			for (int milestone : boss.getKcMilestones()) {
 				if (kc >= milestone) {
 					awardMilestone(boss, milestone);
@@ -76,9 +72,8 @@ public class BossKcService {
 		String claimKey = boss.getBossName() + ":" + milestone;
 		String legacyKey = boss.getSetTag() + ":" + milestone;
 		var state = stateService.get();
-		if (state == null || state.getBossKcClaims().contains(claimKey)) {
+		if (state == null || state.getBossKcClaims().contains(claimKey))
 			return;
-		}
 		if (state.getBossKcClaims().contains(legacyKey)) {
 			// A save written before the rekey holds one tag-keyed claim standing in
 			// for what may be several bosses. Let this boss absorb it — silently,

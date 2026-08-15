@@ -113,9 +113,8 @@ final class ChestStrain {
 	static double load(long el, Tuning.Chest tier) {
 		long from = shudderMs(tier);
 		long to = giveMs(tier);
-		if (to <= from) {
+		if (to <= from)
 			return 0;
-		}
 		double t = (el - from) / (double) (to - from);
 		return t <= 0 ? 0 : (t >= 1 ? 1 : t);
 	}

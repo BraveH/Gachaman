@@ -79,9 +79,8 @@ public class PermissionService implements GachaStateService.Listener {
 	}
 
 	void rebuild(GachaState state) {
-		if (!cardDatabase.isReady()) {
+		if (!cardDatabase.isReady())
 			return;
-		}
 		if (!config.oneCardPerSlot()) {
 			rebuildOwnershipOnly(state);
 			return;
@@ -100,33 +99,93 @@ public class PermissionService implements GachaStateService.Listener {
 				continue;
 			}
 			OwnedCard owned = byUuid.get(entry.getValue());
-			if (owned == null) {
+			if (owned == null)
 				continue;
+			allowed.addAll(itemIdsFor(owned, slot));
+		}
+		publish(allowed, state);
+	}
+
+	/**
+	 * Swap in a freshly computed permission set. Both rebuild routes end here so
+	 * the two volatiles are always written together and in the same order: a
+	 * reader that saw a new allow-set against the previous deed set would, for one
+	 * instant, be answering from a pair that never existed.
+	 */
+	private void publish(Set<Integer> allowed, GachaState state) {
+		this.allowedItemIds = allowed;
+		this.deededSlots = new HashSet<>(state.getDeededSlots());
+	}
+
+	/**
+	 * Every item of a hologram's tier, optionally narrowed to one slot — {@code
+	 * slot} null means the whole tier in every slot, which is what ownership-only
+	 * permission grants.
+	 */
+	private void addTierIds(Set<Integer> ids, OwnedCard owned, GearSlot slot) {
+		for (CardDefinition card : cardDatabase.all().values()) {
+			if (owned.getTierKey().equals(card.getTierKey())
+				&& (slot == null || card.getSlot() == slot)) {
+				ids.addAll(card.getItemIds());
 			}
-			if (owned.isHologram()) {
-				// tier-wide permission scoped to this slot
-				for (CardDefinition card : cardDatabase.all().values()) {
-					if (owned.getTierKey().equals(card.getTierKey()) && card.getSlot() == slot) {
-						allowed.addAll(card.getItemIds());
-					}
-				}
-				continue;
-			}
-			CardDefinition card = cardDatabase.card(owned.getCardId());
-			if (card == null || card.getSlot() != slot) {
-				continue;
-			}
-			allowed.addAll(card.getItemIds());
-			if (owned.getVariant() == Variant.SHINY && card.getFamilyKey() != null) {
-				for (CardDefinition member : cardDatabase.family(card.getFamilyKey())) {
-					if (member.getTierRank() <= card.getTierRank()) {
-						allowed.addAll(member.getItemIds());
-					}
+		}
+	}
+
+	/**
+	 * One equipment card's ids: its own, plus — for a SHINY — every lower-or-equal
+	 * tier member of its family.
+	 *
+	 * <p>Shared by both permission routes, which is the point. The shiny ladder had
+	 * this rule written out twice, and two copies of "which family members does a
+	 * shiny unlock" is exactly the pair that drifts: the config toggle would then
+	 * decide not just WHETHER the loadout gates gear but what a shiny is worth,
+	 * and a player flipping it would watch their unlocks change for no stated
+	 * reason.
+	 */
+	private void addCardIds(Set<Integer> ids, OwnedCard owned, CardDefinition card) {
+		ids.addAll(card.getItemIds());
+		if (owned.getVariant() == Variant.SHINY && card.getFamilyKey() != null) {
+			for (CardDefinition member : cardDatabase.family(card.getFamilyKey())) {
+				if (member.getTierRank() <= card.getTierRank()) {
+					ids.addAll(member.getItemIds());
 				}
 			}
 		}
-		this.allowedItemIds = allowed;
-		this.deededSlots = new HashSet<>(state.getDeededSlots());
+	}
+
+	/**
+	 * The item ids ONE loadout entry grants: this card, in this slot, and
+	 * nothing else. This is the per-entry branch {@link #rebuild} runs in its
+	 * loop, lifted out verbatim so it has exactly one definition — the union
+	 * over every entry is still the whole allowed set, so nothing about
+	 * rebuild's answer changed.
+	 *
+	 * <p>It exists because {@link #isForbidden} is the WRONG question for the
+	 * unassign guard, and wrong in the way that looks right: for every id in
+	 * this set isForbidden answers false, precisely BECAUSE the card is still
+	 * assigned. A guard built on it would refuse nothing, ever, and pass a
+	 * casual read. A dragon hologram in WEAPON with a dragon scimitar worn is
+	 * the case that makes the difference visible — isForbidden says fine,
+	 * this says "that scimitar is yours only while the hologram stays put".
+	 *
+	 * <p>Empty when the card does not belong in this slot at all, which makes
+	 * "would clearing this slot strand anything?" a plain set intersection.
+	 */
+	public Set<Integer> itemIdsFor(OwnedCard owned, GearSlot slot) {
+		Set<Integer> ids = new HashSet<>();
+		if (owned == null || slot == null || !cardDatabase.isReady()) {
+			return ids; // fail-open, same as every other read here
+		}
+		if (owned.isHologram()) {
+			// tier-wide permission scoped to this slot
+			addTierIds(ids, owned, slot);
+			return ids;
+		}
+		CardDefinition card = cardDatabase.card(owned.getCardId());
+		if (card != null && card.getSlot() == slot) {
+			addCardIds(ids, owned, card);
+		}
+		return ids;
 	}
 
 	/**
@@ -139,27 +198,14 @@ public class PermissionService implements GachaStateService.Listener {
 		Set<Integer> allowed = new HashSet<>();
 		for (OwnedCard owned : state.getOwnedCards()) {
 			if (owned.isHologram()) {
-				for (CardDefinition card : cardDatabase.all().values()) {
-					if (owned.getTierKey().equals(card.getTierKey())) {
-						allowed.addAll(card.getItemIds());
-					}
-				}
+				addTierIds(allowed, owned, null); // null slot: the whole tier, every slot
 				continue;
 			}
 			CardDefinition card = cardDatabase.card(owned.getCardId());
-			if (card == null) {
-				continue;
-			}
-			allowed.addAll(card.getItemIds());
-			if (owned.getVariant() == Variant.SHINY && card.getFamilyKey() != null) {
-				for (CardDefinition member : cardDatabase.family(card.getFamilyKey())) {
-					if (member.getTierRank() <= card.getTierRank()) {
-						allowed.addAll(member.getItemIds());
-					}
-				}
+			if (card != null) {
+				addCardIds(allowed, owned, card);
 			}
 		}
-		this.allowedItemIds = allowed;
-		this.deededSlots = new HashSet<>(state.getDeededSlots());
+		publish(allowed, state);
 	}
 }

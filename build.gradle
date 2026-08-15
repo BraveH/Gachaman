@@ -59,6 +59,23 @@ tasks.register('ceremonyArt', JavaExec) {
 	args 'src/main/resources/com/gachaman/art/ceremony'
 }
 
+// Regenerates weapon-types.json from the DBTableID constants the resolved
+// runelite-api actually defines. The shipped JSON is already correct, so this is
+// only needed after an API bump — WeaponTypeResourceTest fails the build if the
+// two ever drift, and names the category that caused it.
+tasks.register('weaponTypes', JavaExec) {
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.gachaman.tools.WeaponTypes'
+}
+
+// Regenerates loadout-board.json from the SpriteID.EQUIPMENT_SLOT_* constants.
+// LoadoutBoardResourceTest fails the build if the shipped file ever drifts from
+// the declaration, and names the socket that caused it.
+tasks.register('loadoutBoard', JavaExec) {
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.gachaman.tools.LoadoutBoard'
+}
+
 tasks.register('ceremonyFitCmp', JavaExec) {
 	classpath = sourceSets.test.runtimeClasspath
 	mainClass = 'com.gachaman.overlay.CeremonyFitCmp'

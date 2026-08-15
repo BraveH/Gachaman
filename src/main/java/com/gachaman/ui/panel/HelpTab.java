@@ -59,9 +59,8 @@ public class HelpTab extends JPanel {
 	/** Rebuilds only when the measured viewport width changed; no-op otherwise. */
 	void rebuild() {
 		int width = measuredWidth(this);
-		if (width == builtWidth) {
+		if (width == builtWidth)
 			return;
-		}
 		builtWidth = width;
 		removeAll();
 		buildSections(width);

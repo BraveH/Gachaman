@@ -75,9 +75,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	}
 
 	static KcAdvance kcAdvance(boolean compactor, boolean assistedPenalty, boolean pendingHalf) {
-		if (!assistedPenalty) {
+		if (!assistedPenalty)
 			return new KcAdvance(compactor ? 2 : 1, pendingHalf);
-		}
 		if (compactor) {
 			return new KcAdvance(1, pendingHalf); // 2 x 0.5
 		}
@@ -106,9 +105,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	 * is the one least able to absorb it.
 	 */
 	public static int anteStakeFor(long gc, int percent) {
-		if (gc < Tuning.ANTE_MIN_PURSE_GC || percent <= 0) {
+		if (gc < Tuning.ANTE_MIN_PURSE_GC || percent <= 0)
 			return 0;
-		}
 		int pct = Math.max(Tuning.ANTE_MIN_PERCENT, Math.min(Tuning.ANTE_MAX_PERCENT, percent));
 		long stake = Math.min(gc * pct / 100, Tuning.ANTE_MAX_GC);
 		// can only ever bind by the cap, never by the purse (pct <= 50), but the
@@ -121,7 +119,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	 * on an easy contract is a wager with no downside worth speaking of, and the
 	 * point of this one is that INSANE contracts are where dying is plausible.
 	 */
-	public static boolean anteEligible(@Nullable TaskOffer offer) {
+	public static boolean anteEligible(TaskOffer offer) {
 		return offer != null && offer.getDifficulty() == TaskDifficulty.INSANE;
 	}
 
@@ -161,6 +159,26 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	private final MonsterTable monsterTable;
 	private final QuestUnlockService questUnlockService;
 	private final MaxHitService maxHitService;
+	/**
+	 * The Preferred Weapon pair. StyleTracker is asked what was in hand at the
+	 * killing blow (never what is in hand now — see {@link #weaponMultFor}), and
+	 * WeaponTypeService decides whether that satisfies the wheel's named category.
+	 *
+	 * <p>Declared LAST on purpose: Lombok builds the constructor in field order,
+	 * so appending here leaves every existing positional call site — all of them
+	 * headless tests — able to say what it always said plus the new arguments.
+	 */
+	private final StyleTracker styleTracker;
+	private final WeaponTypeService weaponTypeService;
+	/**
+	 * The Consignment, which owns the moment a style roll comes due. Injected
+	 * rather than hooked (the four @Setter hooks above exist so the payout path
+	 * stays testable without a Client) because this one is not optional: a
+	 * completion that silently skipped it would drop the deferred roll AND the
+	 * feature, and Guice refusing to build the service is a far better failure
+	 * than a wheel that quietly never offers.
+	 */
+	private final ConsignmentService consignmentService;
 
 	private final List<Listener> listeners = new ArrayList<>();
 	/** Optional hook the plugin wires for the party layer. */
@@ -256,9 +274,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	 */
 	@Nullable
 	private String liveSlayerTarget() {
-		if (slayerTargetHook == null) {
+		if (slayerTargetHook == null)
 			return null;
-		}
 		try {
 			return slayerTargetHook.get();
 		}
@@ -319,9 +336,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		final int[] lost = {0};
 		stateService.mutate(s -> {
 			ActiveTask task = s.getActiveTask();
-			if (task == null || task.getAnteStake() <= 0) {
+			if (task == null || task.getAnteStake() <= 0)
 				return s;
-			}
 			lost[0] = task.getAnteStake();
 			return s.withActiveTask(task.withAnteStake(0));
 		});
@@ -357,9 +373,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	/** Re-present the already-rolled offers (Esc'd earlier) — never re-rolls. */
 	public boolean presentOffers() {
 		List<TaskOffer> offers = pending();
-		if (offers.isEmpty()) {
+		if (offers.isEmpty())
 			return false;
-		}
 		ceremonyBus.submit(CeremonyBus.Type.TASK_OFFERS, offers);
 		return true;
 	}
@@ -432,9 +447,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	public void demotePartyOffers() {
 		stateService.mutate(s -> {
 			List<TaskOffer> pending = s.getPendingOffers();
-			if (pending == null || pending.isEmpty() || !pending.get(0).isPartyRoll()) {
+			if (pending == null || pending.isEmpty() || !pending.get(0).isPartyRoll())
 				return s;
-			}
 			List<TaskOffer> personal = new ArrayList<>(pending.size());
 			for (TaskOffer offer : pending) {
 				personal.add(new TaskOffer(offer.getDifficulty(), offer.getMonsterName(),
@@ -467,9 +481,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 
 	public boolean acceptOffer(int index) {
 		TaskOffer offer = offerAt(index);
-		if (offer == null) {
+		if (offer == null)
 			return false;
-		}
 		if (offer.isPartyRoll()) {
 			// a party offer is not accepted — it is VOTED for; the host's
 			// settlement accepts it on every member's client via acceptPartyOffer
@@ -486,7 +499,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	 * the same offer as a SHARED contract (kills from all of them count).
 	 */
 	public boolean acceptPartyOffer(int index, String partyLabel,
-		@Nullable List<AttackStyle> partyStyles) {
+		List<AttackStyle> partyStyles) {
 		return acceptPartyOffer(index, partyLabel, partyStyles, false, null);
 	}
 
@@ -496,7 +509,7 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	 * so a party that could not agree on the wager still hunts together.
 	 */
 	public boolean acceptPartyOffer(int index, String partyLabel,
-		@Nullable List<AttackStyle> partyStyles, boolean anteRequested) {
+		List<AttackStyle> partyStyles, boolean anteRequested) {
 		return acceptPartyOffer(index, partyLabel, partyStyles, anteRequested, null);
 	}
 
@@ -507,12 +520,11 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	 * never be rejoined, which is right for the solo path and for tests.
 	 */
 	public boolean acceptPartyOffer(int index, String partyLabel,
-		@Nullable List<AttackStyle> partyStyles, boolean anteRequested,
-		@Nullable Long proposalId) {
+		List<AttackStyle> partyStyles, boolean anteRequested,
+		Long proposalId) {
 		TaskOffer offer = offerAt(index);
-		if (offer == null) {
+		if (offer == null)
 			return false;
-		}
 		acceptInternal(offer, partyLabel, partyStyles, anteRequested, proposalId);
 		return true;
 	}
@@ -525,9 +537,9 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	 * persisted ActiveTask.partyAnchorId field stays (removing it would change
 	 * the save format) and simply keeps its 0 default, exactly as before.
 	 */
-	private void acceptInternal(TaskOffer offer, @Nullable String partyLabel,
-		@Nullable List<AttackStyle> partyStyles, boolean anteRequested,
-		@Nullable Long partyProposalId) {
+	private void acceptInternal(TaskOffer offer, String partyLabel,
+		List<AttackStyle> partyStyles, boolean anteRequested,
+		Long partyProposalId) {
 		ActiveTask task = ActiveTask.builder()
 			.difficulty(offer.getDifficulty())
 			.monsterName(offer.getMonsterName())
@@ -588,9 +600,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		int price = compactor ? Tuning.COMPACTOR_PRICE_GC : Tuning.EXTENDER_PRICE_GC;
 		final boolean[] applied = {false};
 		stateService.mutate(s -> {
-			if (s.getActiveTask() == null || s.getActiveTask().getAppliedCharge() != null) {
+			if (s.getActiveTask() == null || s.getActiveTask().getAppliedCharge() != null)
 				return s;
-			}
 			GachaState next;
 			if (compactor ? s.getFreeCompactors() > 0 : s.getFreeExtenders() > 0) {
 				next = compactor
@@ -616,9 +627,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	 */
 	public void syncPartyKills(int othersTotal) {
 		ActiveTask task = activeTask();
-		if (task == null || !task.isParty() || othersTotal <= task.getPartyOtherKills()) {
+		if (task == null || !task.isParty() || othersTotal <= task.getPartyOtherKills())
 			return;
-		}
 		stateService.mutate(s -> s.getActiveTask() == null ? s
 			: s.withActiveTask(s.getActiveTask().withPartyOtherKills(othersTotal)));
 		completeSharedIfReached();
@@ -636,9 +646,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	/** A participant's client reported the shared contract complete (sync backstop). */
 	public void forcePartyComplete() {
 		ActiveTask task = activeTask();
-		if (task == null || !task.isParty()) {
+		if (task == null || !task.isParty())
 			return;
-		}
 		// the mutate re-reads the contract off its OWN snapshot (s), not the one
 		// guarded above, so a completion landing in between cannot be overwritten
 		stateService.mutate(s -> {
@@ -670,17 +679,15 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	 * or already-maxed chain, so the meter has nothing left to promise.
 	 */
 	public double comboProgressAt(int nowTick) {
-		if (!comboAlive(nowTick) || comboKills >= Tuning.COMBO_MAX_KILLS) {
+		if (!comboAlive(nowTick) || comboKills >= Tuning.COMBO_MAX_KILLS)
 			return 0;
-		}
 		return (comboKills % Tuning.COMBO_KILLS_PER_STACK) / (double) Tuning.COMBO_KILLS_PER_STACK;
 	}
 
 	/** Ticks left before an alive chain cancels from idling (0 when no chain). */
 	public int comboIdleTicksRemaining(int nowTick) {
-		if (comboIdleAnchorTick < 0) {
+		if (comboIdleAnchorTick < 0)
 			return 0;
-		}
 		return Math.max(0, Tuning.COMBO_IDLE_RESET_TICKS - (nowTick - comboIdleAnchorTick));
 	}
 
@@ -742,9 +749,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	@Override
 	public void onKill(KillTracker.Kill kill) {
 		GachaState state = stateService.get();
-		if (state == null) {
+		if (state == null)
 			return;
-		}
 		lastKillTick = kill.getTick();
 		ActiveTask task = state.getActiveTask();
 		boolean onTask = task != null && task.getMonsterName().equalsIgnoreCase(kill.getNpcName());
@@ -783,14 +789,24 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 				// bonuses rather than compounding. Multiplied, a low-level
 				// player punching up stacked 2.5 x 5.0 x 2.5 into a 31x kill and
 				// the early game paid better per hour than the late game. Added,
-				// the pair tops out near 4x and the ladder stays legible: six
-				// stacks is "+150%", a big level gap is "+150%", together +300%.
+				// and with KILL_DIFF_CAP now 1.75, the pair tops out at 3.25x and
+				// the ladder stays legible: six stacks is "+150%", the level-gap
+				// term is at most "+75%", together +225%.
 				int playerCb = playerCombatLevel();
 				double bonus = (Tuning.killCbMultiplier(playerCb, kill.getNpcCombatLevel()) - 1.0)
 					+ (Tuning.comboMultiplier(stacks) - 1.0);
+				// The Preferred Weapon multiplies the WHOLE award rather than joining
+				// that additive term. Folded in additively a "1.5x" bonus would be
+				// worth about +31% at the top of the ladder, and an interface that says
+				// 1.5x while the player measures +31% is a lie; Tuning.WEAPON_BONUS_MULT
+				// carries the rest of that argument. The real attainable ceiling on one
+				// kill is therefore 3.25 x 1.5 = 4.875x, reached with six stacks and the
+				// level-gap term sitting on its cap.
+				double weaponMult = weaponMultFor(state, kill);
 				// the assist penalty stays multiplicative: it is a halving of
 				// whatever was earned, not a bonus competing with the others
-				double mult = (1.0 + bonus) * (assistedPenalty ? Tuning.ASSISTED_KILL_MULT : 1.0);
+				double mult = (1.0 + bonus) * weaponMult
+					* (assistedPenalty ? Tuning.ASSISTED_KILL_MULT : 1.0);
 				long scaled = Math.round(task.getPerKillGc() * mult);
 				awarded = creditSink.award(scaled, new CreditSink.GcContext(
 					CreditSink.Source.KILL, kill.getNpcName(), tagsFor(kill.getNpcName())));
@@ -864,21 +880,57 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 		}
 	}
 
+	/**
+	 * The Preferred Weapon factor for one kill: {@link Tuning#WEAPON_BONUS_MULT}
+	 * when the wheel's named category was in the player's hands at the killing
+	 * blow, 1.0 otherwise.
+	 *
+	 * <p><b>The category is not read here, and that is the whole feature.</b>
+	 * onKill runs several ticks after the death — KillTracker holds every kill
+	 * back for the loot oracle — so a varbit read at this moment would report
+	 * what is equipped NOW, and swapping the named weapon in during that window
+	 * would collect a bonus the fight never earned. StyleTracker stamps every
+	 * judged attack with what it was made with, and only a stamp inside this
+	 * kill's own engagement window counts; a kill with no judged attack in that
+	 * window (a thrall's kill, damage dealt off-screen) pays nothing rather than
+	 * inheriting the previous fight's weapon.
+	 *
+	 * <p>Called from inside the NON-TAINTED branch above, which is what makes
+	 * "a tainted kill pays no weapon bonus" structural rather than a rule
+	 * somebody has to remember: a tainted kill never reaches the award at all.
+	 * WeaponBonusTest pins that so a later refactor of that branch cannot
+	 * quietly change it.
+	 *
+	 * <p>Neither collaborator is null-guarded, unlike the Client reads elsewhere
+	 * in this file. Both are constructor-injected, so Guice cannot leave either
+	 * null in the live plugin — it would refuse to build the service at all — and
+	 * a guard here would exist purely for headless harnesses, which the token
+	 * budget does not have room to spend on. A test that reaches this line wires
+	 * a real StyleTracker and a real WeaponTypeService; both are safe with a null
+	 * Client (nothing is ever sampled, so nothing is ever satisfied) and cost a
+	 * line each.
+	 */
+	private double weaponMultFor(GachaState state, KillTracker.Kill kill) {
+		StyleTracker.WeaponSample sample = styleTracker.weaponAt(
+			kill.getEngagementStartTick(), kill.getTick());
+		return sample != null && weaponTypeService.satisfies(state.getPreferredWeaponType(),
+			sample.getCategory(), sample.getComMode())
+			? Tuning.WEAPON_BONUS_MULT : 1.0;
+	}
+
 	private void checkSideBets(KillTracker.Kill kill) {
 		// one read, taken before the tick bookkeeping: nothing between here and
 		// the old second read touched the state, so this is the same contract
 		ActiveTask task = activeTask();
-		if (task == null) {
+		if (task == null)
 			return;
-		}
 		recentKillTicks.add(kill.getTick());
 		while (recentKillTicks.size() > 10) {
 			recentKillTicks.poll();
 		}
 		List<SideBet> bets = task.getSideBets();
-		if (bets == null || bets.isEmpty()) {
+		if (bets == null || bets.isEmpty())
 			return;
-		}
 		List<SideBet> updated = new ArrayList<>(bets.size());
 		boolean changed = false;
 		for (SideBet bet : bets) {
@@ -930,14 +982,12 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	 */
 	private void recordDiscovery(String monsterName) {
 		GachaState state = stateService.get();
-		if (state == null || state.getSpeciesDiscovered() == null) {
+		if (state == null || state.getSpeciesDiscovered() == null)
 			return;
-		}
 		// Locale.ROOT: persisted keys must not vary with the JVM locale
 		String key = monsterName.toLowerCase(Locale.ROOT);
-		if (state.getSpeciesDiscovered().contains(key)) {
+		if (state.getSpeciesDiscovered().contains(key))
 			return;
-		}
 		GachaState next = stateService.mutate(s -> {
 			Set<String> discovered = new HashSet<>(s.getSpeciesDiscovered());
 			discovered.add(key);
@@ -1003,10 +1053,9 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 	 * no style, and Gson keeps null array elements across a save/load — so
 	 * both must count as no contribution rather than throw.
 	 */
-	static int distinctStyles(@Nullable List<AttackStyle> styles) {
-		if (styles == null || styles.isEmpty()) {
+	static int distinctStyles(List<AttackStyle> styles) {
+		if (styles == null || styles.isEmpty())
 			return 0;
-		}
 		EnumSet<AttackStyle> seen = EnumSet.noneOf(AttackStyle.class);
 		for (AttackStyle style : styles) {
 			if (style != null) {
@@ -1018,9 +1067,8 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 
 	private void completeTask() {
 		GachaState state = stateService.get();
-		if (state == null || state.getActiveTask() == null) {
+		if (state == null || state.getActiveTask() == null)
 			return;
-		}
 		ActiveTask task = state.getActiveTask();
 		// one clock read shared by the personal best and by the Dossier record, so
 		// the filed timestamp and the filed duration cannot disagree
@@ -1235,7 +1283,12 @@ public class TaskService implements KillTracker.KillListener, ComplianceService.
 			ceremonyBus.submit(CeremonyBus.Type.DEED_CHOICE, 0);
 		}
 		if (cycleTriggered) {
-			styleService.roll(lastKillTick);
+			// NOT styleService.roll(): a roll coming due is the only moment the
+			// Consignment may be offered, so this is the one call site allowed to
+			// put it up. offerOrRoll always leaves the roll either taken or owed,
+			// which is why nothing is read back — and with no presenter wired it
+			// takes the ordinary wheel, exactly as this line did before.
+			consignmentService.offerOrRoll(lastKillTick);
 		}
 		resetCombo(); // rhythm does not carry across contracts
 		// A completion banks the reward, the deed, the fragments and the style

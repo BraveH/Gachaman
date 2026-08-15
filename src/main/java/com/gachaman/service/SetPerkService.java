@@ -37,9 +37,8 @@ public class SetPerkService implements GachaStateService.Listener {
 
 	@Override
 	public void onStateChanged(GachaState state) {
-		if (!cardDatabase.isReady()) {
+		if (!cardDatabase.isReady())
 			return;
-		}
 		Set<Integer> ownedIds = state.getOwnedCards().stream()
 			.filter(c -> !c.isHologram())
 			.map(OwnedCard::getCardId)
@@ -63,9 +62,8 @@ public class SetPerkService implements GachaStateService.Listener {
 		Set<String> newKeys = new HashSet<>();
 		List<CeremonyBus.Fanfare> fanfares = new ArrayList<>();
 		for (SetTable.CardSet set : setTable.getSets()) {
-			if (state.getCompletedSets().contains(set.getSetKey())) {
+			if (state.getCompletedSets().contains(set.getSetKey()))
 				continue;
-			}
 			List<CardDefinition> members = cardDatabase.setMembers(set.getSetKey());
 			if (members.isEmpty() || members.size() < set.getCardNames().size()) {
 				continue; // some names failed to resolve; never complete a partial mapping
@@ -81,9 +79,8 @@ public class SetPerkService implements GachaStateService.Listener {
 				log.debug("Set completed: {}", set.getSetKey());
 			}
 		}
-		if (newKeys.isEmpty()) {
+		if (newKeys.isEmpty())
 			return;
-		}
 		// This one still re-enters, and is meant to: the nested pass sees every key
 		// already banked and finds nothing, which is the fixed point we want.
 		stateService.mutate(s -> {
@@ -98,18 +95,15 @@ public class SetPerkService implements GachaStateService.Listener {
 
 	double perkFactor(CreditSink.GcContext context) {
 		GachaState state = stateService.get();
-		if (state == null || state.getCompletedSets().isEmpty()) {
+		if (state == null || state.getCompletedSets().isEmpty())
 			return 1.0;
-		}
 		double factor = 1.0;
 		for (SetTable.CardSet set : setTable.getSets()) {
-			if (!state.getCompletedSets().contains(set.getSetKey())) {
+			if (!state.getCompletedSets().contains(set.getSetKey()))
 				continue;
-			}
 			SetTable.Perk perk = set.getPerk();
-			if (perk == null || !typeMatches(perk.getType(), context.getSource())) {
+			if (perk == null || !typeMatches(perk.getType(), context.getSource()))
 				continue;
-			}
 			if (scopeMatches(perk, context)) {
 				factor *= 1.0 + perk.getMagnitudePercent() / 100.0;
 			}
@@ -147,9 +141,8 @@ public class SetPerkService implements GachaStateService.Listener {
 	}
 
 	public static String perkDescription(SetTable.Perk perk) {
-		if (perk == null) {
+		if (perk == null)
 			return "";
-		}
 		String what;
 		switch (perk.getType()) {
 			case KILL_GC_PERCENT:

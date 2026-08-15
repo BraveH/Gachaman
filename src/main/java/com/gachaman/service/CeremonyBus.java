@@ -22,6 +22,27 @@ public class CeremonyBus {
 		TASK_OFFERS,     // payload: List<TaskOffer>
 		TASK_COMPLETE,   // payload: TaskCompletionSummary
 		DEED_CHOICE,     // payload: DeedGrant
+		/**
+		 * payload: {@link ConsignmentService.Offer} — the Consignment, and the
+		 * only request on this bus that carries an OBLIGATION rather than a
+		 * reward.
+		 *
+		 * <p>Everything else queued here is something the player has already
+		 * been given: dropping a fanfare costs a banner, dropping a chest reveal
+		 * still commits the cards. This one is a question with a deadline on it,
+		 * and whoever claims it has promised {@code ConsignmentService} that
+		 * exactly one of {@code accept} / {@code decline} / {@code abandon} will
+		 * follow. Claiming it and then merely forgetting it leaves the style roll
+		 * owed until the next login drain settles it.
+		 *
+		 * <p>Which is why this type must never be handed to a
+		 * {@link FallbackHandler}: a chat line cannot answer a binding choice.
+		 * Nothing registers a fallback today (see CeremonyBusDeclineTest), so an
+		 * unclaimed offer parks in the queue and re-presents when the renderer
+		 * frees up — which is exactly what has to happen, because a contract
+		 * completion queues TASK_COMPLETE and often DEED_CHOICE ahead of it.
+		 */
+		CONSIGNMENT,
 		FANFARE          // payload: Fanfare (generic icon+text celebration)
 	}
 

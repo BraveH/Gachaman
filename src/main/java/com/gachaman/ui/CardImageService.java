@@ -26,7 +26,7 @@ public class CardImageService {
 	 * (possibly later, possibly never for already-loaded images) for repaints.
 	 */
 	@Nullable
-	public BufferedImage itemImage(int itemId, @Nullable Runnable onLoaded) {
+	public BufferedImage itemImage(int itemId, Runnable onLoaded) {
 		BufferedImage cached = cache.get(itemId);
 		if (cached != null) {
 			// re-attach EVERY caller's hook: onLoaded fires immediately when
@@ -37,9 +37,8 @@ public class CardImageService {
 			return cached;
 		}
 		AsyncBufferedImage async = itemManager.getImage(itemId);
-		if (async == null) {
+		if (async == null)
 			return null;
-		}
 		cache.put(itemId, async);
 		if (onLoaded != null) {
 			async.onLoaded(onLoaded);
@@ -48,12 +47,12 @@ public class CardImageService {
 	}
 
 	@Nullable
-	public BufferedImage cardImage(CardDefinition card, @Nullable Runnable onLoaded) {
+	public BufferedImage cardImage(CardDefinition card, Runnable onLoaded) {
 		return itemImage(card.getCardId(), onLoaded);
 	}
 
 	@Nullable
-	public BufferedImage hologramImage(HologramDefinition holo, @Nullable Runnable onLoaded) {
+	public BufferedImage hologramImage(HologramDefinition holo, Runnable onLoaded) {
 		CardDefinition representative = cardDatabase.cardByName(holo.getRepresentativeItemName());
 		return representative == null ? null : cardImage(representative, onLoaded);
 	}

@@ -79,9 +79,30 @@ public class RollMathTest
 		double plus10 = Tuning.killCbMultiplier(100, 110);
 		double plus30 = Tuning.killCbMultiplier(100, 130);
 		Assert.assertTrue(plus10 > 1.1 && plus30 > plus10);
-		// the same absolute gap means far more at low levels (ratio scaling)
-		Assert.assertTrue("+5 at cb 3 must dwarf +5 at cb 70",
-			Tuning.killCbMultiplier(3, 8) > 2 * Tuning.killCbMultiplier(70, 75));
+		// The same absolute gap means far more at low levels (ratio scaling).
+		//
+		// This assertion used to read "> 2 *", and that was correct while
+		// KILL_DIFF_CAP was 2.5: +5 at cb 3 is a ratio of 2.67 and scored 5.68
+		// before the clamp, which really did dwarf the near-peer. The owner's
+		// drop to 1.75 clamps the low-level side to the cap itself, so the
+		// factor-of-two claim is now arithmetically unreachable — not because
+		// the ratio scaling stopped working, but because the ceiling landed
+		// below where the comparison was being made.
+		//
+		// What is pinned instead is the property the cap did NOT change, in the
+		// strongest form still observable through this function: the low-level
+		// pair is pushed all the way to the ceiling while the near-peer sits
+		// far under it. That keeps the test honest about the direction AND
+		// records that the clamp binds at cb 3, which is the actual new
+		// behaviour worth catching if the cap ever moves again.
+		double lowLevelGap = Tuning.killCbMultiplier(3, 8);
+		double nearPeerGap = Tuning.killCbMultiplier(70, 75);
+		Assert.assertEquals("+5 at cb 3 is a ratio of 2.67 and must reach the cap",
+			Tuning.KILL_DIFF_CAP, lowLevelGap, 1e-9);
+		Assert.assertTrue("+5 at cb 70 is a near-peer and must stay well under the cap",
+			nearPeerGap < Tuning.KILL_DIFF_CAP - 0.4);
+		Assert.assertTrue("+5 at cb 3 must still pay more than +5 at cb 70",
+			lowLevelGap > nearPeerGap);
 		// far above caps
 		Assert.assertEquals(Tuning.KILL_DIFF_CAP, Tuning.killCbMultiplier(50, 700), 1e-9);
 		// trivial mobs decay toward the floor

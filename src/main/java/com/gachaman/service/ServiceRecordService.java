@@ -77,9 +77,8 @@ public class ServiceRecordService implements KillTracker.KillListener, TaskServi
 	 * shutdown), never per kill.
 	 */
 	public synchronized void flush() {
-		if (pending.isEmpty()) {
+		if (pending.isEmpty())
 			return;
-		}
 		Map<String, Integer> tally = new HashMap<>(pending);
 		// cleared BEFORE the write: a failed write costs a handful of kills, a
 		// re-runnable tally would over-count them permanently. For a cosmetic
@@ -126,10 +125,9 @@ public class ServiceRecordService implements KillTracker.KillListener, TaskServi
 	 * +1 kill of service for every card assigned to a loadout slot, distinct by
 	 * uuid: a card that somehow occupied two slots still served one kill.
 	 */
-	static void creditKill(Map<String, Integer> tally, @Nullable Map<String, String> loadout) {
-		if (loadout == null || loadout.isEmpty()) {
+	static void creditKill(Map<String, Integer> tally, Map<String, String> loadout) {
+		if (loadout == null || loadout.isEmpty())
 			return;
-		}
 		for (String uuid : new HashSet<>(loadout.values())) {
 			if (uuid != null) {
 				tally.merge(uuid, 1, Integer::sum);
@@ -144,10 +142,9 @@ public class ServiceRecordService implements KillTracker.KillListener, TaskServi
 	 * dropped — their service died with them.
 	 */
 	@Nullable
-	static List<OwnedCard> applyTally(@Nullable List<OwnedCard> cards, Map<String, Integer> tally) {
-		if (cards == null || cards.isEmpty() || tally.isEmpty()) {
+	static List<OwnedCard> applyTally(List<OwnedCard> cards, Map<String, Integer> tally) {
+		if (cards == null || cards.isEmpty() || tally.isEmpty())
 			return null;
-		}
 		List<OwnedCard> out = new ArrayList<>(cards.size());
 		boolean changed = false;
 		for (OwnedCard card : cards) {
@@ -178,11 +175,10 @@ public class ServiceRecordService implements KillTracker.KillListener, TaskServi
 	 * against a different list inside mutate().
 	 */
 	@Nullable
-	static List<OwnedCard> setServed(@Nullable List<OwnedCard> cards, Set<String> uuids,
+	static List<OwnedCard> setServed(List<OwnedCard> cards, Set<String> uuids,
 		int killsServed) {
-		if (cards == null || cards.isEmpty() || uuids.isEmpty()) {
+		if (cards == null || cards.isEmpty() || uuids.isEmpty())
 			return null;
-		}
 		List<OwnedCard> out = new ArrayList<>(cards.size());
 		boolean changed = false;
 		for (OwnedCard card : cards) {
@@ -205,7 +201,7 @@ public class ServiceRecordService implements KillTracker.KillListener, TaskServi
 	 * against their own kill count. Holograms are excluded — they carry cardId
 	 * -1 and never enter the grid.
 	 */
-	public static Map<Integer, Integer> bestByCardId(@Nullable List<OwnedCard> cards) {
+	public static Map<Integer, Integer> bestByCardId(List<OwnedCard> cards) {
 		Map<Integer, Integer> best = new HashMap<>();
 		if (cards != null) {
 			for (OwnedCard card : cards) {

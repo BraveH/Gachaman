@@ -47,9 +47,8 @@ public class WeeklyShopService {
 	 */
 	public List<ShopSlot> currentOffers() {
 		GachaState state = stateService.get();
-		if (state == null || !cardDatabase.isReady()) {
+		if (state == null || !cardDatabase.isReady())
 			return Collections.emptyList();
-		}
 		String weekKey = currentWeekKey();
 		Set<Integer> ownedIds = state.getOwnedCards().stream()
 			.filter(c -> !c.isHologram())
@@ -85,13 +84,11 @@ public class WeeklyShopService {
 	@Nullable
 	public OwnedCard purchase(int slotIndex) {
 		List<ShopSlot> offers = currentOffers();
-		if (slotIndex < 0 || slotIndex >= offers.size()) {
+		if (slotIndex < 0 || slotIndex >= offers.size())
 			return null;
-		}
 		ShopSlot slot = offers.get(slotIndex);
-		if (slot.isPurchased() || !creditSink.spend(slot.getPriceGc())) {
+		if (slot.isPurchased() || !creditSink.spend(slot.getPriceGc()))
 			return null;
-		}
 		String weekKey = currentWeekKey();
 		OwnedCard card = new OwnedCard(UUID.randomUUID().toString(), slot.getCard().getCardId(),
 			null, Variant.NORMAL, System.currentTimeMillis(), "shop:" + weekKey, 0);

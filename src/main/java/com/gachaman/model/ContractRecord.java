@@ -62,7 +62,7 @@ public class ContractRecord {
 	 * cap: a save written when the cap was higher must converge, not sit
 	 * permanently one over.
 	 */
-	public static List<ContractRecord> appendCapped(@Nullable List<ContractRecord> log,
+	public static List<ContractRecord> appendCapped(List<ContractRecord> log,
 		ContractRecord record, int max) {
 		List<ContractRecord> next = log == null ? new ArrayList<>() : new ArrayList<>(log);
 		next.add(record);

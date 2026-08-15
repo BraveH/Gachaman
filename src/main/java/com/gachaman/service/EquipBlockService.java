@@ -30,9 +30,8 @@ public class EquipBlockService {
 	@Subscribe
 	public void onMenuEntryAdded(MenuEntryAdded event) {
 		MenuEntry entry = event.getMenuEntry();
-		if (!isEquipOption(entry.getOption())) {
+		if (!isEquipOption(entry.getOption()))
 			return;
-		}
 		int itemId = entry.getItemId();
 		if (itemId > 0 && permissionService.isForbidden(itemId)) {
 			client.getMenu().removeMenuEntry(entry);
@@ -41,9 +40,8 @@ public class EquipBlockService {
 
 	@Subscribe
 	public void onMenuOptionClicked(MenuOptionClicked event) {
-		if (!isEquipOption(event.getMenuOption())) {
+		if (!isEquipOption(event.getMenuOption()))
 			return;
-		}
 		int itemId = event.getItemId();
 		if (itemId > 0 && permissionService.isForbidden(itemId)) {
 			event.consume();

@@ -59,6 +59,21 @@ public class ChestService {
 		long pricePaid;
 		/** Every card in this open rolled shiny twice (8 stardust consumed). */
 		boolean stardustBlessed;
+		/**
+		 * The tier ladder a Toll pull is confined to ({@link RollOdds#UNTIERED} for
+		 * the untiered band), else null for every ordinary chest.
+		 *
+		 * <p>Carried on the RESULT, not just passed to the roll, because the
+		 * in-reveal reroll rebuilds its pool from this object rather than from the
+		 * call that created it. Without the field a rerolled Toll pull would fall
+		 * through to the all-cards pool and quietly hand back a card from outside
+		 * the ladder the player paid for — the one thing the Toll promises.
+		 *
+		 * <p>Gson binds by field, so a pending blob written before this existed
+		 * deserializes it as null and behaves exactly as it did.
+		 */
+		@Nullable
+		String tollTierKey;
 	}
 
 	/**
@@ -185,9 +200,8 @@ public class ChestService {
 	 */
 	public synchronized void recoverPending() {
 		var state = stateService.get();
-		if (pending != null || state == null || state.getPendingChestBlob() == null) {
+		if (pending != null || state == null || state.getPendingChestBlob() == null)
 			return;
-		}
 		try {
 			pending = gson.fromJson(state.getPendingChestBlob(), ChestOpenResult.class);
 		}
@@ -217,9 +231,8 @@ public class ChestService {
 	/** Lifetime Rusty opens so far (the starter tier retires after the cap). */
 	public int rustyChestsOpened() {
 		GachaState state = stateService.get();
-		if (state == null || state.getChestsOpenedByTier() == null) {
+		if (state == null || state.getChestsOpenedByTier() == null)
 			return 0;
-		}
 		return state.getChestsOpenedByTier().getOrDefault(Tuning.Chest.RUSTY.name(), 0);
 	}
 
@@ -230,17 +243,14 @@ public class ChestService {
 	/** Buy and roll a chest; queues the ceremony. Null when unaffordable/busy/DB not ready. */
 	@Nullable
 	public synchronized ChestOpenResult openChest(Tuning.Chest tier) {
-		if (pending != null || !cardDatabase.isReady()) {
+		if (pending != null || !cardDatabase.isReady())
 			return null;
-		}
-		if (tier == Tuning.Chest.RUSTY && !rustyAvailable()) {
+		if (tier == Tuning.Chest.RUSTY && !rustyAvailable())
 			return null;
-		}
 		long price = Tuning.CHEST_PRICE_GC.get(tier);
-		if (!creditSink.spend(price)) {
+		if (!creditSink.spend(price))
 			return null;
-		}
-		return deal(roll(tier, null, null, price, null), CeremonyBus.Type.CHEST_OPEN);
+		return deal(roll(tier, null, null, price, null, null, null), CeremonyBus.Type.CHEST_OPEN);
 	}
 
 	/**
@@ -269,14 +279,12 @@ public class ChestService {
 	 */
 	@Nullable
 	public synchronized ChestOpenResult openSlotChest(GearSlot slot) {
-		if (pending != null || !cardDatabase.isReady() || slot == null) {
+		if (pending != null || !cardDatabase.isReady() || slot == null)
 			return null;
-		}
 		long price = Tuning.CHEST_PRICE_GC.get(Tuning.Chest.GILDED);
-		if (!creditSink.spend(price)) {
+		if (!creditSink.spend(price))
 			return null;
-		}
-		return deal(roll(Tuning.Chest.GILDED, null, slot, price, null),
+		return deal(roll(Tuning.Chest.GILDED, null, slot, price, null, null, null),
 			CeremonyBus.Type.CHEST_OPEN);
 	}
 
@@ -293,8 +301,42 @@ public class ChestService {
 			queued.remove(setTag);
 			return s.withQueuedThemedChests(queued);
 		});
-		return deal(roll(Tuning.Chest.GILDED, setTag, null, 0, null),
+		return deal(roll(Tuning.Chest.GILDED, setTag, null, 0, null, null, null),
 			CeremonyBus.Type.THEMED_CHEST);
+	}
+
+	/**
+	 * The Toll's pull: ONE card drawn from a single tier ladder, Gilded odds, no
+	 * GC price — the player has already paid in a card. See {@link TollService}
+	 * for what is being surrendered and why.
+	 *
+	 * <p>Modelled on {@link #openSlotChest} rather than {@link #openThemedChest}
+	 * because the Toll is PAID, just not in coin. It therefore keeps pity, shiny
+	 * and hologram rolls exactly as a bought chest has them: a player handing over
+	 * a veteran card is taking a real gamble, and a pull that could never come back
+	 * shiny would make the Toll strictly a downgrade machine. The one thing it
+	 * drops is the jackpot upgrade, which is meaningless when the pool is one
+	 * ladder deep.
+	 *
+	 * @param tierKey        the ladder to draw from, or null for the untiered band.
+	 *                       Null is mapped to {@link RollOdds#UNTIERED} on the way
+	 *                       in so that a non-null value can mean "this is a Toll
+	 *                       pull" all the way down without a second flag.
+	 * @param spentCardUuid  the card being handed over, still owned at this instant.
+	 *                       Excluded from the duplicate test for this roll only —
+	 *                       see {@link #ownedKeys(GachaState, String)}.
+	 * @return the dealt open, or null when nothing was taken (a reveal already in
+	 *         flight, or the card database not ready). TollService treats null as
+	 *         "nothing happened" and leaves the week unspent, so this must never
+	 *         return null after having changed anything.
+	 */
+	@Nullable
+	public synchronized ChestOpenResult openTollChest(String tierKey, String spentCardUuid) {
+		if (pending != null || !cardDatabase.isReady())
+			return null;
+		return deal(roll(Tuning.Chest.GILDED, null, null, 0, null,
+			tierKey == null ? RollOdds.UNTIERED : tierKey, spentCardUuid),
+			CeremonyBus.Type.CHEST_OPEN);
 	}
 
 	/**
@@ -307,7 +349,7 @@ public class ChestService {
 	 * blob over it would silently destroy one the player paid for; and rolling
 	 * before the card database is ready would draw from an empty pool.
 	 */
-	static boolean firstColoursDue(@Nullable GachaState state, boolean revealPending, boolean dbReady) {
+	static boolean firstColoursDue(GachaState state, boolean revealPending, boolean dbReady) {
 		return state != null
 			&& state.isFirstColoursChestOwed()
 			&& !revealPending
@@ -331,16 +373,15 @@ public class ChestService {
 	 * recoverPending() to finish the job.
 	 */
 	@Nullable
-	public synchronized ChestOpenResult openFirstColoursChest(@Nullable Set<Integer> preferredCardIds) {
+	public synchronized ChestOpenResult openFirstColoursChest(Set<Integer> preferredCardIds) {
 		GachaState state = stateService.get();
-		if (!firstColoursDue(state, pending != null, cardDatabase.isReady())) {
+		if (!firstColoursDue(state, pending != null, cardDatabase.isReady()))
 			return null;
-		}
 		Predicate<CardDefinition> require =
 			preferredCardIds == null || preferredCardIds.isEmpty()
 				? null
 				: c -> preferredCardIds.contains(c.getCardId());
-		ChestOpenResult result = roll(Tuning.Chest.RUSTY, null, null, 0, require);
+		ChestOpenResult result = roll(Tuning.Chest.RUSTY, null, null, 0, require, null, null);
 		pending = result;
 		rerollUsedThisReveal = false;
 		final String blob = gson.toJson(result);
@@ -358,9 +399,10 @@ public class ChestService {
 	 * Every caller that has nothing to steer passes an explicit null; the
 	 * convenience overload that used to hide it was pure budget.
 	 */
-	ChestOpenResult roll(Tuning.Chest tier, @Nullable String themedSetTag,
-		@Nullable GearSlot targetSlot, long price,
-		@Nullable Predicate<CardDefinition> require) {
+	ChestOpenResult roll(Tuning.Chest tier, String themedSetTag,
+		GearSlot targetSlot, long price,
+		Predicate<CardDefinition> require,
+		String tollTierKey, String excludeCardUuid) {
 		GachaState state = stateService.get();
 		int opensSinceEpic = state == null ? 0 : state.getOpensSinceEpic();
 		boolean rusty = tier == Tuning.Chest.RUSTY;
@@ -381,7 +423,11 @@ public class ChestService {
 		// themed, slot-targeted or Rusty chest still consumes no RNG here, exactly
 		// as the nested ifs this replaces did. Move it earlier and every fixed-seed
 		// test shifts.
-		boolean jackpot = themedSetTag == null && targetSlot == null && !rusty
+		// tollTierKey joins the exclusions for the same reason targetSlot is here:
+		// a pull that must come from ONE tier ladder has nothing to upgrade INTO,
+		// and the && short-circuit keeps it consuming no RNG, so no fixed-seed
+		// test moves.
+		boolean jackpot = themedSetTag == null && targetSlot == null && tollTierKey == null && !rusty
 			&& rng.chance(Tuning.JACKPOT_CHANCE);
 		// Chest is declared RUSTY, BATTERED, GILDED, ORNATE, so ordinal + 1 IS the
 		// one-tier promotion: BATTERED -> GILDED, GILDED -> ORNATE, the only two
@@ -392,7 +438,9 @@ public class ChestService {
 		Tuning.Chest effective = jackpot && tier != Tuning.Chest.ORNATE
 			? Tuning.Chest.values()[tier.ordinal() + 1]
 			: tier;
-		int cardCount = targetSlot != null ? 1 : Tuning.CHEST_CARDS.get(effective);
+		int cardCount = targetSlot != null || tollTierKey != null
+			? 1
+			: Tuning.CHEST_CARDS.get(effective);
 		if (jackpot && tier == Tuning.Chest.ORNATE) {
 			cardCount++; // ornate jackpot: 4th card
 		}
@@ -406,7 +454,7 @@ public class ChestService {
 			: 0;
 
 		List<CardDefinition> pool = poolFor(targetSlot == null ? null : targetSlot.name(),
-			themedSetTag, rusty, state);
+			themedSetTag, rusty, state, tollTierKey);
 
 		// themed chests roll no variants at all (unchanged); Rusty rolls no
 		// holograms (too grand for the starter box) but shiny at a juiced rate
@@ -414,7 +462,7 @@ public class ChestService {
 		double shinyChance = themedSetTag != null ? 0
 			: (rusty ? Tuning.RUSTY_SHINY_CHANCE : Tuning.SHINY_CHANCE);
 		int shinyAttempts = blessed ? 2 : 1;
-		Set<String> ownedKeys = ownedKeys(state);
+		Set<String> ownedKeys = ownedKeys(state, excludeCardUuid);
 		List<RolledSlot> slots = new ArrayList<>(cardCount);
 		for (int i = 0; i < cardCount; i++) {
 			// The ternary on `rarity` is load-bearing, not cosmetic: it
@@ -436,7 +484,7 @@ public class ChestService {
 			&& rng.chance(Tuning.DEED_CHANCE.getOrDefault(tier, 0.0));
 
 		return new ChestOpenResult(tier, effective, jackpot, pityBreak, deed, themedSetTag,
-			targetSlot == null ? null : targetSlot.name(), slots, price, blessed);
+			targetSlot == null ? null : targetSlot.name(), slots, price, blessed, tollTierKey);
 	}
 
 	Rarity rollRarity(double[] odds, double pityBonusPercent) {
@@ -455,9 +503,8 @@ public class ChestService {
 		double cumulative = 0;
 		for (int i = 0; i < adjusted.length; i++) {
 			cumulative += adjusted[i];
-			if (roll < cumulative) {
+			if (roll < cumulative)
 				return Rarity.values()[i];
-			}
 		}
 		return Rarity.COMMON;
 	}
@@ -469,7 +516,7 @@ public class ChestService {
 
 	RolledSlot rollSlot(List<CardDefinition> pool, Rarity rarity, boolean hologramsAllowed,
 		double shinyChance, int shinyAttempts, Set<String> ownedKeys,
-		@Nullable Predicate<CardDefinition> require) {
+		Predicate<CardDefinition> require) {
 		// hologram replaces the card entirely
 		if (hologramsAllowed && !cardDatabase.holograms().isEmpty() && rng.chance(Tuning.HOLOGRAM_CHANCE)) {
 			HologramDefinition holo = pickHologram();
@@ -507,7 +554,7 @@ public class ChestService {
 	 * seed moves.
 	 */
 	CardDefinition pickCardOfRarity(List<CardDefinition> pool, Rarity rarity,
-		@Nullable Predicate<CardDefinition> require) {
+		Predicate<CardDefinition> require) {
 		RollBucket bucket = bucketFor(pool, rarity, require);
 		return bucket.isLeaned() ? pickLeaned(bucket.getCards()) : rng.pick(bucket.getCards());
 	}
@@ -531,7 +578,7 @@ public class ChestService {
 	 * candidates falls back to the next one below it, never above.
 	 */
 	RollBucket bucketFor(List<CardDefinition> pool, Rarity rarity,
-		@Nullable Predicate<CardDefinition> require) {
+		Predicate<CardDefinition> require) {
 		for (int pass = 0; pass < 2; pass++) {
 			final boolean gate = pass == 0 && !rarity.atLeast(Rarity.EPIC);
 			for (int r = rarity.ordinal(); r >= 0; r--) {
@@ -578,9 +625,8 @@ public class ChestService {
 			weights[i] = RollOdds.leanWeight(now);
 			total += weights[i];
 		}
-		if (wieldable == 0 || wieldable == candidates.size()) {
+		if (wieldable == 0 || wieldable == candidates.size())
 			return rng.pick(candidates);
-		}
 		return candidates.get(RollOdds.weightedIndex(rng.nextDouble() * total, weights));
 	}
 
@@ -591,10 +637,9 @@ public class ChestService {
 	 * bound must stay bit-identical to the unconstrained build.
 	 */
 	static List<CardDefinition> constrained(List<CardDefinition> candidates,
-		@Nullable Predicate<CardDefinition> require) {
-		if (require == null || candidates.isEmpty()) {
+		Predicate<CardDefinition> require) {
+		if (require == null || candidates.isEmpty())
 			return candidates;
-		}
 		List<CardDefinition> narrowed = candidates.stream()
 			.filter(require)
 			.collect(Collectors.toList());
@@ -608,7 +653,7 @@ public class ChestService {
 	 * clamp on the tier ladders, not a hard wieldability guarantee. Shared by
 	 * roll() and rerollSlot() so the two can never drift.
 	 */
-	private List<CardDefinition> rustyPool(@Nullable GachaState state) {
+	private List<CardDefinition> rustyPool(GachaState state) {
 		Set<String> deeded = state == null || state.getDeededSlots() == null
 			? Set.of() : state.getDeededSlots();
 		return cardDatabase.all().values().stream()
@@ -636,10 +681,28 @@ public class ChestService {
 	 * empty themed/slot-targeted pool from an rng.pick crash into the same fallback
 	 * the open itself would have taken.
 	 */
-	private List<CardDefinition> poolFor(@Nullable String targetSlot, @Nullable String themedSetTag,
-		boolean rusty, @Nullable GachaState state) {
+	private List<CardDefinition> poolFor(String targetSlot, String themedSetTag,
+		boolean rusty, GachaState state, String tollTierKey) {
 		List<CardDefinition> pool;
-		if (targetSlot != null) {
+		if (tollTierKey != null) {
+			// The Toll's tier ladder. RollOdds.UNTIERED ("") is the band for cards
+			// whose definition carries no tier at all, matching the convention
+			// RollOdds.bandKeyOf already uses — which is why the empty string can
+			// stand in for null here without a second flag saying "this is a toll".
+			//
+			// Routing this through openThemedChest(tierKey) instead would look
+			// equivalent and silently is not: setMembers() knows set tags, not tier
+			// keys, so it returns empty, the guard below "falls back to all cards",
+			// and the player who surrendered a veteran card gets an ordinary chest
+			// with no sign anything went wrong.
+			boolean untiered = RollOdds.UNTIERED.equals(tollTierKey);
+			pool = cardDatabase.all().values().stream()
+				.filter(c -> untiered
+					? c.getTierKey() == null
+					: tollTierKey.equals(c.getTierKey()))
+				.collect(Collectors.toList());
+		}
+		else if (targetSlot != null) {
 			GearSlot slot = GearSlot.valueOf(targetSlot);
 			pool = cardDatabase.all().values().stream()
 				.filter(c -> c.getSlot() == slot)
@@ -677,9 +740,8 @@ public class ChestService {
 			return true; // untiered gear (or headless tests) is never proximity-gated
 		}
 		String ladder = tierTable.ladderOf(card.getTierKey());
-		if (ladder == null) {
+		if (ladder == null)
 			return true;
-		}
 		switch (ladder) {
 			case "metal":
 				RangedMetal ranged = rangedMetal.of(card.getName());
@@ -810,9 +872,8 @@ public class ChestService {
 		Map<RollOdds.TierBand, SortedSet<String>> namesByBand = new HashMap<>();
 		for (Rarity rarity : Rarity.values()) {
 			double share = rarityShare[rarity.ordinal()];
-			if (share <= 0) {
+			if (share <= 0)
 				continue;
-			}
 			RollBucket bucket = bucketFor(pool, rarity, null);
 			List<CardDefinition> cards = bucket.getCards();
 			boolean[] flags = new boolean[cards.size()];
@@ -838,9 +899,8 @@ public class ChestService {
 		double untieredTotal = 0;
 		for (Map.Entry<RollOdds.TierBand, Double> entry : totals.entrySet()) {
 			double probability = entry.getValue();
-			if (probability <= 0) {
+			if (probability <= 0)
 				continue;
-			}
 			RollOdds.TierBand band = entry.getKey();
 			boolean untiered = RollOdds.UNTIERED.equals(band.getTierKey());
 			if (untiered) {
@@ -882,23 +942,25 @@ public class ChestService {
 	/** Spend a reroll token to re-flip one slot; returns the new slot or null. */
 	@Nullable
 	public synchronized RolledSlot rerollSlot(int slotIndex) {
-		if (!canReroll(slotIndex)) {
+		if (!canReroll(slotIndex))
 			return null;
-		}
 		GachaState state = stateService.get();
 		stateService.mutate(s -> s.withRerollTokens(s.getRerollTokens() - 1));
 		rerollUsedThisReveal = true;
 
 		boolean rusty = pending.getPurchasedTier() == Tuning.Chest.RUSTY;
+		// A Toll pull rerolls back into its OWN ladder — the tier is what the
+		// player surrendered a card for, so a reroll that escaped it would be a
+		// second chest rather than a second draw.
 		List<CardDefinition> pool = poolFor(pending.getTargetSlot(), pending.getThemedSetTag(),
-			rusty, state);
+			rusty, state, pending.getTollTierKey());
 		boolean hologramsAllowed = pending.getThemedSetTag() == null && !rusty;
 		double shinyChance = pending.getThemedSetTag() != null ? 0
 			: (rusty ? Tuning.RUSTY_SHINY_CHANCE : Tuning.SHINY_CHANCE);
 		int shinyAttempts = pending.isStardustBlessed() ? 2 : 1;
 		Rarity rarity = rollRarity(Tuning.CHEST_ODDS.get(pending.getEffectiveTier()), 0);
 		RolledSlot fresh = rollSlot(pool, rarity, hologramsAllowed, shinyChance, shinyAttempts,
-			ownedKeys(state));
+			ownedKeys(state, null));
 
 		List<RolledSlot> slots = new ArrayList<>(pending.getSlots());
 		slots.set(slotIndex, fresh);
@@ -931,9 +993,8 @@ public class ChestService {
 
 	/** Apply the pending open to state. Returns GC gained from duplicates. */
 	public synchronized long commitPending() {
-		if (pending == null) {
+		if (pending == null)
 			return 0;
-		}
 		ChestOpenResult result = pending;
 		pending = null;
 
@@ -1049,12 +1110,31 @@ public class ChestService {
 
 	// --- Helpers ---
 
-	static Set<String> ownedKeys(@Nullable GachaState state) {
+	/**
+	 * The duplicate-test keys for everything the player owns, optionally blind to
+	 * ONE card by uuid. Callers with nothing to exclude pass an explicit null; the
+	 * one-argument convenience overload that used to hide it had a single caller
+	 * and was pure budget.
+	 *
+	 * <p>The exclusion exists for the Toll (see {@link #openTollChest}), which
+	 * deals its pull while the surrendered card is still in the album — that
+	 * ordering is deliberate, so a client that dies mid-purchase cannot take the
+	 * card and hand back nothing. Without the exclusion the surrendered card would
+	 * count as a duplicate of itself, and since the pull is drawn from that card's
+	 * OWN tier ladder the collision is common rather than a tail case.
+	 *
+	 * <p>Skipping by UUID rather than by key is what keeps a second copy honest: a
+	 * player holding two of the same card who pays one of them still has the other
+	 * in this set, so the pull correctly reads as a duplicate. Removing the KEY
+	 * instead would quietly hand them a free non-dupe.
+	 */
+	static Set<String> ownedKeys(GachaState state, String excludeUuid) {
 		Set<String> keys = new HashSet<>();
-		if (state == null) {
+		if (state == null)
 			return keys;
-		}
 		for (OwnedCard card : state.getOwnedCards()) {
+			if (excludeUuid != null && excludeUuid.equals(card.getUuid()))
+				continue;
 			if (card.isHologram()) {
 				keys.add("H:" + card.getTierKey());
 			}

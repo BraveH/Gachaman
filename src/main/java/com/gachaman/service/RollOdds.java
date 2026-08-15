@@ -85,9 +85,8 @@ public final class RollOdds {
 		double cumulative = 0;
 		for (int i = 0; i < weights.length; i++) {
 			cumulative += weights[i];
-			if (roll < cumulative) {
+			if (roll < cumulative)
 				return i;
-			}
 		}
 		return weights.length - 1;
 	}
@@ -99,9 +98,8 @@ public final class RollOdds {
 			total += w;
 		}
 		double[] out = new double[weights.length];
-		if (total <= 0) {
+		if (total <= 0)
 			return out;
-		}
 		for (int i = 0; i < weights.length; i++) {
 			out[i] = weights[i] / total;
 		}
@@ -118,18 +116,16 @@ public final class RollOdds {
 	public static Map<TierBand, Double> tierShares(List<CardDefinition> candidates,
 		boolean[] wieldableNow, boolean leaned) {
 		Map<TierBand, Double> shares = new LinkedHashMap<>();
-		if (candidates.isEmpty()) {
+		if (candidates.isEmpty())
 			return shares;
-		}
 		double[] weights = new double[candidates.size()];
 		double total = 0;
 		for (int i = 0; i < candidates.size(); i++) {
 			weights[i] = leaned ? leanWeight(wieldableNow[i]) : 1.0;
 			total += weights[i];
 		}
-		if (total <= 0) {
+		if (total <= 0)
 			return shares;
-		}
 		for (int i = 0; i < candidates.size(); i++) {
 			shares.merge(bandOf(candidates.get(i), wieldableNow[i]), weights[i] / total,
 				Double::sum);

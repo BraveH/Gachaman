@@ -55,14 +55,30 @@ public class TaskServiceDossierTest
 		CreditSink creditSink = new CreditSink(stateService);
 		complianceService = new ComplianceService(stateService, creditSink, null, null);
 		CeremonyBus ceremonyBus = new CeremonyBus();
-		StyleService styleService = new StyleService(stateService, complianceService, ceremonyBus,
+		StyleService styleService = StyleFixture.styleService(stateService, complianceService, ceremonyBus,
 			new GachaRng(1L));
 		com.gachaman.data.MonsterTable monsterTable =
 			com.gachaman.data.MonsterTable.load(new com.google.gson.Gson());
+		// One test here tips the style cycle, and a due roll now goes through the
+		// Consignment rather than straight to the wheel. This one declines to make
+		// an offer (the card database reports itself not ready, which is the honest
+		// answer for a harness that has none) and so takes the ordinary roll —
+		// exactly what these assertions were written against.
+		ConsignmentService consignment = new ConsignmentService(stateService, styleService,
+			null, new com.gachaman.data.CardDatabase(null, null, null, null, null)
+			{
+				@Override
+				public boolean isReady()
+				{
+					return false;
+				}
+			}, ceremonyBus);
 		taskService = new TaskService(null, stateService, creditSink, complianceService,
 			styleService, ceremonyBus, new GachaRng(1L), monsterTable,
 			// null Client already means these tests never reach rollOffers()
-			null, null);
+			null, null,
+			// no contract here pays per kill, so the weapon pair is never read
+			null, null, consignment);
 		taskService.addListener(new TaskService.Listener()
 		{
 			@Override

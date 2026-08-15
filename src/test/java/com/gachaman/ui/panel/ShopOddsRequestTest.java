@@ -54,7 +54,7 @@ public class ShopOddsRequestTest
 		// collaborator is null, chestService (the second argument) included — that
 		// null IS the failure this test reproduces.
 		ShopTab tab = new ShopTab(new GachaStateService(null), null, null, null, null, null,
-			clientThread, null);
+			clientThread, null, null, null);
 
 		Assert.assertTrue("the null chestService should have thrown inside the job",
 			fireAndCatch(tab));
@@ -75,7 +75,7 @@ public class ShopOddsRequestTest
 	{
 		InlineClientThread clientThread = new InlineClientThread();
 		ShopTab tab = new ShopTab(new GachaStateService(null), null, null, null, null, null,
-			clientThread, null);
+			clientThread, null, null, null);
 
 		fireAndCatch(tab);
 		drainEdt();

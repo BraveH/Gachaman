@@ -27,14 +27,12 @@ public class TaskNpcHighlightOverlay extends Overlay {
 
 	@Override
 	public Dimension render(Graphics2D graphics) {
-		if (!config.highlightTaskNpc()) {
+		if (!config.highlightTaskNpc())
 			return null;
-		}
 		GachaState state = stateService.get();
 		ActiveTask task = state == null ? null : state.getActiveTask();
-		if (task == null) {
+		if (task == null)
 			return null;
-		}
 		// One left: the contract's biggest moment used to be a surprise, because
 		// the golden burst fires AFTER the final kill lands. Marking the targets
 		// that can finish it turns the last stretch into a hunt instead — you see
@@ -47,9 +45,8 @@ public class TaskNpcHighlightOverlay extends Overlay {
 		Color fill = new Color(color.getRed(), color.getGreen(), color.getBlue(), lastOne ? 60 : 30);
 		graphics.setStroke(new BasicStroke(2f));
 		for (NPC npc : client.getTopLevelWorldView().npcs()) {
-			if (npc == null) {
+			if (npc == null)
 				continue;
-			}
 			String name = npc.getName();
 			if (name == null || !Text.removeTags(name).equalsIgnoreCase(task.getMonsterName())
 				|| npc.isDead()) {

@@ -1,0 +1,71 @@
+{
+  "note": "Authored by com.gachaman.tools.LoadoutBoard from SpriteID.EQUIPMENT_SLOT_* constants. Do not hand-edit: LoadoutBoardResourceTest pins this file to those constants. \u0027col\u0027 is an index into the overlay\u0027s three-column layout (0 left, 1 middle, 2 right), not an absolute x — the columns are derived from BOARD_W and SOCKET.",
+  "sockets": {
+    "HEAD": {
+      "col": 1,
+      "row": 0,
+      "y": 28,
+      "sprite": 156
+    },
+    "CAPE": {
+      "col": 0,
+      "row": 1,
+      "y": 72,
+      "sprite": 157
+    },
+    "AMULET": {
+      "col": 1,
+      "row": 1,
+      "y": 72,
+      "sprite": 158
+    },
+    "AMMO": {
+      "col": 2,
+      "row": 1,
+      "y": 72,
+      "sprite": 166
+    },
+    "WEAPON": {
+      "col": 0,
+      "row": 2,
+      "y": 116,
+      "sprite": 159
+    },
+    "BODY": {
+      "col": 1,
+      "row": 2,
+      "y": 116,
+      "sprite": 161
+    },
+    "SHIELD": {
+      "col": 2,
+      "row": 2,
+      "y": 116,
+      "sprite": 162
+    },
+    "LEGS": {
+      "col": 1,
+      "row": 3,
+      "y": 160,
+      "sprite": 163
+    },
+    "HANDS": {
+      "col": 0,
+      "row": 4,
+      "y": 204,
+      "sprite": 164
+    },
+    "FEET": {
+      "col": 1,
+      "row": 4,
+      "y": 204,
+      "sprite": 165
+    },
+    "RING": {
+      "col": 2,
+      "row": 4,
+      "y": 204,
+      "sprite": 160
+    }
+  }
+}

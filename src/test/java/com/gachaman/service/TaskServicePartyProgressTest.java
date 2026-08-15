@@ -104,12 +104,17 @@ public class TaskServicePartyProgressTest
 			new ComplianceService(stateService, creditSink, null, null);
 		CeremonyBus ceremonyBus = new CeremonyBus();
 		StyleService styleService =
-			new StyleService(stateService, complianceService, ceremonyBus, new GachaRng(1L));
+			StyleFixture.styleService(stateService, complianceService, ceremonyBus, new GachaRng(1L));
 		taskService = new TaskService(null, stateService, creditSink, complianceService,
 			styleService, ceremonyBus, new GachaRng(1L),
 			MonsterTable.load(new com.google.gson.Gson()),
 			// null Client already means these tests never reach rollOffers()
-			null, null);
+			null, null,
+			// The three collaborators added with the Preferred Weapon and the
+			// Consignment are unwired here: no contract in this file pays per kill,
+			// so the award branch (the only reader of the weapon pair) is never
+			// reached, and no completion here tips the style cycle.
+			null, null, null);
 	}
 
 	/**

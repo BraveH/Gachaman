@@ -26,9 +26,8 @@ public enum GearSlot {
 
 	public static GearSlot fromSlotIndex(int index) {
 		for (GearSlot s : values()) {
-			if (s.slotIndex == index) {
+			if (s.slotIndex == index)
 				return s;
-			}
 		}
 		return null;
 	}

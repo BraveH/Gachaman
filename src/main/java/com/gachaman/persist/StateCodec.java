@@ -43,9 +43,8 @@ public class StateCodec {
 	 * and whichever wins is still decoded (and so still verified) properly.
 	 */
 	public long savedAt(String blob) {
-		if (blob == null || blob.isEmpty()) {
+		if (blob == null || blob.isEmpty())
 			return 0;
-		}
 		try {
 			JsonObject envelope = gson.fromJson(gunzipBase64(blob), JsonObject.class);
 			return envelope.has("savedAtMs") ? envelope.get("savedAtMs").getAsLong() : 0;
@@ -57,9 +56,8 @@ public class StateCodec {
 
 	/** @return decoded state, or null if the blob is missing/corrupt/tampered. */
 	public GachaState decode(String blob) {
-		if (blob == null || blob.isEmpty()) {
+		if (blob == null || blob.isEmpty())
 			return null;
-		}
 		try {
 			String json = gunzipBase64(blob);
 			JsonObject envelope = gson.fromJson(json, JsonObject.class);

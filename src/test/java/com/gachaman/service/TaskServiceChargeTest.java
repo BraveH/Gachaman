@@ -49,14 +49,19 @@ public class TaskServiceChargeTest
 		creditSink = new CreditSink(stateService);
 		ComplianceService complianceService = new ComplianceService(stateService, creditSink, null, null);
 		CeremonyBus ceremonyBus = new CeremonyBus();
-		StyleService styleService = new StyleService(stateService, complianceService, ceremonyBus,
+		StyleService styleService = StyleFixture.styleService(stateService, complianceService, ceremonyBus,
 			new GachaRng(1L));
 		com.gachaman.data.MonsterTable monsterTable =
 			com.gachaman.data.MonsterTable.load(new com.google.gson.Gson());
 		taskService = new TaskService(null, stateService, creditSink, complianceService,
 			styleService, ceremonyBus, new GachaRng(1L), monsterTable,
 			// null Client already means these tests never reach rollOffers()
-			null, null);
+			null, null,
+			// The three collaborators added with the Preferred Weapon and the
+			// Consignment are unwired here: no contract in this file pays per kill,
+			// so the award branch (the only reader of the weapon pair) is never
+			// reached, and no completion here tips the style cycle.
+			null, null, null);
 	}
 
 	private void seed(long gc, int compactors, int extenders, boolean withTask)

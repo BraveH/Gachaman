@@ -156,25 +156,19 @@ public class PatronsTab extends JPanel {
 	 * "shared -3 days ago" is the only answer here that is certainly wrong.
 	 */
 	static String ago(long then, long now) {
-		if (then <= 0) {
+		if (then <= 0)
 			return "";
-		}
 		long days = Math.max(0, now - then) / DAY_MS;
-		if (days <= 0) {
+		if (days <= 0)
 			return "today";
-		}
-		if (days == 1) {
+		if (days == 1)
 			return "yesterday";
-		}
-		if (days < 7) {
+		if (days < 7)
 			return days + "d ago";
-		}
-		if (days < 30) {
+		if (days < 30)
 			return (days / 7) + "w ago";
-		}
-		if (days < 365) {
+		if (days < 365)
 			return (days / 30) + "mo ago";
-		}
 		return (days / 365) + "y ago";
 	}
 

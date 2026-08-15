@@ -70,11 +70,22 @@ public final class Tuning {
 	public static final double KILL_RATIO_LINEAR = 1.5;
 	public static final double KILL_RATIO_QUAD = 0.75;
 	/**
-	 * Was 5.0. A 5x ceiling on punching up was the other half of the runaway:
-	 * against the retired low-level bonus it compounded to 12x on the base
-	 * before the combo was even counted.
+	 * Was 5.0, then 2.5. A 5x ceiling on punching up was the other half of the
+	 * runaway: against the retired low-level bonus it compounded to 12x on the
+	 * base before the combo was even counted.
+	 *
+	 * <p>The drop from 2.5 is a literal no-op for every SOLO kill and always
+	 * was — the clamp first bites at ratio 1.693, but a contract sizes its
+	 * monster to at most INSANE's 1.35 fraction of the player's combat level,
+	 * which tops out at 1.7169. The one live path to the clamp is a PARTY
+	 * CARRY: the award reads the LOCAL player's combat level while a party
+	 * contract sizes its monster to the party average, so a cb-30 member
+	 * carried in a cb-90 party can fight ratio 4.0 and clamp. Left at 2.5 that
+	 * path pays the weapon bonus on top of a 4x, on the account least able to
+	 * have earned it. See KillDiffCapTest, which pins the no-op claim over
+	 * every pair the generator can actually produce.
 	 */
-	public static final double KILL_DIFF_CAP = 2.5;
+	public static final double KILL_DIFF_CAP = 1.75;
 
 	/*
 	 * There is deliberately no low-level compensation multiplier here any more.
@@ -102,7 +113,8 @@ public final class Tuning {
 	 *
 	 * <p>Every base in {@link #PER_KILL_GC} is a multiple of 4, so a quarter
 	 * step always lands on a whole number of GC and the ladder needs no
-	 * rounding of its own.
+	 * rounding of its own — EXCEPT when {@link #WEAPON_BONUS_MULT} is live,
+	 * which is a deliberate, owner-chosen exception; see that constant.
 	 */
 	public static final int COMBO_IDLE_RESET_TICKS = 50;   // ~30 seconds
 	public static final int COMBO_MAX_STACKS = 6;
@@ -120,6 +132,35 @@ public final class Tuning {
 		return 1.0 + COMBO_STACK_STEP * Math.max(0, Math.min(COMBO_MAX_STACKS, stacks));
 	}
 
+	/**
+	 * The Preferred Weapon: the wheel names a weapon CATEGORY alongside the
+	 * style, and a compliant kill landed with that category in hand pays this
+	 * much more. Multiplicative on the whole per-kill award, deliberately —
+	 * folded in additively it would be worth only +31% at the attainable
+	 * ceiling, and a bonus the interface calls "1.5x" while the player measures
+	 * +31% is a lie. The runaway argument that forced the combat-level bonus
+	 * and the combo to ADD does not transfer: those two are the same kind of
+	 * term scaling the same base for the same reason, while the weapon is a
+	 * different axis — HOW you fight, not who you fight or how steadily — and
+	 * it is self-limiting because the named category usually costs DPS.
+	 *
+	 * <p>Per-kill only, never on completion. The category is sampled at the
+	 * killing blow (see StyleTracker's cached judgement), so the bonus is
+	 * verifiable against the kill that earned it; a completion bonus would be
+	 * decided by whatever happened to be equipped at the end and could be had
+	 * by swapping in the preferred weapon for the final kill alone.
+	 *
+	 * <p>1.5 breaks the whole-GC ladder above, knowingly: it needs base x mult
+	 * to stay a multiple of 4, and with the smallest base at 4 that admits only
+	 * WHOLE multipliers — 1.25, 1.5 and 1.75 all go lumpy, and only 2.0 and 3.0
+	 * do not. The owner chose 1.5 with that named. EASY at an even match
+	 * therefore reads 6, 8, 9, 11, 12, 14, 15 up the combo ladder rather than
+	 * stepping evenly, and WeaponBonusTest pins exactly that so it stays a
+	 * decision rather than becoming a bug report. Any level gap at all already
+	 * makes the total fractional, so this is visible only on an even match.
+	 */
+	public static final double WEAPON_BONUS_MULT = 1.5;
+
 	public static double killCbMultiplier(int playerCb, int npcCb) {
 		int diff = npcCb - playerCb;
 		if (diff >= 0) {
@@ -129,9 +170,8 @@ public final class Tuning {
 				+ over * over * KILL_RATIO_QUAD;
 			return Math.min(KILL_DIFF_CAP, mult);
 		}
-		if (diff >= -KILL_DIFF_GRACE) {
+		if (diff >= -KILL_DIFF_GRACE)
 			return 1.0;
-		}
 		return Math.max(KILL_DIFF_FLOOR, 1.0 + (diff + KILL_DIFF_GRACE) * KILL_DIFF_UNDER_RATE);
 	}
 
@@ -162,13 +202,11 @@ public final class Tuning {
 	 * contract a player ever finishes is the one that pays x2.5.
 	 */
 	public static double completionMilestoneMult(int taskNumber) {
-		if (taskNumber <= 0) {
+		if (taskNumber <= 0)
 			return 1.0;
-		}
 		for (int i = 0; i < COMPLETION_MILESTONES.length; i++) {
-			if (taskNumber % COMPLETION_MILESTONES[i] == 0) {
+			if (taskNumber % COMPLETION_MILESTONES[i] == 0)
 				return COMPLETION_MILESTONE_MULT[i];
-			}
 		}
 		return 1.0;
 	}
@@ -520,15 +558,12 @@ public final class Tuning {
 	 * corrupt or absent record paints nothing rather than inventing history.
 	 */
 	public static CardWear cardWear(int killsServed) {
-		if (killsServed >= WEAR_SHATTERED_KILLS) {
+		if (killsServed >= WEAR_SHATTERED_KILLS)
 			return CardWear.SHATTERED;
-		}
-		if (killsServed >= WEAR_CRACKED_KILLS) {
+		if (killsServed >= WEAR_CRACKED_KILLS)
 			return CardWear.CRACKED;
-		}
-		if (killsServed >= WEAR_HAIRLINE_KILLS) {
+		if (killsServed >= WEAR_HAIRLINE_KILLS)
 			return CardWear.HAIRLINE;
-		}
 		return CardWear.NONE;
 	}
 
@@ -550,5 +585,42 @@ public final class Tuning {
 			default:
 				return 0;
 		}
+	}
+
+	/**
+	 * What share of a contract's pay is the PER-KILL half, as a fraction of the
+	 * two halves together.
+	 *
+	 * <p>Here because two files were deriving it independently and agreeing only
+	 * by luck. {@link #WEAPON_BONUS_MULT} multiplies kill GC and nothing else, so
+	 * this single number is the whole of what the Preferred Weapon is worth — and
+	 * both the Overview panel (which prints it against the contract in hand) and
+	 * the reveal ceremony's weapon caption (which prints it for a difficulty's
+	 * base rates) have to answer with it. Two correct derivations in two files is
+	 * not a shared answer; it is two answers that happen to match until one of
+	 * them is edited.
+	 *
+	 * <p>Callers keep their own final step, which is the honest division of
+	 * labour: the panel wants the fraction twice (once as a percentage of the
+	 * contract, once scaled by {@code WEAPON_BONUS_MULT - 1} into a break-even
+	 * slack), while the caption wants only the second. What must not differ — and
+	 * now cannot — is the ratio itself.
+	 *
+	 * <p>Doubles rather than the panel's three ints because the caption's kill
+	 * count is a midpoint and lands on x.5 for an odd band. The negative clamp
+	 * stays: a completion bonus below zero is not a thing the generator produces,
+	 * but a hand-edited or migrated save can hold one, and treating it as zero is
+	 * what the panel already did.
+	 *
+	 * @param killGc      base per-kill GC times the quota — never the combo, the
+	 *                    level gap or the party pool, none of which is a term of
+	 *                    the contract
+	 * @param completionGc the completion bonus, likewise at its base rate
+	 * @return the kill share in 0..1, and 0 for a contract that pays nothing at
+	 *         all rather than a NaN from 0/0
+	 */
+	public static double killShare(double killGc, double completionGc) {
+		double total = killGc + Math.max(0, completionGc);
+		return total <= 0 ? 0 : killGc / total;
 	}
 }

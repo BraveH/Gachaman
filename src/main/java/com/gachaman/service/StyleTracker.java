@@ -66,10 +66,60 @@ public class StyleTracker {
 	 * contradiction provable.
 	 */
 	private static final int PARDON_WINDOW_TICKS = 5;
+	/**
+	 * How long a weapon sample is kept.
+	 *
+	 * <p>Sized against the KILL path, not the pardon window, because that is who
+	 * reads it: KillTracker holds every kill back for the loot oracle and emits it
+	 * up to PENDING_TIMEOUT_TICKS (30) after the death. A sample has to outlive
+	 * that whole window or the award would find nothing and quietly pay no bonus
+	 * for a kill that genuinely earned one — and "quietly" is the problem, since a
+	 * missing bonus looks exactly like a bonus the player never qualified for.
+	 */
+	private static final int WEAPON_SAMPLE_TTL_TICKS = 40;
+	/**
+	 * Hard cap, the same belt-and-braces {@link #MAX_RECENT_VERDICTS} is. At most
+	 * one judgement lands per tick (the anim path refuses a second, and the XP
+	 * fallback waits out XP_FALLBACK_QUIET_TICKS), so the TTL above already bounds
+	 * this to TTL + 1 and the cap can only bite if that invariant ever breaks.
+	 */
+	private static final int MAX_WEAPON_SAMPLES = WEAPON_SAMPLE_TTL_TICKS + 1;
 
 	/** What evidence produced a judgement. Pardons only ever touch STANCE. */
 	enum JudgementSource {
 		MARK, ANIM, STANCE, XP
+	}
+
+	/**
+	 * What was in the player's hands at one judged attack, stamped with the tick
+	 * it was read on.
+	 *
+	 * <p>The stamp is the whole value of this. A kill reaches the award code
+	 * several ticks after the killing blow, so a varbit read there reports what is
+	 * equipped NOW — and a player who swapped the preferred weapon in during the
+	 * loot-oracle window would collect a bonus the fight never earned. Sampling at
+	 * the attack and carrying the tick with it lets the award insist the sample
+	 * belongs to the kill it is paying for.
+	 *
+	 * <p>comMode rides along because the taxonomy's one pseudo-type — casting from
+	 * the autocast slot — is not a weapon category at all; see
+	 * {@link WeaponTypeService#SPELL_CAST_KEY}. Read at the same instant as the
+	 * category so the pair can never describe two different moments.
+	 *
+	 * <p>One known imprecision, accepted rather than papered over: the category
+	 * varbit updates a tick BEHIND an equip (the same lag that makes the first
+	 * cast after swapping to a staff read as melee, which is what the pardon
+	 * machinery above exists to absorb), so a sample taken on the very tick of a
+	 * swap can name the weapon just put away. It is one attack wide, it can only
+	 * ever hand out a bonus rather than withhold one, and closing it would mean
+	 * deferring the sample — which is exactly the late read this whole mechanism
+	 * exists to avoid.
+	 */
+	@Value
+	public static class WeaponSample {
+		int tick;
+		int category;
+		int comMode;
 	}
 
 	/**
@@ -158,6 +208,19 @@ public class StyleTracker {
 	 */
 	private final Deque<Verdict> recentVerdicts = new ArrayDeque<>();
 	private static final int MAX_RECENT_VERDICTS = 8;
+	/**
+	 * Weapon samples, oldest first — a deque for exactly the reason
+	 * {@link #recentVerdicts} is one, and it is worth spelling out because a
+	 * single slot looks sufficient here and is not.
+	 *
+	 * <p>The reader is the kill award, which arrives 2-30 ticks after the death.
+	 * By then the player has almost always started on the next monster, and every
+	 * one of those attacks would have overwritten a single slot with a tick past
+	 * the end of the finished kill's window. The bonus would then fail to pay on
+	 * the ordinary case — fighting continuously — and pay only when the player
+	 * stopped attacking after the kill, which is backwards.
+	 */
+	private final Deque<WeaponSample> weaponSamples = new ArrayDeque<>();
 	/** Cast-click mark: when it was set and the actor it was aimed at. */
 	private int castMarkTick = -1;
 	private Actor castMarkTarget;
@@ -205,6 +268,10 @@ public class StyleTracker {
 			// a verdict from before the hop belongs to a fight that is over; the
 			// login XP flood must not be able to pardon it
 			recentVerdicts.clear();
+			// same reasoning, and it keeps the invariant local rather than resting
+			// on "the tick counter never resets, so old samples fall out of every
+			// future window anyway" — true today, and a trap for whoever changes it
+			weaponSamples.clear();
 		}
 	}
 
@@ -240,20 +307,17 @@ public class StyleTracker {
 
 	/** Clicks that abandon a pending manual cast (widget clicks — eat, spellbook — do not). */
 	private static boolean supersedesCast(MenuAction action) {
-		if (action == null) {
+		if (action == null)
 			return false;
-		}
-		if (action == MenuAction.WALK) {
+		if (action == MenuAction.WALK)
 			return true;
-		}
 		String name = action.name();
 		return name.startsWith("NPC_") || name.startsWith("PLAYER_") || name.startsWith("GROUND_ITEM_");
 	}
 
-	private boolean castMarkActiveOn(@Nullable Actor interacting) {
-		if (castMarkTick < 0 || tick - castMarkTick > CAST_MARK_CAP_TICKS) {
+	private boolean castMarkActiveOn(Actor interacting) {
+		if (castMarkTick < 0 || tick - castMarkTick > CAST_MARK_CAP_TICKS)
 			return false;
-		}
 		if (castMarkTarget == null) {
 			// target unresolvable at click time — fall back to the old short
 			// TTL against whatever we are now interacting with
@@ -275,14 +339,12 @@ public class StyleTracker {
 	 */
 	@Subscribe
 	public void onAnimationChanged(AnimationChanged event) {
-		if (event.getActor() != client.getLocalPlayer() || tick < settleUntilTick || tick == lastJudgedTick) {
+		if (event.getActor() != client.getLocalPlayer() || tick < settleUntilTick || tick == lastJudgedTick)
 			return;
-		}
 		int animation = client.getLocalPlayer().getAnimation();
 		Actor interacting = client.getLocalPlayer().getInteracting();
-		if (animation == -1 || interacting == null) {
+		if (animation == -1 || interacting == null)
 			return;
-		}
 		if (anims("neverJudge").contains(animation)) {
 			// utility cast / consumable / block pose — not an attack, and the
 			// pending Cast mark (if any) survives untouched
@@ -381,9 +443,8 @@ public class StyleTracker {
 	private void maybePardonStanceVerdict() {
 		Verdict verdict = pardonTarget(recentVerdicts, tick, lastMeleeRangedXpTick,
 			lastUtilityMagicTick);
-		if (verdict == null) {
+		if (verdict == null)
 			return;
-		}
 		verdict.pardoned = true;
 		log.debug("style pardon: retracting {} verdict from tick {} (magic xp at tick {})",
 			verdict.style, verdict.tick, tick);
@@ -436,6 +497,7 @@ public class StyleTracker {
 
 	private void judge(AttackStyle style, JudgementSource source) {
 		lastJudgedTick = tick;
+		sampleWeapon();
 		// prune first, so the cap can only ever discard verdicts that are still
 		// young enough to matter — and at one judgement per tick over a 5-tick
 		// window it never reaches the cap in the first place
@@ -454,10 +516,89 @@ public class StyleTracker {
 		Listeners.fire(listeners, l -> l.onAttack(style, judgedTick), "attack listener failed");
 	}
 
-	private void logVerdict(int animation, AttackStyle verdict, JudgementSource source, boolean markMatch) {
-		if (!log.isDebugEnabled()) {
-			return;
+	/**
+	 * Record what the attack judged this tick was made with.
+	 *
+	 * <p>Called from {@link #judge} and deliberately NOT from
+	 * {@link #predictStyle}: the ANIM and MARK branches of
+	 * {@link #onAnimationChanged} both judge and return before predictStyle is
+	 * ever reached, so a spell-cast kill — the one whose entire verdict comes from
+	 * the animation — would never sample its own weapon and could never earn the
+	 * preference it was fought with.
+	 *
+	 * <p>On the XP-fallback path the judged tick is the tick the XP LANDED, which
+	 * for a spell is a few ticks after the cast. That is still the right evidence
+	 * to keep — it is what the player was holding while that attack resolved, and
+	 * it is the only reading available for an attack the animation path never saw.
+	 *
+	 * <p>A read that throws records NOTHING rather than a placeholder, and both
+	 * reads have to succeed before anything is pushed (the arguments are evaluated
+	 * before the call). That is the same direction every other unresolvable case
+	 * in this file takes: an unsampled attack simply pays no weapon bonus, and the
+	 * bonus is only ever additive to the player's fortunes, so failing to pay it
+	 * is a non-event where paying it for a weapon nobody can prove was in hand
+	 * would make the preference meaningless.
+	 */
+	private void sampleWeapon() {
+		try {
+			recordWeapon(tick, client.getVarbitValue(VarbitID.COMBAT_WEAPON_CATEGORY),
+				client.getVarpValue(VarPlayerID.COM_MODE));
 		}
+		catch (Exception ignored) {
+			// no client, or the varbit is unreadable — this attack goes unsampled
+		}
+	}
+
+	/**
+	 * Push one sample, pruning by age first and capping second — the same order
+	 * {@link #judge} prunes its verdicts in, and for the same reason: the cap can
+	 * then only ever discard entries that are already too old to matter.
+	 *
+	 * <p>Package-private, and separated from the client read above, so the
+	 * retention rule that kills actually depend on can be exercised without a live
+	 * Client — exactly why {@link #resolve} and {@link #shouldPardon} are pure
+	 * statics.
+	 */
+	void recordWeapon(int atTick, int category, int comMode) {
+		while (!weaponSamples.isEmpty()
+			&& atTick - weaponSamples.peekFirst().getTick() > WEAPON_SAMPLE_TTL_TICKS) {
+			weaponSamples.pollFirst();
+		}
+		weaponSamples.addLast(new WeaponSample(atTick, category, comMode));
+		while (weaponSamples.size() > MAX_WEAPON_SAMPLES) {
+			weaponSamples.pollFirst();
+		}
+	}
+
+	/**
+	 * What was in hand at the last judged attack inside [fromTick, toTick], or
+	 * null when no attack this tracker judged falls in that window.
+	 *
+	 * <p>Callers pass a kill's own [engagementStartTick, deathTick]. The NEWEST
+	 * match is returned because that is the killing blow — a player who swings
+	 * their preferred weapon for the last hit has genuinely landed the kill with
+	 * it, while one who swaps it in after the death lands outside the window and
+	 * gets nothing.
+	 *
+	 * <p>Null for a kill with no judged attack inside its own engagement — a
+	 * thrall's kill, damage dealt off-screen, a monster something else finished —
+	 * rather than the category from whatever fight came before it. That is what
+	 * makes the rule airtight instead of merely usually right.
+	 */
+	@Nullable
+	public WeaponSample weaponAt(int fromTick, int toTick) {
+		WeaponSample best = null;
+		for (WeaponSample sample : weaponSamples) {
+			if (sample.getTick() >= fromTick && sample.getTick() <= toTick) {
+				best = sample; // pushed oldest-first, so the last match is the newest
+			}
+		}
+		return best;
+	}
+
+	private void logVerdict(int animation, AttackStyle verdict, JudgementSource source, boolean markMatch) {
+		if (!log.isDebugEnabled())
+			return;
 		int category = -1;
 		int comMode = -1;
 		try {
@@ -490,14 +631,12 @@ public class StyleTracker {
 	private String styleNameFor(int category, int styleIndex) {
 		EnumComposition weaponStyles = client.getEnum(EnumID.WEAPON_STYLES);
 		int structsEnumId = weaponStyles.getIntValue(category);
-		if (structsEnumId == -1) {
+		if (structsEnumId == -1)
 			return null;
-		}
 		EnumComposition structs = client.getEnum(structsEnumId);
 		int[] structIds = structs.getIntVals();
-		if (styleIndex < 0 || styleIndex >= structIds.length) {
+		if (styleIndex < 0 || styleIndex >= structIds.length)
 			return null;
-		}
 		StructComposition struct = client.getStructComposition(structIds[styleIndex]);
 		return struct == null ? null : struct.getStringValue(ParamID.ATTACK_STYLE_NAME);
 	}

@@ -78,9 +78,8 @@ public class QuestUnlockService {
 	 * this method does not produce it.
 	 */
 	public Set<String> completedQuests() {
-		if (gatingQuests.isEmpty()) {
+		if (gatingQuests.isEmpty())
 			return Collections.emptySet();
-		}
 		int tick = client.getTickCount();
 		if (cachedAtTick != Integer.MIN_VALUE && tick - cachedAtTick < CACHE_TTL_TICKS
 			&& tick >= cachedAtTick) {

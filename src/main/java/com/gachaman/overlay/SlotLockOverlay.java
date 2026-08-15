@@ -64,29 +64,24 @@ public class SlotLockOverlay extends Overlay {
 		// Fail open, exactly as the permission check does: an unloaded save has
 		// an EMPTY deeded set, which would read as "every slot is locked" and
 		// flash eleven crosses across the tab on every login.
-		if (stateService.get() == null) {
+		if (stateService.get() == null)
 			return null;
-		}
 		// The equipment widgets can EXIST with garbage bounds outside the game
 		// view, so trust them only when the panel root and the head slot agree —
 		// the same guard the loadout button uses, for the same ghosting reason.
 		Widget root = client.getWidget(InterfaceID.Wornitems.UNIVERSE);
-		if (root == null || root.isHidden()) {
+		if (root == null || root.isHidden())
 			return null;
-		}
 		Rectangle rootBounds = root.getBounds();
-		if (rootBounds == null || rootBounds.width < 100 || rootBounds.height < 100) {
+		if (rootBounds == null || rootBounds.width < 100 || rootBounds.height < 100)
 			return null;
-		}
 		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		for (GearSlot slot : GearSlot.values()) {
-			if (permissionService.isSlotDeeded(slot)) {
+			if (permissionService.isSlotDeeded(slot))
 				continue;
-			}
 			Widget widget = client.getWidget(SLOT_WIDGETS[slot.ordinal()]);
-			if (widget == null || widget.isHidden()) {
+			if (widget == null || widget.isHidden())
 				continue;
-			}
 			Rectangle b = widget.getBounds();
 			if (b == null || b.width <= 0 || b.height <= 0
 				|| !rootBounds.contains(b.x + b.width / 2, b.y + b.height / 2)) {

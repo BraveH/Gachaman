@@ -85,9 +85,8 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener {
 
 	@Override
 	public void onKillFeedback(TaskService.KillFeedback feedback) {
-		if (feedback == null) {
+		if (feedback == null)
 			return;
-		}
 		// keep the WORLD point, not a canvas point: projecting once at spawn
 		// pinned the number to a screen pixel, so it slid off the corpse the
 		// moment the camera moved. Projection happens per frame in drawNotes.
@@ -147,9 +146,8 @@ public class KillJuiceOverlay extends Overlay implements TaskService.Listener {
 	private void drawNotes(Graphics2D g, long now) {
 		for (int i = 0; i < notes.length; i++) {
 			Note note = notes[i];
-			if (!note.active) {
+			if (!note.active)
 				continue;
-			}
 			long el = now - note.startMs;
 			long life = note.kind == KIND_BURST ? BURST_MS : FLOAT_MS;
 			if (el < 0 || el >= life) {

@@ -135,10 +135,9 @@ public class DossierTab extends JPanel {
 		return section;
 	}
 
-	private static String buildRows(@Nullable List<ContractRecord> log) {
-		if (log == null || log.isEmpty()) {
+	private static String buildRows(List<ContractRecord> log) {
+		if (log == null || log.isEmpty())
 			return "<font color='#909090'>No contracts filed yet. Complete one and it lands here.</font>";
-		}
 		StringBuilder html = new StringBuilder();
 		int shown = 0;
 		// newest first: the log is appended in completion order, so walk it back
@@ -180,21 +179,19 @@ public class DossierTab extends JPanel {
 						? " off-style kill" : " off-style kills"))
 				.append("</font></font><br/><br/>");
 		}
-		if (shown == 0) {
+		if (shown == 0)
 			return "<font color='#909090'>No contracts filed yet. Complete one and it lands here.</font>";
-		}
 		return html.toString();
 	}
 
-	private static String nameOf(@Nullable String monsterName) {
+	private static String nameOf(String monsterName) {
 		return monsterName == null || monsterName.isEmpty() ? "Unknown quarry" : monsterName;
 	}
 
 	/** Falls back to neutral for a difficulty name this build does not know. */
-	private static Color difficultyColor(@Nullable String difficulty) {
-		if (difficulty == null) {
+	private static Color difficultyColor(String difficulty) {
+		if (difficulty == null)
 			return ColorScheme.LIGHT_GRAY_COLOR;
-		}
 		try {
 			return TaskDifficulty.valueOf(difficulty).getColor();
 		}
@@ -205,10 +202,9 @@ public class DossierTab extends JPanel {
 
 	/** Null when there is no style to show, so the caller can omit the segment. */
 	@Nullable
-	private static Color styleColor(@Nullable String style) {
-		if (style == null) {
+	private static Color styleColor(String style) {
+		if (style == null)
 			return null;
-		}
 		try {
 			return AttackStyle.valueOf(style).getColor();
 		}
@@ -217,10 +213,9 @@ public class DossierTab extends JPanel {
 		}
 	}
 
-	static String styleName(@Nullable String style) {
-		if (style == null) {
+	static String styleName(String style) {
+		if (style == null)
 			return "";
-		}
 		try {
 			return AttackStyle.valueOf(style).getDisplayName();
 		}
@@ -233,9 +228,8 @@ static String formatDuration(long ms) {
 		long totalSeconds = Math.max(0, ms) / 1000;
 		long minutes = totalSeconds / 60;
 		long seconds = totalSeconds % 60;
-		if (minutes >= 60) {
+		if (minutes >= 60)
 			return String.format("%d:%02d:%02d", minutes / 60, minutes % 60, seconds);
-		}
 		return String.format("%d:%02d", minutes, seconds);
 	}
 }

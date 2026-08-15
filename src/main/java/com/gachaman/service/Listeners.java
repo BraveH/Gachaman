@@ -2,7 +2,6 @@ package com.gachaman.service;
 
 import java.util.*;
 import java.util.function.*;
-import javax.annotation.*;
 import lombok.extern.slf4j.*;
 
 /**
@@ -70,10 +69,9 @@ final class Listeners {
 	 * the five call sites had to remember it, and a forgotten one is an NPE on
 	 * the hottest path in the plugin rather than a quiet no-op.
 	 */
-	static <T> void fireHook(@Nullable T hook, Consumer<? super T> action, String label) {
-		if (hook == null) {
+	static <T> void fireHook(T hook, Consumer<? super T> action, String label) {
+		if (hook == null)
 			return;
-		}
 		try {
 			action.accept(hook);
 		}

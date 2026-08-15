@@ -229,9 +229,8 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 
 	/** EDT-safe, coalesced refresh. Cheap to call from any thread, any rate. */
 	public void refresh() {
-		if (!refreshQueued.compareAndSet(false, true)) {
+		if (!refreshQueued.compareAndSet(false, true))
 			return;
-		}
 		SwingUtilities.invokeLater(() -> {
 			refreshQueued.set(false);
 			refreshNow();
@@ -239,9 +238,8 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	}
 
 	private void refreshNow() {
-		if (!started) {
+		if (!started)
 			return;
-		}
 		dirty.addAll(EnumSet.allOf(Tab.class));
 		// on every refresh, not just on a config change: the first filed contract
 		// and the first shared one are STATE changes, and a tab the player just
@@ -292,9 +290,8 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	}
 
 	private void rebuildIfDirty(Tab tab) {
-		if (!dirty.remove(tab)) {
+		if (!dirty.remove(tab))
 			return;
-		}
 		try {
 			rebuilders.get(tab).run();
 		}
@@ -318,17 +315,15 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 * Safe to call before the constructor finishes wiring: tabRow is the guard.
 	 */
 	public void updateTabVisibility() {
-		if (tabRow == null) {
+		if (tabRow == null)
 			return;
-		}
 		GachaState state = stateService.get();
 		tabRow.removeAll();
 		boolean selectedSurvives = false;
 		for (Tab tab : Tab.values()) {
 			JButton button = tabButtons.get(tab);
-			if (button == null || !isTabVisible(tab, state)) {
+			if (button == null || !isTabVisible(tab, state))
 				continue;
-			}
 			tabRow.add(button);
 			selectedSurvives |= tab == selected;
 		}
@@ -349,7 +344,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 * of the ones that do. Overview is the fallback in
 	 * {@link #updateTabVisibility} and so must never be hidden here.
 	 */
-	private boolean isTabVisible(Tab tab, @Nullable GachaState state) {
+	private boolean isTabVisible(Tab tab, GachaState state) {
 		switch (tab) {
 			case DOSSIER:
 				return hasContracts(state);
@@ -363,11 +358,10 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	}
 
 	/** True once one contract has been filed — the Dossier's whole content. */
-	private static boolean hasContracts(@Nullable GachaState state) {
+	private static boolean hasContracts(GachaState state) {
 		List<ContractRecord> log = state == null ? null : state.getContractLog();
-		if (log == null) {
+		if (log == null)
 			return false;
-		}
 		for (ContractRecord record : log) {
 			if (record != null) {
 				return true; // Gson can hand back a null array element
@@ -446,9 +440,8 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	}
 
 	private void ensureScanTimer() {
-		if (!active || cardDatabase.isReady()) {
+		if (!active || cardDatabase.isReady())
 			return;
-		}
 		if (scanTimer == null) {
 			scanTimer = new Timer(SCAN_POLL_MS, e -> {
 				if (cardDatabase.isReady()) {
@@ -573,9 +566,8 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 
 		@Override
 		protected void paintThumb(Graphics g, JComponent c, Rectangle r) {
-			if (r.isEmpty() || !scrollbar.isEnabled()) {
+			if (r.isEmpty() || !scrollbar.isEnabled())
 				return;
-			}
 			g.setColor(STONE_THUMB);
 			g.fillRect(r.x + 1, r.y + 1, r.width - 2, r.height - 2);
 			g.setColor(STONE_EDGE);
@@ -608,7 +600,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 
 	// --- Shared widget helpers used by the tabs ---
 
-	static JPanel section(@Nullable String title) {
+	static JPanel section(String title) {
 		JPanel panel = new JPanel();
 		panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
 		panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -777,7 +769,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 * {@code & < >} — a lone {@code >} is legal text in HTML5 but Swing's parser
 	 * is HTML 3.2 and will happily close a tag it thinks it is inside.
 	 */
-	static String escape(@Nullable String text) {
+	static String escape(String text) {
 		return text == null ? ""
 			: text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
 	}
@@ -788,10 +780,9 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	 * this is used on is a difficulty or a chest name, and none of them is a
 	 * "u"-as-in-you or a silent-h word where the two rules disagree.
 	 */
-	static String article(@Nullable String noun) {
-		if (noun == null || noun.isEmpty()) {
+	static String article(String noun) {
+		if (noun == null || noun.isEmpty())
 			return "a";
-		}
 		return "AEIOUaeiou".indexOf(noun.charAt(0)) >= 0 ? "an" : "a";
 	}
 
@@ -867,7 +858,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		@Nullable
 		private final String label;
 
-		MeterBar(double fraction, Color barColor, @Nullable String label) {
+		MeterBar(double fraction, Color barColor, String label) {
 			this.fraction = Math.max(0, Math.min(1, fraction));
 			this.barColor = barColor;
 			this.label = label;
@@ -900,7 +891,7 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 	}
 
 	/** A left-aligned row wrapper so BorderLayout rows behave in a BoxLayout. */
-	static JPanel row(JComponent left, @Nullable JComponent right) {
+	static JPanel row(JComponent left, JComponent right) {
 		JPanel panel = new JPanel(new BorderLayout(6, 0));
 		panel.setOpaque(false);
 		panel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -1095,9 +1086,8 @@ public class GachamanPanel extends PluginPanel implements GachaStateService.List
 		Container ancestor = SwingUtilities.getAncestorOfClass(JViewport.class, panel);
 		if (ancestor instanceof JViewport) {
 			int width = ((JViewport) ancestor).getExtentSize().width;
-			if (width > 0) {
+			if (width > 0)
 				return width;
-			}
 		}
 		return FALLBACK_WIDTH;
 	}

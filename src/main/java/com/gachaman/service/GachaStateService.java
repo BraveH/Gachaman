@@ -70,13 +70,11 @@ public class GachaStateService {
 
 	/** Apply a pure mutation, persist, notify. No-op when not loaded. */
 	public synchronized GachaState mutate(UnaryOperator<GachaState> fn) {
-		if (!loaded || state == null) {
+		if (!loaded || state == null)
 			return null;
-		}
 		GachaState next = fn.apply(state);
-		if (next == null || next == state) {
+		if (next == null || next == state)
 			return state;
-		}
 		state = next;
 		store.save(next);
 		notifyListeners(next);

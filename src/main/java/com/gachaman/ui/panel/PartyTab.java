@@ -86,7 +86,7 @@ public class PartyTab extends JPanel {
 	private Supplier<PartyRollService.VoteView> voteViewSupplier;
 
 	public void setVoteViewSupplier(
-		@Nullable Supplier<PartyRollService.VoteView> supplier) {
+		Supplier<PartyRollService.VoteView> supplier) {
 		this.voteViewSupplier = supplier;
 	}
 
@@ -189,7 +189,7 @@ public class PartyTab extends JPanel {
 	 * The names stack; the meter does not.
 	 */
 	private JComponent buildGroup(PartyPresenceService.Group group, int w, Marks marks,
-		@Nullable PartyRollService.VoteView votes) {
+		PartyRollService.VoteView votes) {
 		JPanel outer = new JPanel() {
 			@Override
 			public Dimension getMaximumSize() {
@@ -241,16 +241,15 @@ public class PartyTab extends JPanel {
 	 * row happened to be first would credit the quota to one of them.
 	 */
 	private static Color barColor(PartyPresenceService.Group group) {
-		if (group.isShared()) {
+		if (group.isShared())
 			return ColorScheme.BRAND_ORANGE;
-		}
 		PartyPresenceService.Row only = group.getMembers().get(0);
 		return only.getStyle() == null ? ColorScheme.BRAND_ORANGE : only.getStyle().getColor();
 	}
 
 	/** One member's line: style chip, name and level, their vote, then their badges. */
 	private static JComponent memberHeader(PartyPresenceService.Row row, int w, Marks marks,
-		@Nullable PartyRollService.VoteView votes) {
+		PartyRollService.VoteView votes) {
 		boolean live = row.isHeard() && row.isLoggedIn();
 		JPanel header = new JPanel(new BorderLayout(6, 0)) {
 			@Override
@@ -294,10 +293,9 @@ public class PartyTab extends JPanel {
 	 * member can see what the party is converging on without reopening it.
 	 */
 	private static String voteSuffix(PartyPresenceService.Row row,
-		@Nullable PartyRollService.VoteView votes) {
-		if (votes == null) {
+		PartyRollService.VoteView votes) {
+		if (votes == null)
 			return "";
-		}
 		String label = votes.getLabelByMember().get(row.getMemberId());
 		return label == null ? "  · no vote" : "  · " + label;
 	}
@@ -370,7 +368,7 @@ public class PartyTab extends JPanel {
 		@Nullable
 		private final String topKey;
 
-		Marks(@Nullable Map<String, PatronRecord> ledger) {
+		Marks(Map<String, PatronRecord> ledger) {
 			this.ledger = ledger;
 			this.topKey = PatronMark.topKey(ledger);
 		}

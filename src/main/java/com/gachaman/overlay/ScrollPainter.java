@@ -139,9 +139,8 @@ final class ScrollPainter {
 		int top = topRollerCy(r, u) - ROLLER_H / 2;
 		int bot = bottomRollerCy(r, u) + ROLLER_H / 2;
 		int h = bot - top;
-		if (h <= 0) {
+		if (h <= 0)
 			return;
-		}
 		// Largest and faintest first, each smaller pass laid over the last, so the
 		// alpha ACCUMULATES toward the middle and falls off at the rim.
 		//

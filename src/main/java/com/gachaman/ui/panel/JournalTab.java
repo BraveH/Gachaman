@@ -110,9 +110,8 @@ public class JournalTab extends JPanel {
 	}
 
 	private static String capitalize(String s) {
-		if (s == null || s.isEmpty()) {
+		if (s == null || s.isEmpty())
 			return "?";
-		}
 		return Character.toUpperCase(s.charAt(0)) + s.substring(1);
 	}
 
@@ -152,9 +151,8 @@ public class JournalTab extends JPanel {
 		boolean any = false;
 		for (TaskDifficulty difficulty : TaskDifficulty.values()) {
 			PersonalBest pb = state.getPersonalBests().get(difficulty.name());
-			if (pb == null || (pb.getFastestTaskMs() <= 0 && pb.getBiggestHaulGc() <= 0)) {
+			if (pb == null || (pb.getFastestTaskMs() <= 0 && pb.getBiggestHaulGc() <= 0))
 				continue;
-			}
 			any = true;
 			section.add(GachamanPanel.line(difficulty.getDisplayName(), difficulty.getColor(),
 				FontManager.getRunescapeBoldFont()));
@@ -289,9 +287,8 @@ public class JournalTab extends JPanel {
 		long totalSeconds = ms / 1000;
 		long minutes = totalSeconds / 60;
 		long seconds = totalSeconds % 60;
-		if (minutes >= 60) {
+		if (minutes >= 60)
 			return String.format("%d:%02d:%02d", minutes / 60, minutes % 60, seconds);
-		}
 		return String.format("%d:%02d", minutes, seconds);
 	}
 }

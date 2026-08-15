@@ -55,9 +55,8 @@ public class StateStore {
 		String blob = codec.encode(state);
 		configManager.setRSProfileConfiguration(GachamanConfig.GROUP, KEY_STATE, blob);
 		String profile = configManager.getRSProfileKey();
-		if (profile == null) {
+		if (profile == null)
 			return;
-		}
 		pendingDisk.set(new String[]{profile, blob});
 		if (flushDiskNow) {
 			executor.execute(this::flushDisk);
@@ -71,9 +70,8 @@ public class StateStore {
 	private void flushDisk() {
 		flushScheduled = false;
 		String[] pending = pendingDisk.getAndSet(null);
-		if (pending == null) {
+		if (pending == null)
 			return;
-		}
 		writeDisk(pending[0], pending[1]);
 	}
 
@@ -95,9 +93,8 @@ public class StateStore {
 		long bestAt = codec.savedAt(blob);
 		for (String name : new String[]{"state.dat", "state.dat.bak"}) {
 			File f = diskFile(configManager.getRSProfileKey(), name);
-			if (f == null || !f.exists()) {
+			if (f == null || !f.exists())
 				continue;
-			}
 			try {
 				String disk = new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8);
 				long diskAt = codec.savedAt(disk);
@@ -114,9 +111,8 @@ public class StateStore {
 			}
 		}
 		GachaState state = codec.decode(best);
-		if (state != null) {
+		if (state != null)
 			return state;
-		}
 		// the newest copy did not survive verification — fall back through the
 		// rest, newest first, rather than starting the player from nothing
 		for (String candidate : candidatesOldestLast(blob)) {
@@ -135,9 +131,8 @@ public class StateStore {
 		out.add(configBlob);
 		for (String name : new String[]{"state.dat", "state.dat.bak"}) {
 			File f = diskFile(configManager.getRSProfileKey(), name);
-			if (f == null || !f.exists()) {
+			if (f == null || !f.exists())
 				continue;
-			}
 			try {
 				out.add(new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8));
 			}
@@ -151,14 +146,12 @@ public class StateStore {
 
 	private void writeDisk(String profileKey, String blob) {
 		File f = diskFile(profileKey, "state.dat");
-		if (f == null) {
+		if (f == null)
 			return;
-		}
 		try {
 			File dir = f.getParentFile();
-			if (!dir.exists() && !dir.mkdirs()) {
+			if (!dir.exists() && !dir.mkdirs())
 				return;
-			}
 			Path path = f.toPath();
 			if (f.exists()) {
 				Files.copy(path, diskFile(profileKey, "state.dat.bak").toPath(),
@@ -179,9 +172,8 @@ public class StateStore {
 	}
 
 	private File diskFile(String profileKey, String name) {
-		if (profileKey == null) {
+		if (profileKey == null)
 			return null;
-		}
 		return new File(new File(BASE_DIR, profileKey.replaceAll("[^A-Za-z0-9_.-]", "_")), name);
 	}
 }

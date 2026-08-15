@@ -89,9 +89,8 @@ public class TaskProgressOverlay extends OverlayPanel {
 	@Override
 	public Dimension render(Graphics2D graphics) {
 		GachaState state = stateService.get();
-		if (state == null || TutorialGate.onTutorial(client)) {
+		if (state == null || TutorialGate.onTutorial(client))
 			return null;
-		}
 		ActiveTask task = state.getActiveTask();
 		List<TaskOffer> offers = state.getPendingOffers();
 

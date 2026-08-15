@@ -1,0 +1,329 @@
+{
+  "note": "Authored by com.gachaman.tools.WeaponTypes from DBTableID.CombatInterfaceWeaponCategory.Row constants. Do not hand-edit: WeaponTypeResourceTest pins this file to those constants, and the keys are persisted in player saves. dbrow -1 is the SPELL_CAST pseudo-type, which is com mode 4 (the autocast slot) and has no row of its own.",
+  "types": [
+    {
+      "key": "unarmed",
+      "displayName": "No weapon equipped",
+      "dbrow": 3938,
+      "offerIn": [
+        "MELEE"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "axe",
+      "displayName": "Axes",
+      "dbrow": 3939,
+      "offerIn": [
+        "MELEE"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "blunt",
+      "displayName": "Blunt weapons",
+      "dbrow": 3940,
+      "offerIn": [
+        "MELEE"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "blunt_bludgeon",
+      "displayName": "Bludgeons",
+      "dbrow": 3941,
+      "offerIn": [
+        "MELEE"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "bow",
+      "displayName": "Bows",
+      "dbrow": 3942,
+      "offerIn": [
+        "RANGED"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "claw",
+      "displayName": "Claws",
+      "dbrow": 3943,
+      "offerIn": [
+        "MELEE"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "crossbow",
+      "displayName": "Crossbows",
+      "dbrow": 3944,
+      "offerIn": [
+        "RANGED"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "flamer",
+      "displayName": "Salamanders",
+      "dbrow": 3945,
+      "offerIn": [],
+      "offerable": false,
+      "reason": "tri-style: the varbit reports the category, never which of the three stances is in use"
+    },
+    {
+      "key": "grenade",
+      "displayName": "Chinchompas",
+      "dbrow": 3946,
+      "offerIn": [
+        "RANGED"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "gun",
+      "displayName": "Guns",
+      "dbrow": 3947,
+      "offerIn": [],
+      "offerable": false,
+      "reason": "reads as ranged but is fought as melee — a ranged wheel naming it would ask the player to break their own style lock"
+    },
+    {
+      "key": "hacksword",
+      "displayName": "Slash swords",
+      "dbrow": 3948,
+      "offerIn": [
+        "MELEE"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "heavysword",
+      "displayName": "Two-handed swords",
+      "dbrow": 3949,
+      "offerIn": [
+        "MELEE"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "heavysword_large",
+      "displayName": "Colossal blades",
+      "dbrow": 3950,
+      "offerIn": [],
+      "offerable": false,
+      "reason": "too narrow a category to hand a player for a whole style cycle"
+    },
+    {
+      "key": "pickaxe",
+      "displayName": "Pickaxes",
+      "dbrow": 3951,
+      "offerIn": [
+        "MELEE"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "polearm",
+      "displayName": "Polearms",
+      "dbrow": 3952,
+      "offerIn": [
+        "MELEE"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "chargespear",
+      "displayName": "Charged spears",
+      "dbrow": 3953,
+      "offerIn": [],
+      "offerable": false,
+      "reason": "the client special-cases this category\u0027s styles (see StyleTracker), and it is too narrow to hand a player for a whole style cycle"
+    },
+    {
+      "key": "polestaff",
+      "displayName": "Polestaves",
+      "dbrow": 3954,
+      "offerIn": [
+        "MELEE"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "scythe",
+      "displayName": "Scythes",
+      "dbrow": 3955,
+      "offerIn": [
+        "MELEE"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "spear",
+      "displayName": "Spears",
+      "dbrow": 3956,
+      "offerIn": [
+        "MELEE"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "banner",
+      "displayName": "Banners",
+      "dbrow": 3957,
+      "offerIn": [],
+      "offerable": false,
+      "reason": "a carried banner, not a category anyone trains a style in"
+    },
+    {
+      "key": "spiked",
+      "displayName": "Spiked weapons",
+      "dbrow": 3958,
+      "offerIn": [
+        "MELEE"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "stabsword",
+      "displayName": "Stab swords",
+      "dbrow": 3959,
+      "offerIn": [
+        "MELEE"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "staff",
+      "displayName": "Staves",
+      "dbrow": 3960,
+      "offerIn": [
+        "MELEE",
+        "MAGIC"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "staff_bladed",
+      "displayName": "Bladed staves",
+      "dbrow": 3961,
+      "offerIn": [
+        "MELEE",
+        "MAGIC"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "staff_spellblade",
+      "displayName": "Spellblade staves",
+      "dbrow": 3962,
+      "offerIn": [
+        "MELEE",
+        "MAGIC"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "thrown",
+      "displayName": "Thrown weapons",
+      "dbrow": 3963,
+      "offerIn": [
+        "RANGED"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "whip",
+      "displayName": "Whips",
+      "dbrow": 3964,
+      "offerIn": [
+        "MELEE"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "staff_selfpowering",
+      "displayName": "Powered staves",
+      "dbrow": 3965,
+      "offerIn": [
+        "MAGIC"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "wand_selfpowering",
+      "displayName": "Powered wands",
+      "dbrow": 3966,
+      "offerIn": [],
+      "offerable": false,
+      "reason": "no live items in this category, so the preference could never be met"
+    },
+    {
+      "key": "bulwark",
+      "displayName": "Bulwarks",
+      "dbrow": 3967,
+      "offerIn": [],
+      "offerable": false,
+      "reason": "block mode does no damage — a bulwark cycle is unplayable"
+    },
+    {
+      "key": "partisan",
+      "displayName": "Partisans",
+      "dbrow": 3968,
+      "offerIn": [
+        "MELEE"
+      ],
+      "offerable": true
+    },
+    {
+      "key": "tribrid",
+      "displayName": "Tribrid weapons",
+      "dbrow": 4091,
+      "offerIn": [],
+      "offerable": false,
+      "reason": "covers all three styles at once — naming it would hollow out the style lock"
+    },
+    {
+      "key": "egg",
+      "displayName": "Eggs",
+      "dbrow": 5376,
+      "offerIn": [],
+      "offerable": false,
+      "reason": "not a category anyone fights a contract with"
+    },
+    {
+      "key": "sailing_cannon",
+      "displayName": "Sailing cannons",
+      "dbrow": 13321,
+      "offerIn": [],
+      "offerable": false,
+      "reason": "a mounted cannon, not a wielded weapon"
+    },
+    {
+      "key": "multi_melee",
+      "displayName": "Multi-style melee",
+      "dbrow": 16265,
+      "offerIn": [],
+      "offerable": false,
+      "reason": "no stable pool of items to name"
+    },
+    {
+      "key": "slashflail",
+      "displayName": "Slash flails",
+      "dbrow": 16914,
+      "offerIn": [],
+      "offerable": false,
+      "reason": "one item, and quest locked"
+    },
+    {
+      "key": "spell_cast",
+      "displayName": "Cast spells",
+      "dbrow": -1,
+      "offerIn": [
+        "MAGIC"
+      ],
+      "offerable": true
+    }
+  ]
+}

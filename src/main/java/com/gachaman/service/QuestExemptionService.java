@@ -62,9 +62,8 @@ public class QuestExemptionService {
 
 	/** Client thread only. True when the NPC is a target of an in-progress quest. */
 	public boolean isQuestTarget(String npcName) {
-		if (npcName == null) {
+		if (npcName == null)
 			return false;
-		}
 		int tick = client.getTickCount();
 		if (tick != memoTick) {
 			memoTick = tick;
@@ -109,9 +108,8 @@ public class QuestExemptionService {
 					q -> q.getState(client) == QuestState.IN_PROGRESS)) {
 					continue;
 				}
-				if (gate.hasWindow() && !gate.contains(readVar(gate))) {
+				if (gate.hasWindow() && !gate.contains(readVar(gate)))
 					continue;
-				}
 				out.add(new Unlock(gate.getNpcName(), gate.getQuest().getName()));
 			}
 			catch (Exception e) {
@@ -131,20 +129,16 @@ public class QuestExemptionService {
 	}
 
 	private boolean compute(String lowerName) {
-		if (manualUnlocks.contains(lowerName)) {
+		if (manualUnlocks.contains(lowerName))
 			return true;
-		}
 		for (QuestMonsterTable.Gate gate : questMonsterTable.gatesFor(lowerName)) {
 			try {
-				if (gate.getQuest().getState(client) != QuestState.IN_PROGRESS) {
+				if (gate.getQuest().getState(client) != QuestState.IN_PROGRESS)
 					continue;
-				}
-				if (!gate.hasWindow()) {
+				if (!gate.hasWindow())
 					return true;
-				}
-				if (gate.contains(readVar(gate))) {
+				if (gate.contains(readVar(gate)))
 					return true;
-				}
 			}
 			catch (Exception e) {
 				// a quest-state script hiccup fails CLOSED: the combat block

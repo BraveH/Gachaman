@@ -27,20 +27,17 @@ public class ForbiddenItemOverlay extends WidgetItemOverlay {
 
 	@Override
 	public void renderItemOverlay(Graphics2D graphics, int itemId, WidgetItem widgetItem) {
-		if (!permissionService.isForbidden(itemId)) {
+		if (!permissionService.isForbidden(itemId))
 			return;
-		}
 		Rectangle bounds = widgetItem.getCanvasBounds();
-		if (bounds == null) {
+		if (bounds == null)
 			return;
-		}
 		graphics.drawImage(getIcon(), bounds.x + bounds.width - ICON_SIZE, bounds.y, null);
 	}
 
 	private BufferedImage getIcon() {
-		if (icon != null) {
+		if (icon != null)
 			return icon;
-		}
 		BufferedImage image = new BufferedImage(ICON_SIZE, ICON_SIZE, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = image.createGraphics();
 		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);

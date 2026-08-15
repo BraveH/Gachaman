@@ -98,19 +98,17 @@ public enum RangedMetal {
 		 * poisoned "Rune dart(p++)" arrives as "Rune dart" and needs no special case.
 		 */
 		@Nullable
-		public RangedMetal of(@Nullable String cardName) {
-			if (cardName == null) {
+		public RangedMetal of(String cardName) {
+			if (cardName == null)
 				return null;
-			}
 			int lastSpace = cardName.lastIndexOf(' ');
 			if (lastSpace < 0) {
 				return null; // no prefix at all, so not metal-prefixed gear
 			}
 			String family = table.nouns.get(
 				cardName.substring(lastSpace + 1).toLowerCase(Locale.ROOT));
-			if (family == null) {
+			if (family == null)
 				return null;
-			}
 			try {
 				return valueOf(family);
 			}
@@ -127,7 +125,7 @@ public enum RangedMetal {
 		 * number, so an unrecognised combination is gated exactly as it was before
 		 * this class existed rather than silently opening at level 1.
 		 */
-		public int reqRangedLevel(RangedMetal metal, @Nullable String tierKey, int fallback) {
+		public int reqRangedLevel(RangedMetal metal, String tierKey, int fallback) {
 			Map<String, Integer> reqs = table.families.get(metal.name());
 			Integer req = tierKey == null || reqs == null ? null : reqs.get(tierKey);
 			return req == null ? fallback : req;

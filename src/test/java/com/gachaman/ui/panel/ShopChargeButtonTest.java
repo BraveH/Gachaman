@@ -31,7 +31,7 @@ public class ShopChargeButtonTest
 	private static ShopTab tab()
 	{
 		return new ShopTab(new GachaStateService(null), null, null, null, null, null,
-			null, null);
+			null, null, null, null);
 	}
 
 	@Test

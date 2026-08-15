@@ -15,6 +15,7 @@ import java.awt.*;
 import java.awt.event.*;
 import java.util.*;
 import java.util.function.*;
+import javax.annotation.*;
 import javax.inject.*;
 import javax.swing.*;
 import javax.swing.border.*;
@@ -41,6 +42,18 @@ import net.runelite.client.util.*;
 import static com.gachaman.ui.panel.GachamanPanel.*;
 import static net.runelite.client.ui.ColorScheme.*;
 import static net.runelite.client.util.QuantityFormatter.*;
+// A fourth, on exactly the argument above: this file named Tuning seventeen
+// times — the fragment window, the weapon multiplier, the Double Docket, the
+// pity cap and the whole Ante band — and "Tuning." is three tokens every time.
+//
+// It cannot collide with the three above, which is the same disjointness
+// argument: Tuning exports SCREAMING_CASE constants and the nested enum Chest
+// (which this file never names), GachamanPanel exports widget helpers and width
+// constants, ColorScheme exports colours, QuantityFormatter exports formatters.
+// A static-import-on-demand only ever competes with another one, and anything
+// OverviewTab declares or inherits from JPanel — LEFT_ALIGNMENT included — wins
+// over all four regardless.
+import static com.gachaman.Tuning.*;
 
 /**
  * Overview: GC balances, style lock + cycle, the active task (with side bets
@@ -48,36 +61,73 @@ import static net.runelite.client.util.QuantityFormatter.*;
  */
 @Singleton
 public class OverviewTab extends JPanel {
+	/**
+	 * The bold RuneScape face this tab titles with, held rather than asked for
+	 * six times over.
+	 *
+	 * <p>Provably the same object either way, which is the only reason this is
+	 * safe to hoist: {@code FontManager.runescapeBoldFont} is a <b>private static
+	 * final</b> field assigned once in that class's static initialiser, and the
+	 * getter compiles to a bare {@code getstatic} + {@code areturn} with no
+	 * derive, no clone and no lazy build. Every call site was already sharing this
+	 * instance and only spelling out the lookup to reach it. The one deriveFont
+	 * caller still derives its own 16f copy, exactly as before — deriveFont never
+	 * mutates its receiver.
+	 */
+	private static final Font BOLD = FontManager.getRunescapeBoldFont();
+
 	private static final Color TAINT_RED = new Color(190, 60, 55);
 	private static final Color SIDEBET_DONE = new Color(110, 200, 110);
 	private static final Color DOCKET_GREEN = new Color(120, 220, 120);
 	/** The Ante: warm, not festive — it marks money at risk, not a prize. */
 	private static final Color ANTE_AMBER = new Color(214, 158, 74);
 
+	// Some of these are shorter than the service they hold, because an identifier
+	// is charged to the token budget on every line it appears on and the declared
+	// type is right there saying what it is.
+	//
+	// taskService is NOT shortened and must not be: OverviewTabTest greps this
+	// file for the literal text "invokeLater(taskService::presentOffers)" and
+	// fails if it reappears — that spelling binds to the BooleanSupplier overload
+	// and leaks a per-tick task forever (see viewRolledContracts). Rename the
+	// field and the guard silently stops watching for the bug it was written for.
 	private final GachaStateService stateService;
 	private final TaskService taskService;
 	private final ClientThread clientThread;
-	private final PartyRollService partyRollService;
+	private final PartyRollService rollService;
 	private final GachamanConfig config;
 
-	private final QuestExemptionService questExemptionService;
+	private final QuestExemptionService quests;
+	/**
+	 * Resource-only reads ({@code displayName}), so this tab never has to hop to
+	 * the client thread to name the category the wheel picked. Deliberately NOT
+	 * used to ask what is in the player's hands right now: that would need a
+	 * varbit read, and the bonus is per-kill precisely so it cannot be decided by
+	 * a late look at whatever happens to be equipped.
+	 */
+	private final WeaponTypeService weapons;
+	private final ConsignmentService consignment;
 
-	private BooleanSupplier inPartySupplier = () -> false;
+	private BooleanSupplier inParty = () -> false;
 	/** The live Quest-unlocked section, so a late answer can tell if it is stale. */
-	private JPanel questUnlocks;
+	private JPanel unlockBox;
 
 	@Inject
 	public OverviewTab(GachaStateService stateService, TaskService taskService,
 		ClientThread clientThread,
-		PartyRollService partyRollService,
+		PartyRollService rollService,
 		GachamanConfig config,
-		QuestExemptionService questExemptionService) {
+		QuestExemptionService quests,
+		WeaponTypeService weapons,
+		ConsignmentService consignment) {
+		this.weapons = weapons;
+		this.consignment = consignment;
 		this.stateService = stateService;
 		this.taskService = taskService;
 		this.clientThread = clientThread;
-		this.partyRollService = partyRollService;
+		this.rollService = rollService;
 		this.config = config;
-		this.questExemptionService = questExemptionService;
+		this.quests = quests;
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		setOpaque(false);
 		setBorder(new EmptyBorder(0, 0, 6, 0));
@@ -85,7 +135,7 @@ public class OverviewTab extends JPanel {
 
 	void setInPartySupplier(BooleanSupplier supplier) {
 		if (supplier != null) {
-			this.inPartySupplier = supplier;
+			this.inParty = supplier;
 		}
 	}
 
@@ -95,7 +145,7 @@ public class OverviewTab extends JPanel {
 		if (state == null) {
 			// drop the reference too, or a snapshot still in flight would fill a
 			// section that is no longer on screen
-			questUnlocks = null;
+			unlockBox = null;
 			add(centeredNote("Log in to begin your Gachaman journey."));
 			revalidate();
 			repaint();
@@ -106,7 +156,7 @@ public class OverviewTab extends JPanel {
 		addSection(buildStyleSection(state));
 		addSection(buildTaskSection(state));
 		if (!state.isFragmentDeedForged()
-			&& state.getTotalTasksCompleted() < Tuning.FRAGMENT_WINDOW_TASKS) {
+			&& state.getTotalTasksCompleted() < FRAGMENT_WINDOW_TASKS) {
 			addSection(buildFragmentSection(state));
 		}
 		if (state.getTaint() > 0) {
@@ -115,9 +165,9 @@ public class OverviewTab extends JPanel {
 		addSection(buildPitySection(state));
 		// last on purpose: a player who does not care scrolls past everything
 		// that matters first, and it hides itself entirely when empty
-		questUnlocks = section("Quest-unlocked NPCs");
-		questUnlocks.setVisible(false);
-		addSection(questUnlocks);
+		unlockBox = section("Quest-unlocked NPCs");
+		unlockBox.setVisible(false);
+		addSection(unlockBox);
 		requestQuestUnlocks(state);
 
 		revalidate();
@@ -131,7 +181,7 @@ public class OverviewTab extends JPanel {
 	 * that finishes before the answer arrives simply shows nothing for a frame.
 	 */
 	private void requestQuestUnlocks(GachaState state) {
-		JPanel target = questUnlocks;
+		JPanel target = unlockBox;
 		ActiveTask task = state.getActiveTask();
 		String taskMonster = task == null ? null : task.getMonsterName();
 		// keep this a BLOCK lambda. ClientThread overloads invokeLater on Runnable
@@ -139,13 +189,13 @@ public class OverviewTab extends JPanel {
 		// the Runnable one; viewRolledContracts below documents what a task bound
 		// to the BooleanSupplier overload costs.
 		clientThread.invokeLater(() -> {
-			List<Unlock> unlocks = questExemptionService.currentUnlocks();
+			List<Unlock> unlocks = quests.currentUnlocks();
 			SwingUtilities.invokeLater(() -> fillQuestUnlocks(target, unlocks, taskMonster));
 		});
 	}
 
 	private void fillQuestUnlocks(JPanel target, List<Unlock> unlocks, String taskMonster) {
-		if (target != questUnlocks) {
+		if (target != unlockBox) {
 			return; // a later rebuild replaced the section this answer was for
 		}
 		// the contract's own monster is not news - this section is for what the
@@ -153,9 +203,8 @@ public class OverviewTab extends JPanel {
 		List<Unlock> shown = new ArrayList<>();
 		Set<String> seen = new HashSet<>();
 		for (Unlock unlock : unlocks) {
-			if (taskMonster != null && taskMonster.equalsIgnoreCase(unlock.getNpcName())) {
+			if (taskMonster != null && taskMonster.equalsIgnoreCase(unlock.getNpcName()))
 				continue;
-			}
 			// NUL joins the two halves of the dedupe key because no NPC or quest
 			// name can contain it, so ("a", "b\0c") and ("a\0b", "c") stay
 			// distinct. Write it as the escape \0 and NEVER as a raw 0x00 byte in
@@ -229,6 +278,33 @@ public class OverviewTab extends JPanel {
 	}
 
 	/**
+	 * A one-line label, added. Seventeen call sites spelled
+	 * {@code section.add(smallLine(text, colour))} in full; the eight that keep
+	 * the label to hang a tooltip on it still call {@link GachamanPanel#smallLine}
+	 * directly, because those want the component and this does not hand it back.
+	 *
+	 * <p>Folding the add in is order-safe for the same reason {@link #gap} and
+	 * {@link #actionButton} are: the label still lands at exactly the same point
+	 * in the parent's child order, which is the only order-sensitive step.
+	 */
+	private static void note(JComponent parent, String text, Color color) {
+		parent.add(smallLine(text, color));
+	}
+
+	/**
+	 * A word-wrapping paragraph, added — {@link #note}'s sibling for the nine
+	 * sites that wrapped instead of clipping.
+	 *
+	 * <p>{@link GachamanPanel#wrapped} is the HTML JEditorPane form and stays
+	 * exactly as it is; nothing about the pane, the width it is pinned to or the
+	 * markup it accepts changes here. The one caller that keeps the component to
+	 * put a tooltip on it (the weapon worth line) still calls wrapped() itself.
+	 */
+	private static void para(JComponent parent, String text, Color color) {
+		parent.add(wrapped(text, color));
+	}
+
+	/**
 	 * The four-beat button dance — make it, tooltip it, wire it, add it —
 	 * collapsed into one call, because most of the buttons on this panel are
 	 * purely declarative. The button still lands at exactly the same point in the
@@ -265,26 +341,26 @@ public class OverviewTab extends JPanel {
 		gap(section, 3);
 		actionButton(section, "Cancel Party Roll",
 			"Host only: abort this party roll for every member who joined it" + tail,
-			e -> partyRollService.cancelRoll());
+			e -> rollService.cancelRoll());
 	}
 
 	private JPanel buildBalanceSection(GachaState state) {
 		// the GC readout itself is shared with the Shop tab; only the two lines
 		// under it are this page's
-		JPanel section = GachamanPanel.balanceSection(state);
+		JPanel section = balanceSection(state);
 		gap(section, 4);
-		section.add(smallLine(
+		note(section, 
 			"Lifetime earned: " + formatNumber(state.getLifetimeGcEarned()) + " GC",
-			LIGHT_GRAY_COLOR));
-		section.add(smallLine(
-			"Reroll tokens: " + state.getRerollTokens(), LIGHT_GRAY_COLOR));
+			LIGHT_GRAY_COLOR);
+		note(section, 
+			"Reroll tokens: " + state.getRerollTokens(), LIGHT_GRAY_COLOR);
 		return section;
 	}
 
 	private JPanel buildStyleSection(GachaState state) {
-		JPanel section = GachamanPanel.section("Allowed Style");
+		JPanel section = section("Allowed Style");
 		if (state.getAllowedStyle() == null) {
-			section.add(smallLine("Not yet rolled — fate awaits.", LIGHT_GRAY_COLOR));
+			note(section, "Not yet rolled — fate awaits.", LIGHT_GRAY_COLOR);
 			return section;
 		}
 		AttackStyle style;
@@ -292,20 +368,178 @@ public class OverviewTab extends JPanel {
 			style = AttackStyle.valueOf(state.getAllowedStyle());
 		}
 		catch (IllegalArgumentException e) {
-			section.add(smallLine("Unknown style", LIGHT_GRAY_COLOR));
+			note(section, "Unknown style", LIGHT_GRAY_COLOR);
 			return section;
 		}
 		section.add(line(style.getDisplayName(), style.getColor(),
-			FontManager.getRunescapeBoldFont().deriveFont(16f)));
+			BOLD.deriveFont(16f)));
 		gap(section, 5);
 		int target = Math.max(1, state.getCycleTarget());
 		double progress = state.getCycleProgress();
 		String barLabel = trimDouble(progress) + " / " + target + " contracts";
 		section.add(new MeterBar(progress / target, style.getColor(), barLabel));
 		gap(section, 3);
-		section.add(smallLine("Style re-rolls when the cycle completes.",
-			MEDIUM_GRAY_COLOR));
+		note(section, "Style re-rolls when the cycle completes.",
+			MEDIUM_GRAY_COLOR);
+		// Both of these belong to the wheel, so they live under it rather than in
+		// sections of their own — and both are deliberately BELOW the two early
+		// returns above. A profile that has never rolled has no preferred weapon
+		// to name, and the Consignment excludes the first-ever roll outright, so
+		// saying "today's offer is still to come" there would be a promise the
+		// house has already decided not to keep.
+		addWeaponLines(section, state, style);
+		addConsignmentLine(section);
 		return section;
+	}
+
+	/**
+	 * The weapon category the wheel named alongside the style, and what it is
+	 * actually worth on the contract in hand.
+	 *
+	 * <p><b>The honesty rule, which is the whole reason this is more than one
+	 * line:</b> the multiplier is x1.5 on KILL GC and nothing else, and kill GC
+	 * is a small slice of an EASY contract against a large slice of an INSANE
+	 * one. Told "x1.5" and no more, a player would reasonably conclude that
+	 * fighting with the named category is always the right play — and on an EASY
+	 * contract with a slow category it is a pay cut. So the break-even is printed
+	 * as a number they can hold their own weapon up against, rather than hinted
+	 * at in prose that lets the panel off the hook.
+	 *
+	 * <p>Always {@link WeaponTypeService#displayName}, never the key. The key for
+	 * category 0 is "unarmed" while its name is "No weapon equipped", because the
+	 * game reports that same category for every non-weapon item a player might be
+	 * holding — calling it "unarmed" would be a claim about their hands that the
+	 * varbit cannot support.
+	 *
+	 * <p>Package-private rather than private so the rendered lines can be pinned
+	 * headlessly, the same arrangement {@link #trimDouble} already has. That one
+	 * rule — the key never on screen, the name always — is invisible to every
+	 * other kind of test, because both spellings compile and only one of them is
+	 * a lie.
+	 */
+	void addWeaponLines(JPanel section, GachaState state, AttackStyle style) {
+		gap(section, 6);
+		String name = weapons.displayName(state.getPreferredWeaponType());
+		if (name == null) {
+			// Two causes, one line, and neither is the player's doing: no category
+			// was named for this cycle, or one was named under a taxonomy this build
+			// no longer carries. The bonus only ever adds to their income, so its
+			// absence is not a failure and must not be dressed as one.
+			note(section, "Preferred weapon: none — no bonus available.",
+				LIGHT_GRAY_COLOR);
+			return;
+		}
+		JLabel named = smallLine("Preferred weapon: " + name, style.getColor());
+		named.setToolTipText("The wheel names a weapon category alongside the style. A kill landed in the allowed style with one of those in hand pays x"
+			+ trimDouble(WEAPON_BONUS_MULT) + " GC. Per kill only — never on the completion bonus, and never on a kill that broke the style lock.");
+		section.add(named);
+		ActiveTask task = state.getActiveTask();
+		String none = noBonusReason(task);
+		if (none != null) {
+			note(section, none, MEDIUM_GRAY_COLOR);
+			return;
+		}
+		double share = killShareFraction(task.getPerKillGc(), task.getKillsRequired(),
+			task.getCompletionGc());
+		long total = (long) task.getPerKillGc() * task.getKillsRequired()
+			+ task.getCompletionGc();
+		// The break-even, derived rather than guessed. With K the contract's base
+		// kill GC (per-kill x quota) and C its completion bonus, a contract run
+		// entirely with the named category pays 1.5K + C instead of K + C, over a
+		// time of t' per kill instead of t. GC per hour is equal exactly when
+		// t'/t == (1.5K + C)/(K + C) — so the weapon may be 0.5K/(K + C) slower and
+		// break even, which is the kill share times (WEAPON_BONUS_MULT - 1). On an
+		// EASY contract that is about 8% of slack; on an INSANE, about 22%.
+		long slack = Math.round(share * (WEAPON_BONUS_MULT - 1.0) * 100);
+		// "the preferred weapon", not the name itself: the name for category 0 is
+		// "No weapon equipped", and "So No weapon equipped may be up to 8% slower"
+		// is a sentence no player should have to parse. The line above has just
+		// named it, so the phrase is unambiguous and it reads for every category.
+		JComponent worth = wrapped("Kill GC is " + Math.round(share * 100)
+			+ "% of this contract's " + formatNumber(total)
+			+ " GC — the completion bonus is the rest, and the weapon never touches it. So the preferred weapon may be up to "
+			+ slack + "% slower per kill and still pay the same. Slower than that and taking it is a pay cut.", LIGHT_GRAY_COLOR);
+		worth.setToolTipText("Computed from this contract's own two figures, so you can check it against the Contract section below."
+			+ " The break-even moves during play: the rhythm combo and a level gap scale kill GC up and buy the weapon more slack,"
+			+ " while the Double Docket, a milestone and the party co-op bonus scale the completion up and buy it less."
+			+ " On a shared contract the quota is pooled, so your own share of the kill GC is smaller than the figure above.");
+		section.add(worth);
+	}
+
+	/**
+	 * Why the preferred weapon is worth nothing on the contract in hand, or null
+	 * when it is worth something.
+	 *
+	 * <p>"No bonus available" in both arms, deliberately, and never a wording that
+	 * reads as a fault: a Redemption contract pays nothing per kill by design, and
+	 * a player between contracts has done nothing wrong. The two cases are still
+	 * told apart because the fix is different — sign a contract, or finish this
+	 * one — and a single vague line would leave the player poking at the wrong one.
+	 */
+	@Nullable
+	static String noBonusReason(ActiveTask task) {
+		if (task == null)
+			return "No contract signed — no bonus available.";
+		return task.getPerKillGc() > 0 ? null
+			: "This contract pays nothing per kill — no bonus available.";
+	}
+
+	/**
+	 * What share of a contract's base GC is paid out per kill, as a fraction.
+	 *
+	 * <p>The Preferred Weapon multiplies kill GC and nothing else, so this single
+	 * number is what it is worth. Computed from the two figures the Contract
+	 * section already prints — the per-kill rate and the completion bonus — so the
+	 * player can check the claim by hand rather than take it. The combo and
+	 * level-gap terms are left out for the same reason: they are properties of a
+	 * kill, not terms of the contract, and the tooltip says which way each moves
+	 * the answer instead of quietly baking in an average.
+	 *
+	 * <p>Package-private for the test that pins EASY against INSANE with the real
+	 * Tuning tables — the two ends of the honesty claim this whole block makes.
+	 *
+	 * <p><b>The ratio itself now lives in {@link Tuning#killShare(double, double)}
+	 * and not here.</b> {@code RevealOverlay.weaponWorthPct} was deriving the same
+	 * thing independently for the reveal ceremony's weapon caption, off the same
+	 * two Tuning tables, and the two agreed only because both derivations happened
+	 * to be right — nothing held them together, so an edit to either would have
+	 * moved one number on screen and not the other. This method keeps its name and
+	 * its int signature (the contract in hand really does carry three ints, and
+	 * the quota clamp below belongs to the panel's own defensiveness about a
+	 * migrated save), and hands the division itself to the shared helper.
+	 */
+	static double killShareFraction(int perKillGc, int killsRequired, int completionGc) {
+		return killShare((double) Math.max(0, perKillGc) * Math.max(0, killsRequired), completionGc);
+	}
+
+	/**
+	 * Whether today's Consignment is still to come.
+	 *
+	 * <p>Three states rather than two: the day key is spent on an ANSWER, not on
+	 * the offer being raised, so an offer standing on screen right now is neither
+	 * "made" nor "still to come" and gets its own line.
+	 *
+	 * <p>"Still to come" is honest rather than a promise, and the tooltip carries
+	 * the reason: the house only ever asks in the moment a style roll comes due,
+	 * so a day can pass with the key unspent simply because the cycle never turned
+	 * over. Saying "available today" would read as a thing the player could go and
+	 * collect.
+	 */
+	private void addConsignmentLine(JPanel section) {
+		gap(section, 5);
+		boolean live = consignment.pendingOffer() != null;
+		boolean spent = consignment.offeredToday();
+		JLabel label = smallLine(live
+			? "Consignment: the house is making its offer now."
+			: spent
+				? "Consignment: today's offer has been made."
+				: "Consignment: today's offer is still to come.",
+			live || !spent ? ANTE_AMBER : MEDIUM_GRAY_COLOR);
+		label.setToolTipText("A free Gilded chest whose price is your next style roll: the wheel does not spin, the house names the style,"
+			+ " and it names the one your album owns the fewest weapon cards for. At most one a day (the day turns at midnight UTC),"
+			+ " and only in the moment a roll comes due — so a day can pass without one if your cycle does not complete."
+			+ " Declining spends the day too: being asked is the thing that is rationed.");
+		section.add(label);
 	}
 
 	/**
@@ -320,7 +554,7 @@ public class OverviewTab extends JPanel {
 	private void addProposalCards(JPanel section) {
 		// the enhanced-for evaluates proposalGroups() exactly once, same as the
 		// local it replaced
-		for (PartyRollService.PendingProposal offer : partyRollService.proposalGroups()) {
+		for (PartyRollService.PendingProposal offer : rollService.proposalGroups()) {
 			section.add(buildProposalCard(offer));
 			gap(section, 6);
 		}
@@ -339,17 +573,17 @@ public class OverviewTab extends JPanel {
 		String host = offer.getHostName()
 			+ (offer.getHostCombatLevel() > 0 ? "  lvl " + offer.getHostCombatLevel() : "");
 		card.add(line(host + "'s roll" + (offer.isMine() ? "  (yours)" : ""),
-			new Color(230, 190, 80), FontManager.getRunescapeBoldFont()));
+			new Color(230, 190, 80), BOLD));
 		gap(card, 2);
 
 		// the rule the roll would ACTUALLY use, and how long the offer stands.
 		// Seconds, not ticks: a countdown nobody can convert is not a countdown.
-		card.add(wrapped("Sizing: " + escape(offer.getSizingLabel()),
-			LIGHT_GRAY_COLOR));
-		card.add(smallLine((offer.isVoting() ? "voting  ·  " : offer.getAgreed() + " in  ·  ")
+		para(card, "Sizing: " + escape(offer.getSizingLabel()),
+			LIGHT_GRAY_COLOR);
+		note(card, (offer.isVoting() ? "voting  ·  " : offer.getAgreed() + " in  ·  ")
 				+ PartyRollService.ticksToSeconds(offer.getTicksLeft())
 				+ "s left",
-			MEDIUM_GRAY_COLOR));
+			MEDIUM_GRAY_COLOR);
 		gap(card, 3);
 
 		for (PartyRollService.ProposalMember member : offer.getMembers()) {
@@ -363,11 +597,11 @@ public class OverviewTab extends JPanel {
 			boolean settled = offer.isVoting()
 				? member.getVote() >= 0
 				: member.getResponse() == PartyRollResponseMessage.AGREE;
-			card.add(smallLine(
+			note(card, 
 				"  " + member.getName() + (member.isSelf() ? " (you)" : "")
 					+ (member.isHost() ? " — host" : "")
 					+ "  ·  " + state,
-				settled ? LIGHT_GRAY_COLOR : MUTED_MEMBER));
+				settled ? LIGHT_GRAY_COLOR : MUTED_MEMBER);
 		}
 
 		if (offer.isMine()) {
@@ -381,15 +615,14 @@ public class OverviewTab extends JPanel {
 		JButton join = button("Join");
 		join.setEnabled(!offer.isBlocked());
 		join.setToolTipText(offer.isBlocked()
-			? "You cannot join this roll — you have a contract, undecided rolls, or party"
-				+ " contracts are off in your settings."
+			? "You cannot join this roll — you have a contract, undecided rolls, or party contracts are off in your settings."
 			: "Join this roll. Any other roll you have been offered is answered for you.");
-		join.addActionListener(e -> partyRollService.joinProposal(id));
+		join.addActionListener(e -> rollService.joinProposal(id));
 		card.add(join);
 		gap(card, 3);
 		actionButton(card, "Decline",
 			"Sit this one out. The rest of that party may still take a contract.",
-			e -> partyRollService.declineProposal(id));
+			e -> rollService.declineProposal(id));
 		return card;
 	}
 
@@ -444,16 +677,21 @@ public class OverviewTab extends JPanel {
 	}
 
 	private JPanel buildTaskSection(GachaState state) {
-		JPanel section = GachamanPanel.section("Contract");
+		JPanel section = section("Contract");
 		ActiveTask task = state.getActiveTask();
 		if (task == null) {
-			boolean offersWaiting = state.getPendingOffers() != null && !state.getPendingOffers().isEmpty();
+			// read once. GachaState is a Lombok @Value, so the three reads this
+			// replaces could not have disagreed — they were three trips for one
+			// immutable reference, and the null check now guards the local it
+			// actually checked.
+			List<TaskOffer> offers = state.getPendingOffers();
+			boolean offersWaiting = offers != null && !offers.isEmpty();
 			if (offersWaiting) {
-				boolean partyVote = state.getPendingOffers().get(0).isPartyRoll();
-				section.add(wrapped(partyVote
+				boolean partyVote = offers.get(0).isPartyRoll();
+				para(section, partyVote
 						? "Party contracts rolled — click one to VOTE (a majority accepts)."
 						: "Contracts rolled — view them and pick one.",
-					LIGHT_GRAY_COLOR));
+					LIGHT_GRAY_COLOR);
 				gap(section, 4);
 				// the group, through the vote: who is in it and how each of them
 				// has voted. This branch used to return before the cards were
@@ -465,13 +703,13 @@ public class OverviewTab extends JPanel {
 				// NOT taskService::presentOffers — see viewRolledContracts above
 				actionButton(section, "View Rolled Contracts", null,
 					e -> clientThread.invokeLater(this::viewRolledContracts));
-				if (partyVote && partyRollService.canCancelRoll()) {
+				if (partyVote && rollService.canCancelRoll()) {
 					addCancelRoll(section, " (before a contract is accepted).");
 				}
 				addAnteControls(section, state, partyVote);
 				return section;
 			}
-			section.add(smallLine("No active contract.", LIGHT_GRAY_COLOR));
+			note(section, "No active contract.", LIGHT_GRAY_COLOR);
 			gap(section, 4);
 			// every roll on offer, before the buttons that would start a rival one:
 			// the whole point of a card is that answering it is the cheaper move
@@ -482,10 +720,10 @@ public class OverviewTab extends JPanel {
 			// holding no offers — which reads here as "nothing going on". Rolling a
 			// personal board in that window gets its scrolls force-closed the moment
 			// the party vote settles, so the party's claim on this client counts too.
-			roll.setEnabled(taskService.canRollOffers() && !partyRollService.committedSnapshot());
+			roll.setEnabled(taskService.canRollOffers() && !rollService.committedSnapshot());
 			roll.addActionListener(e -> clientThread.invokeLater(taskService::rollOffers));
 			section.add(roll);
-			if (inPartySupplier.getAsBoolean()) {
+			if (inParty.getAsBoolean()) {
 				// deliberately OUTSIDE the branches below, exactly where it has always
 				// been: when a proposal is live and this client is not the host,
 				// nothing follows it, and that bare 4px gap at the foot of the section
@@ -495,25 +733,23 @@ public class OverviewTab extends JPanel {
 				// the same truth table as the old `if (live) { if (canForceStart) X } else Y`,
 				// one nesting level shallower. Both reads are pure, so the swapped
 				// order costs nothing.
-				if (!partyRollService.isProposalLive()) {
+				if (!rollService.isProposalLive()) {
 					JButton party = button("Propose Party Roll");
-					party.setToolTipText("Party members without a contract join with ::gachaparty;"
-						+ " the roll starts with whoever agrees (minimum 2), identical offers"
-						+ " appear for everyone, and a majority vote picks the shared contract.");
+					party.setToolTipText("Party members without a contract join with ::gachaparty; the roll starts with whoever agrees (minimum 2),"
+						+ " identical offers appear for everyone, and a majority vote picks the shared contract.");
 					party.setEnabled(taskService.canRollOffers());
-					party.addActionListener(e -> partyRollService.propose());
+					party.addActionListener(e -> rollService.propose());
 					section.add(party);
 				}
-				else if (partyRollService.canForceStart()) {
+				else if (rollService.canForceStart()) {
 					// no status line in this branch any more: the group card above
 					// already carries the host, the roster, the count and the countdown,
 					// and two copies of one clock is one copy too many
 					gap(section, 3);
 					actionButton(section,
-						"Start Roll Now (" + partyRollService.agreedCount() + " agreed)",
-						"Host only: start immediately with everyone who has"
-							+ " agreed so far instead of waiting out the 60s window.",
-						e -> partyRollService.forceStart());
+						"Start Roll Now (" + rollService.agreedCount() + " agreed)",
+						"Host only: start immediately with everyone who has agreed so far instead of waiting out the 60s window.",
+						e -> rollService.forceStart());
 					addCancelRoll(section, ".");
 				}
 			}
@@ -525,18 +761,20 @@ public class OverviewTab extends JPanel {
 		// measures 176px, so Swing ellipsised away the exact thing the suffix was
 		// there to show. The level moves down to the difficulty line, which has the
 		// full 205px to itself.
-		JLabel monster = line(task.getMonsterName(),
-			Color.WHITE, FontManager.getRunescapeBoldFont());
-		monster.setToolTipText(task.getMonsterName() + " (level " + task.getMonsterCombatLevel() + ")");
+		// the name four times over, from an immutable @Value, so one read
+		String named = task.getMonsterName();
+		JLabel monster = line(named,
+			Color.WHITE, BOLD);
+		monster.setToolTipText(named + " (level " + task.getMonsterCombatLevel() + ")");
 		JButton wiki = new JButton("Wiki");
 		wiki.setFont(FontManager.getRunescapeSmallFont());
 		wiki.setMargin(new Insets(1, 6, 1, 6));
 		wiki.setFocusPainted(false);
 		wiki.setBackground(DARKER_GRAY_HOVER_COLOR);
 		wiki.setForeground(new Color(240, 200, 90));
-		wiki.setToolTipText("Open the OSRS wiki page for " + task.getMonsterName());
+		wiki.setToolTipText("Open the OSRS wiki page for " + named);
 		final String wikiUrl = "https://oldschool.runescape.wiki/w/"
-			+ task.getMonsterName().replace(' ', '_');
+			+ named.replace(' ', '_');
 		wiki.addActionListener(e -> LinkBrowser.browse(wikiUrl));
 		// row() is this header field for field: BorderLayout(6, 0), not opaque,
 		// left-aligned, left child in CENTER and right child in EAST. The one extra
@@ -547,48 +785,52 @@ public class OverviewTab extends JPanel {
 		headerRow.setMaximumSize(new Dimension(Integer.MAX_VALUE,
 			Math.max(monster.getPreferredSize().height, wiki.getPreferredSize().height)));
 		section.add(headerRow);
-		section.add(smallLine(task.getDifficulty().getDisplayName()
+		// the difficulty's colour paints three lines and the shared flag decides
+		// four things; both come off the same immutable task, so both are read once
+		Color rung = task.getDifficulty().getColor();
+		boolean shared = task.isParty();
+		int quota = task.getKillsRequired();
+		boolean half = task.isHalfKillPending();
+		note(section, task.getDifficulty().getDisplayName()
 				+ "  ·  lvl " + task.getMonsterCombatLevel()
 				+ (task.isRedemption() ? " — REDEMPTION" : ""),
-			task.getDifficulty().getColor()));
-		if (task.isParty()) {
+			rung);
+		if (shared) {
 			// Its own line: appended to the difficulty it ran to 237px in a 205px
 			// column, and the horizontal scrollbar is disabled, so the party label
 			// was simply cut off.
-			section.add(smallLine("SHARED: " + task.getPartyLabel(),
-				task.getDifficulty().getColor()));
+			note(section, "SHARED: " + task.getPartyLabel(), rung);
 		}
 		gap(section, 5);
 		// shared contracts pool every participant's kills into the quota
-		int pooled = task.getKillsDone() + (task.isParty() ? task.getPartyOtherKills() : 0);
-		double killsDone = pooled + (task.isHalfKillPending() ? 0.5 : 0);
-		double killFrac = task.getKillsRequired() <= 0 ? 0
-			: killsDone / task.getKillsRequired();
-		section.add(new MeterBar(killFrac, task.getDifficulty().getColor(),
-			pooled + (task.isHalfKillPending() ? ".5" : "")
-				+ " / " + task.getKillsRequired() + " kills"
-				+ (task.isParty() ? " (yours: " + task.getKillsDone() + ")" : "")));
+		int pooled = task.getKillsDone() + (shared ? task.getPartyOtherKills() : 0);
+		double killsDone = pooled + (half ? 0.5 : 0);
+		double killFrac = quota <= 0 ? 0
+			: killsDone / quota;
+		section.add(new MeterBar(killFrac, rung,
+			pooled + (half ? ".5" : "")
+				+ " / " + quota + " kills"
+				+ (shared ? " (yours: " + task.getKillsDone() + ")" : "")));
 		gap(section, 4);
-		section.add(smallLine(
+		note(section, 
 			formatNumber(task.getPerKillGc()) + " GC / kill  ·  "
 				+ formatNumber(task.getCompletionGc()) + " GC completion",
-			LIGHT_GRAY_COLOR));
+			LIGHT_GRAY_COLOR);
 		if (task.getAppliedCharge() != null) {
-			section.add(smallLine("Charge applied: " + prettyCharge(task.getAppliedCharge()),
-				new Color(150, 190, 240)));
+			note(section, "Charge applied: " + prettyCharge(task.getAppliedCharge()),
+				new Color(150, 190, 240));
 		}
-		if (task.getAnteStake() > 0) {
+		int staked = task.getAnteStake();
+		if (staked > 0) {
 			// Shown for as long as the stake exists, because it is the player's
 			// own GC sitting outside the purse — the balance at the top of this
 			// panel is short by exactly this much and needs the explanation.
 			JLabel ante = smallLine(
-				"Ante: " + formatNumber(task.getAnteStake()) + " GC staked",
+				"Ante: " + formatNumber(staked) + " GC staked",
 				ANTE_AMBER);
-			ante.setToolTipText("This GC left your purse when you signed. Complete the contract"
-				+ " and " + formatNumber(
-					(long) task.getAnteStake() * Tuning.ANTE_PAYOUT_MULT)
-				+ " GC comes back; die and it is gone. Only your own stake is at risk —"
-				+ " a party member dying does not cost you yours.");
+			ante.setToolTipText("This GC left your purse when you signed. Complete the contract and " + formatNumber(
+					(long) staked * ANTE_PAYOUT_MULT)
+				+ " GC comes back; die and it is gone. Only your own stake is at risk — a party member dying does not cost you yours.");
 			section.add(ante);
 		}
 		// Shown on EVERY contract, active or not. A bonus that only appears once
@@ -597,21 +839,20 @@ public class OverviewTab extends JPanel {
 		// not getting it. The tooltip carries the exact when-is-it-fixed rule.
 		JLabel docket = smallLine(
 			task.isSlayerAligned()
-				? "Double Docket: ACTIVE (x" + trimDouble(Tuning.DOUBLE_DOCKET_MULT) + ")"
+				? "Double Docket: ACTIVE (x" + trimDouble(DOUBLE_DOCKET_MULT) + ")"
 				: "Double Docket: not your Slayer task",
 			task.isSlayerAligned() ? DOCKET_GREEN : LIGHT_GRAY_COLOR);
 		docket.setToolTipText("Kill your Slayer assignment on contract and completion pays x"
-			+ trimDouble(Tuning.DOUBLE_DOCKET_MULT) + ". Checked when you accept AND on every kill, so"
-			+ " picking up the matching task mid-contract still counts — and once it locks in it"
-			+ " stays, even if you finish the Slayer task first. Contracts are never rolled to"
-			+ " match your Slayer task; grouped assignments such as Metal dragons name no single"
-			+ " monster and cannot be detected.");
+			+ trimDouble(DOUBLE_DOCKET_MULT) + ". Checked when you accept AND on every kill, so picking up the matching task mid-contract"
+			+ " still counts — and once it locks in it stays, even if you finish the Slayer task first. Contracts are never rolled to"
+			+ " match your Slayer task; grouped assignments such as Metal dragons name no single monster and cannot be detected.");
 		section.add(docket);
 
-		if (task.getSideBets() != null && !task.getSideBets().isEmpty()) {
+		List<SideBet> bets = task.getSideBets();
+		if (bets != null && !bets.isEmpty()) {
 			gap(section, 5);
-			section.add(smallLine("Side bets:", BRAND_ORANGE));
-			for (SideBet bet : task.getSideBets()) {
+			note(section, "Side bets:", BRAND_ORANGE);
+			for (SideBet bet : bets) {
 				// The same three-way truth table the if/else/if here used to spell
 				// out: a sealed bet hides its terms while it is still running but
 				// never its payout, completing one both uncovers the terms and earns
@@ -622,26 +863,24 @@ public class OverviewTab extends JPanel {
 					+ (bet.isSealed() && !bet.isCompleted()
 						? "???" : TaskService.describeSideBet(bet))
 					+ " — " + formatNumber(bet.getPayoutGc()) + " GC";
-				section.add(smallLine(text,
-					bet.isCompleted() ? SIDEBET_DONE : LIGHT_GRAY_COLOR));
+				note(section, text,
+					bet.isCompleted() ? SIDEBET_DONE : LIGHT_GRAY_COLOR);
 			}
 		}
 
 		gap(section, 4);
-		section.add(wrapped(
+		para(section, 
 			"A contract is a contract — it cannot be abandoned.",
-			MEDIUM_GRAY_COLOR));
+			MEDIUM_GRAY_COLOR);
 		return section;
 	}
 
 	private static boolean hasInsaneOffer(GachaState state) {
-		if (state.getPendingOffers() == null) {
+		if (state.getPendingOffers() == null)
 			return false;
-		}
 		for (TaskOffer offer : state.getPendingOffers()) {
-			if (TaskService.anteEligible(offer)) {
+			if (TaskService.anteEligible(offer))
 				return true;
-			}
 		}
 		return false;
 	}
@@ -658,25 +897,23 @@ public class OverviewTab extends JPanel {
 	 * Disarming takes none — backing out of a wager should never be defended.
 	 */
 	private void addAnteControls(JPanel section, GachaState state, boolean partyVote) {
-		if (!config.anteEnabled() || !hasInsaneOffer(state)) {
+		if (!config.anteEnabled() || !hasInsaneOffer(state))
 			return;
-		}
 		gap(section, 6);
-		section.add(smallLine("The Ante", BRAND_ORANGE));
+		note(section, "The Ante", BRAND_ORANGE);
 
 		int armed = taskService.getArmedAntePercent();
 		if (armed > 0) {
-			section.add(wrapped("ARMED at " + armed + "% — "
+			para(section, "ARMED at " + armed + "% — "
 				+ formatNumber(taskService.previewAnteStake())
 				+ " GC will be staked on the INSANE contract you "
 				+ (partyVote
 					? "vote for, and only if EVERY member agrees to their own stake."
 					: "accept."),
-				ANTE_AMBER));
+				ANTE_AMBER);
 			gap(section, 3);
 			actionButton(section, "Disarm the Ante",
-				"Take the wager off. Nothing has been staked yet —"
-					+ " GC only leaves your purse when a contract is actually signed.",
+				"Take the wager off. Nothing has been staked yet — GC only leaves your purse when a contract is actually signed.",
 				e -> {
 					taskService.armAnte(0);
 					rebuild();
@@ -684,24 +921,20 @@ public class OverviewTab extends JPanel {
 			return;
 		}
 
-		if (taskService.previewAnteStake(Tuning.ANTE_MIN_PERCENT) <= 0) {
-			section.add(wrapped("Your purse is under "
-				+ formatNumber(Tuning.ANTE_MIN_PURSE_GC)
-				+ " GC, so no wager is offered.", MEDIUM_GRAY_COLOR));
+		if (taskService.previewAnteStake(ANTE_MIN_PERCENT) <= 0) {
+			para(section, "Your purse is under "
+				+ formatNumber(ANTE_MIN_PURSE_GC)
+				+ " GC, so no wager is offered.", MEDIUM_GRAY_COLOR);
 			return;
 		}
 
-		section.add(wrapped(
-			"Optional. Stake part of your purse against an INSANE contract before you take"
-				+ " it: complete the contract and the stake returns doubled, die and it is"
-				+ " gone. Contracts cannot be abandoned.",
-			LIGHT_GRAY_COLOR));
+		para(section, 
+			"Optional. Stake part of your purse against an INSANE contract before you take it: complete the contract and the stake returns doubled, die and it is gone. Contracts cannot be abandoned.",
+			LIGHT_GRAY_COLOR);
 		if (partyVote) {
-			section.add(wrapped(
-				"In a party it takes EVERY member. Each stakes from their own purse, and"
-					+ " each loses only their own — one member declining means no Ante for"
-					+ " anyone, but the contract goes ahead either way.",
-				LIGHT_GRAY_COLOR));
+			para(section, 
+				"In a party it takes EVERY member. Each stakes from their own purse, and each loses only their own — one member declining means no Ante for anyone, but the contract goes ahead either way.",
+				LIGHT_GRAY_COLOR);
 		}
 		gap(section, 4);
 
@@ -714,7 +947,7 @@ public class OverviewTab extends JPanel {
 		// the index: item i is ANTE_MIN_PERCENT + 10*i — 10/20/30/40/50 for today's
 		// 10..50 band — which is exactly how the listener below recovers the chosen
 		// percent back out of the combo's selected index.
-		for (int percent = Tuning.ANTE_MIN_PERCENT; percent <= Tuning.ANTE_MAX_PERCENT;
+		for (int percent = ANTE_MIN_PERCENT; percent <= ANTE_MAX_PERCENT;
 			percent += 10) {
 			percents.addItem(percent + "%  —  "
 				+ formatNumber(taskService.previewAnteStake(percent)) + " GC");
@@ -728,29 +961,24 @@ public class OverviewTab extends JPanel {
 		gap(section, 3);
 
 		actionButton(section, "Arm the Ante",
-			"Arms only. The GC leaves your purse when you sign an INSANE"
-				+ " contract, and is priced from your purse at that moment (capped at "
-				+ formatNumber(Tuning.ANTE_MAX_GC) + " GC).",
+			"Arms only. The GC leaves your purse when you sign an INSANE contract, and is priced from your purse at that moment (capped at "
+				+ formatNumber(ANTE_MAX_GC) + " GC).",
 			e -> {
 				// The inverse of the loop that filled the combo: index i is the i'th
 				// ten-point stop up from the floor. Math.max keeps the no-selection
 				// (-1) case pinned to the minimum, exactly as the array lookup did.
-				int percent = Tuning.ANTE_MIN_PERCENT
+				int percent = ANTE_MIN_PERCENT
 					+ 10 * Math.max(0, percents.getSelectedIndex());
 				int stake = taskService.previewAnteStake(percent);
-				if (stake <= 0) {
+				if (stake <= 0)
 					return;
-				}
 				String amount = formatNumber(stake);
 				if (!confirm(this, "Arm the Ante?",
-					"Stake " + amount + " GC (" + percent + "% of your purse) on the next INSANE"
-						+ " contract you take? The exact amount is fixed when you sign.")) {
+					"Stake " + amount + " GC (" + percent + "% of your purse) on the next INSANE contract you take? The exact amount is fixed when you sign.")) {
 					return;
 				}
 				if (!confirm(this, "If you die, it is gone",
-					"Dying while that contract is active loses the " + amount + " GC outright."
-						+ " The contract itself is still binding and cannot be abandoned."
-						+ " Arm the Ante?")) {
+					"Dying while that contract is active loses the " + amount + " GC outright. The contract itself is still binding and cannot be abandoned. Arm the Ante?")) {
 					return;
 				}
 				taskService.armAnte(percent);
@@ -760,15 +988,14 @@ public class OverviewTab extends JPanel {
 
 
 	private JPanel buildTaintSection(GachaState state) {
-		JPanel section = GachamanPanel.section(null);
+		JPanel section = section(null);
 		section.setBackground(new Color(56, 26, 24));
 		section.add(line("TAINT ACTIVE (" + state.getTaint() + ")",
-			TAINT_RED, FontManager.getRunescapeBoldFont()));
+			TAINT_RED, BOLD));
 		gap(section, 3);
-		section.add(wrapped(
-			"Forbidden gear or style has stained your record. All GC income is halved"
-				+ " until the taint is worked off with clean kills (or a Redemption contract).",
-			new Color(230, 170, 160)));
+		para(section, 
+			"Forbidden gear or style has stained your record. All GC income is halved until the taint is worked off with clean kills (or a Redemption contract).",
+			new Color(230, 170, 160));
 		return section;
 	}
 
@@ -789,25 +1016,25 @@ public class OverviewTab extends JPanel {
 	 */
 	private static JPanel meterSection(String title, int done, int total, Color bar,
 		String unit, String note) {
-		JPanel section = GachamanPanel.section(title);
+		JPanel section = section(title);
 		section.add(new MeterBar((double) done / total, bar,
 			done + " / " + total + " " + unit));
 		gap(section, 3);
-		section.add(wrapped(note, MEDIUM_GRAY_COLOR));
+		para(section, note, MEDIUM_GRAY_COLOR);
 		return section;
 	}
 
 	private JPanel buildFragmentSection(GachaState state) {
-		int tasksLeft = Tuning.FRAGMENT_WINDOW_TASKS - state.getTotalTasksCompleted();
+		int tasksLeft = FRAGMENT_WINDOW_TASKS - state.getTotalTasksCompleted();
 		return meterSection("Deed Fragments", state.getDeedFragments(),
-			Tuning.FRAGMENTS_REQUIRED, new Color(230, 190, 80), "fragments",
+			FRAGMENTS_REQUIRED, new Color(230, 190, 80), "fragments",
 			"Medium+ contracts drop fragments during your first "
-				+ Tuning.FRAGMENT_WINDOW_TASKS + " contracts (" + tasksLeft + " left). Collect "
-				+ Tuning.FRAGMENTS_REQUIRED + " to forge a bonus Slot Deed.");
+				+ FRAGMENT_WINDOW_TASKS + " contracts (" + tasksLeft + " left). Collect "
+				+ FRAGMENTS_REQUIRED + " to forge a bonus Slot Deed.");
 	}
 
 	private JPanel buildPitySection(GachaState state) {
-		int cap = Tuning.PITY_HARD_CAP;
+		int cap = PITY_HARD_CAP;
 		// warms from violet to amber over the last fifth of the run to the cap. The
 		// (double) cast is the same one meterSection needs — int/int would only ever
 		// clear 0.8 by hitting the cap exactly.
@@ -846,9 +1073,8 @@ public class OverviewTab extends JPanel {
 	 * test — the same arrangement {@link ShopTab#pct} already uses.
 	 */
 	static String trimDouble(double value) {
-		if (value == Math.floor(value)) {
+		if (value == Math.floor(value))
 			return String.valueOf((int) value);
-		}
 		return String.format(Locale.ROOT, "%.1f", value);
 	}
 }

@@ -1,6 +1,5 @@
 package com.gachaman.party;
 
-import javax.annotation.*;
 
 /**
  * How a party roll picks the combat level it sizes contracts to.
@@ -54,14 +53,12 @@ public enum PartySizing {
 	 * on every client, which is the only property that matters here. A roll
 	 * that cannot agree on its rule is worse than a roll on the wrong rule.
 	 */
-	static PartySizing fromWire(@Nullable String name) {
-		if (name == null) {
+	static PartySizing fromWire(String name) {
+		if (name == null)
 			return FIGHTING_WEIGHT;
-		}
 		for (PartySizing sizing : values()) {
-			if (sizing.name().equals(name)) {
+			if (sizing.name().equals(name))
 				return sizing;
-			}
 		}
 		return FIGHTING_WEIGHT;
 	}

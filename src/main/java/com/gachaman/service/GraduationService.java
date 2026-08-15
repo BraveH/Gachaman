@@ -34,9 +34,8 @@ public class GraduationService {
 
 	@Subscribe
 	public void onItemContainerChanged(ItemContainerChanged event) {
-		if (event.getContainerId() != InventoryID.WORN) {
+		if (event.getContainerId() != InventoryID.WORN)
 			return;
-		}
 		process(event.getItemContainer());
 	}
 
@@ -60,9 +59,8 @@ public class GraduationService {
 		// slot name -> the card that caused a CELEBRATED rank-up (not baselines)
 		Map<String, CardDefinition> graduations = new HashMap<>();
 		for (Item item : container.getItems()) {
-			if (item == null || item.getId() <= 0) {
+			if (item == null || item.getId() <= 0)
 				continue;
-			}
 			CardDefinition def = cardDatabase.cardForItem(item.getId());
 			if (def == null || def.getSlot() == null || def.getTierKey() == null
 				|| def.getTierRank() <= 0) {
@@ -81,13 +79,11 @@ public class GraduationService {
 				}
 			}
 		}
-		if (updates.isEmpty()) {
+		if (updates.isEmpty())
 			return;
-		}
 		stateService.mutate(s -> {
-			if (s.getSlotBestTierRank() == null) {
+			if (s.getSlotBestTierRank() == null)
 				return s;
-			}
 			Map<String, Integer> map = new HashMap<>(s.getSlotBestTierRank());
 			for (Map.Entry<String, Integer> entry : updates.entrySet()) {
 				Integer existing = map.get(entry.getKey());

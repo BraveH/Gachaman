@@ -2,7 +2,6 @@ package com.gachaman.service;
 
 import com.gachaman.model.*;
 import java.util.*;
-import javax.annotation.*;
 import javax.inject.*;
 import lombok.*;
 import net.runelite.api.*;
@@ -69,10 +68,9 @@ public class MaxHitService {
 	 * Best hit the player could land in the style named by the persisted state,
 	 * or 0 when there is no style rolled yet or the name is unrecognised.
 	 */
-	public int estimateFor(@Nullable String styleName) {
-		if (styleName == null) {
+	public int estimateFor(String styleName) {
+		if (styleName == null)
 			return 0;
-		}
 		try {
 			return estimate(AttackStyle.valueOf(styleName));
 		}
@@ -82,10 +80,9 @@ public class MaxHitService {
 	}
 
 	/** Best hit the player could land in this style, or 0 when it cannot be read. */
-	public int estimate(@Nullable AttackStyle style) {
-		if (style == null) {
+	public int estimate(AttackStyle style) {
+		if (style == null)
 			return 0;
-		}
 		try {
 			switch (style) {
 				case RANGED:
@@ -128,13 +125,11 @@ public class MaxHitService {
 	private List<ItemEquipmentStats> wornStats() {
 		List<ItemEquipmentStats> out = new ArrayList<>();
 		ItemContainer worn = client.getItemContainer(InventoryID.WORN);
-		if (worn == null) {
+		if (worn == null)
 			return out;
-		}
 		for (Item item : worn.getItems()) {
-			if (item == null || item.getId() <= 0) {
+			if (item == null || item.getId() <= 0)
 				continue;
-			}
 			ItemStats stats = itemManager.getItemStats(item.getId());
 			if (stats != null && stats.getEquipment() != null) {
 				out.add(stats.getEquipment());

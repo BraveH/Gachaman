@@ -90,7 +90,7 @@ public final class CardRenderer {
 	 * every clipped child in this file descends from drawBack's or drawFace's
 	 * graphics, on which antialiasing is already on.
 	 */
-	private static Graphics2D layer(Graphics2D g, @Nullable Shape clip) {
+	private static Graphics2D layer(Graphics2D g, Shape clip) {
 		Graphics2D out = (Graphics2D) g.create();
 		if (clip != null) {
 			out.setClip(clip);
@@ -268,17 +268,15 @@ public final class CardRenderer {
 
 	/** Rarity-colored glow behind a card (charge-up etc.); intensity 0..1. */
 	public static void drawGlow(Graphics2D g, int x, int y, int w, int h, Color color, float intensity) {
-		if (intensity <= 0) {
+		if (intensity <= 0)
 			return;
-		}
 		Graphics2D g2 = layer(g, null);
 		int layers = 12;
 		for (int i = layers; i >= 1; i--) {
 			float t = (float) i / layers;
 			int alpha = (int) (intensity * 90 * (1 - t) * (1 - t));
-			if (alpha <= 0) {
+			if (alpha <= 0)
 				continue;
-			}
 			// alpha() clamps to 0..255, which subsumes the Math.min this used to do
 			g2.setColor(alpha(color, alpha));
 			int pad = (int) (t * Math.min(w, h) * 0.28f);
@@ -497,14 +495,13 @@ public final class CardRenderer {
 	 * whose bands eat the entire face draws no seams at all rather than seams in
 	 * the wrong place.
 	 */
-	static int[] wearOpenBand(@Nullable Rectangle[] protect, int y, int h) {
+	static int[] wearOpenBand(Rectangle[] protect, int y, int h) {
 		int lo = y;
 		int hi = y + h;
 		if (protect != null) {
 			for (Rectangle r : protect) {
-				if (r == null) {
+				if (r == null)
 					continue;
-				}
 				if (r.y <= lo) {
 					lo = Math.max(lo, r.y + r.height);
 				}
@@ -628,12 +625,11 @@ public final class CardRenderer {
 	 * <p>Pure and deterministic in the seed, which is what lets a test prove the
 	 * never-obscure guarantee by sweeping sizes and seeds rather than by eye.
 	 */
-	static List<int[]> wearSegments(int x, int y, int w, int h, @Nullable CardWear wear,
-		int seed, @Nullable Rectangle[] protect) {
+	static List<int[]> wearSegments(int x, int y, int w, int h, CardWear wear,
+		int seed, Rectangle[] protect) {
 		List<int[]> out = new ArrayList<>();
-		if (wear == null || w <= 0 || h <= 0) {
+		if (wear == null || w <= 0 || h <= 0)
 			return out;
-		}
 		float pad = wearInkReach(w);
 		int[] band = wearOpenBand(protect, y, h);
 
@@ -744,7 +740,7 @@ public final class CardRenderer {
 	 * relief over the top of the rarity label on a small card.
 	 */
 	private static void emitSeam(List<int[]> out, double[][] path, float pad,
-		@Nullable Rectangle[] protect, int kind) {
+		Rectangle[] protect, int kind) {
 		for (int s = 1; s < path.length; s++) {
 			int ax = (int) Math.round(path[s - 1][0]);
 			int ay = (int) Math.round(path[s - 1][1]);
@@ -757,20 +753,18 @@ public final class CardRenderer {
 	}
 
 	/** True when a stroked segment, padded, would touch anything protected. */
-	static boolean blocked(@Nullable Rectangle[] protect, double ax, double ay,
+	static boolean blocked(Rectangle[] protect, double ax, double ay,
 		double bx, double by, float pad) {
-		if (protect == null) {
+		if (protect == null)
 			return false;
-		}
 		int x0 = (int) Math.floor(Math.min(ax, bx) - pad);
 		int y0 = (int) Math.floor(Math.min(ay, by) - pad);
 		int x1 = (int) Math.ceil(Math.max(ax, bx) + pad);
 		int y1 = (int) Math.ceil(Math.max(ay, by) + pad);
 		Rectangle box = new Rectangle(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
 		for (Rectangle r : protect) {
-			if (r != null && r.intersects(box)) {
+			if (r != null && r.intersects(box))
 				return true;
-			}
 		}
 		return false;
 	}
@@ -784,9 +778,8 @@ public final class CardRenderer {
 	private static void drawWearGrime(Graphics2D g2, Shape clip, int x, int y, int w, int h,
 		CardWear wear, int seed) {
 		int alpha = grimeAlpha(wear);
-		if (alpha <= 0 || w <= 0 || h <= 0) {
+		if (alpha <= 0 || w <= 0 || h <= 0)
 			return;
-		}
 		Graphics2D gg = layer(g2, clip);
 		// centred a little above the middle, on the sprite rather than on the
 		// card, so the clear window sits where the thing worth seeing is
@@ -849,9 +842,8 @@ public final class CardRenderer {
 	 */
 	private static void drawWearLines(Graphics2D g2, Shape clip, int w, CardWear wear,
 		List<int[]> segments) {
-		if (segments.isEmpty()) {
+		if (segments.isEmpty())
 			return;
-		}
 		Graphics2D gw = layer(g2, clip);
 		float line = wearStroke(w);
 		int alpha = wearAlpha(wear);
@@ -929,9 +921,8 @@ public final class CardRenderer {
 			double len = Math.hypot(dx, dy);
 			// the wrong kind and a zero-length segment are both "not this pass's
 			// business", so they share the one skip
-			if (seg[4] != kind || len < 1e-6) {
+			if (seg[4] != kind || len < 1e-6)
 				continue;
-			}
 			double nx = -dy / len * off;
 			double ny = dx / len * off;
 			gw.draw(new Line2D.Double(seg[0] + nx, seg[1] + ny, seg[2] + nx, seg[3] + ny));
@@ -969,9 +960,8 @@ public final class CardRenderer {
 	private static void drawWearEdge(Graphics2D g2, Shape clip, int x, int y, int w, int h,
 		CardWear wear, int seed) {
 		int marks = edgeNicks(wear);
-		if (marks == 0 || w <= 0 || h <= 0) {
+		if (marks == 0 || w <= 0 || h <= 0)
 			return;
-		}
 		Graphics2D ge = layer(g2, clip);
 		int alpha = wearAlpha(wear);
 		double perimeter = 2.0 * (w + h);
@@ -1141,9 +1131,8 @@ public final class CardRenderer {
 	 * clearance is guaranteed by construction rather than by measurement luck.
 	 */
 	static int rarityLabelLeft(int x, int w, int badgeTextWidth) {
-		if (badgeTextWidth < 0) {
+		if (badgeTextWidth < 0)
 			return x + 4;
-		}
 		return serviceBadgeX(x, w) + serviceBadgeWidth(w, badgeTextWidth) + Math.max(4, w / 20);
 	}
 
@@ -1153,15 +1142,12 @@ public final class CardRenderer {
 	 * '.', 'k' and 'm' come out, so there is no missing-glyph hazard.
 	 */
 	static String serviceText(int killsServed) {
-		if (killsServed < 1000) {
+		if (killsServed < 1000)
 			return Integer.toString(killsServed);
-		}
-		if (killsServed < 10000) {
+		if (killsServed < 10000)
 			return killsServed / 1000 + "." + killsServed % 1000 / 100 + "k";
-		}
-		if (killsServed < 1000000) {
+		if (killsServed < 1000000)
 			return killsServed / 1000 + "k";
-		}
 		return killsServed / 1000000 + "m";
 	}
 

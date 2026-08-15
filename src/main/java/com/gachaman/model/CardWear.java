@@ -31,15 +31,13 @@ public enum CardWear {
 	 * treating a typo as "no wear" would wipe a record the player meant to set.
 	 */
 	@Nullable
-	public static CardWear parse(@Nullable String word) {
-		if (word == null) {
+	public static CardWear parse(String word) {
+		if (word == null)
 			return null;
-		}
 		String needle = word.trim().toUpperCase(Locale.ROOT);
 		for (CardWear wear : values()) {
-			if (wear.name().equals(needle)) {
+			if (wear.name().equals(needle))
 				return wear;
-			}
 		}
 		return null;
 	}

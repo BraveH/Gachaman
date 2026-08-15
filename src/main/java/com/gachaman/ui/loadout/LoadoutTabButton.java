@@ -57,9 +57,8 @@ public class LoadoutTabButton {
 			return; // loadout system disabled — no button on the equipment page
 		}
 		Widget parent = client.getWidget(InterfaceID.Wornitems.UNIVERSE);
-		if (parent == null) {
+		if (parent == null)
 			return;
-		}
 		if (button != null && buttonParent == parent) {
 			return; // already attached to this incarnation of the interface
 		}

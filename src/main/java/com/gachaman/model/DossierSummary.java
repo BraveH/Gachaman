@@ -1,7 +1,6 @@
 package com.gachaman.model;
 
 import java.util.*;
-import javax.annotation.*;
 import lombok.*;
 
 /**
@@ -22,7 +21,7 @@ public class DossierSummary {
 	/** Best single haul in the retained window, 0 when the log is empty. */
 	long bestGc;
 
-	public static DossierSummary of(@Nullable List<ContractRecord> log) {
+	public static DossierSummary of(List<ContractRecord> log) {
 		int contracts = 0;
 		int clean = 0;
 		int party = 0;

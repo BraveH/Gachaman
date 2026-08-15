@@ -192,9 +192,9 @@ public class PartyPresenceService {
 	 * and "Goblin1" at 1/2 flatten to the same string without a separator, and
 	 * the heartbeat would then swallow a change the party needed to see.
 	 */
-	static String signature(@Nullable String allowedStyle, int combatLevel,
-		@Nullable String taskName, int killsDone, int killsRequired, boolean tainted,
-		@Nullable String accountKey, boolean undecidedOffers, @Nullable Long partyContractId) {
+	static String signature(String allowedStyle, int combatLevel,
+		String taskName, int killsDone, int killsRequired, boolean tainted,
+		String accountKey, boolean undecidedOffers, Long partyContractId) {
 		return (allowedStyle == null ? "" : allowedStyle) + SEP + combatLevel + SEP
 			+ (taskName == null ? "" : taskName) + SEP + killsDone + SEP
 			+ killsRequired + SEP + tainted + SEP
@@ -219,10 +219,9 @@ public class PartyPresenceService {
 	 * quiet, and the carry clause has not fired yet. Saying "solo" there would
 	 * be a guess about someone else's state.
 	 */
-	public static List<Group> group(@Nullable List<Row> rows) {
-		if (rows == null || rows.isEmpty()) {
+	public static List<Group> group(List<Row> rows) {
+		if (rows == null || rows.isEmpty())
 			return Collections.emptyList();
-		}
 		// LinkedHashMap: the row order is already the display order, so the
 		// group order falls out of first appearance and self stays on top
 		Map<String, List<Row>> buckets = new LinkedHashMap<>();
@@ -266,16 +265,14 @@ public class PartyPresenceService {
 	}
 
 	static boolean shouldBroadcast(int nowTick, int lastSentTick,
-		@Nullable String nowSignature, @Nullable String lastSignature) {
-		if (lastSignature == null || !lastSignature.equals(nowSignature)) {
+		String nowSignature, String lastSignature) {
+		if (lastSignature == null || !lastSignature.equals(nowSignature))
 			return true;
-		}
 		// a relog or world hop restarts the client's tick counter: without this
 		// the heartbeat would wait out a now-negative interval and we would look
 		// silent to the whole party for as long as the old count was high
-		if (nowTick < lastSentTick) {
+		if (nowTick < lastSentTick)
 			return true;
-		}
 		return nowTick - lastSentTick >= Tuning.PARTY_PRESENCE_HEARTBEAT_TICKS;
 	}
 
@@ -291,14 +288,12 @@ public class PartyPresenceService {
 
 	/** Trust boundary: a remote name is drawn, so it cannot be unbounded. */
 	@Nullable
-	static String clip(@Nullable String text, int max) {
-		if (text == null) {
+	static String clip(String text, int max) {
+		if (text == null)
 			return null;
-		}
 		String trimmed = text.trim();
-		if (trimmed.isEmpty()) {
+		if (trimmed.isEmpty())
 			return null;
-		}
 		return trimmed.length() <= max ? trimmed : trimmed.substring(0, max);
 	}
 
@@ -312,16 +307,15 @@ public class PartyPresenceService {
 	 * it were somebody's RSN. Treat it as absent and use the same wording as a
 	 * genuinely missing name.
 	 */
-	static String memberName(@Nullable String displayName) {
+	static String memberName(String displayName) {
 		String clipped = clip(displayName, NAME_MAX);
 		return clipped == null || "<unknown>".equals(clipped) ? "A party member" : clipped;
 	}
 
 	/** public: PartyTab lives in another package and sizes its bar from this. */
 	public static double progressFraction(int killsDone, int killsRequired) {
-		if (killsRequired <= 0) {
+		if (killsRequired <= 0)
 			return 0;
-		}
 		return Math.max(0, Math.min(1, killsDone / (double) killsRequired));
 	}
 
@@ -351,9 +345,8 @@ public class PartyPresenceService {
 		}
 		wasEnabled = true;
 		GachaState state = stateService.get();
-		if (state == null) {
+		if (state == null)
 			return;
-		}
 		GachaPresenceMessage mine = localPresence(state);
 		String sig = signature(mine.getAllowedStyle(), mine.getCombatLevel(),
 			mine.getActiveTaskName(), mine.getKillsDone(), mine.getKillsRequired(),
@@ -390,9 +383,8 @@ public class PartyPresenceService {
 
 	@Subscribe
 	public void onGachaPresenceMessage(GachaPresenceMessage msg) {
-		if (msg == null || isSelfEcho(msg.getMemberId())) {
+		if (msg == null || isSelfEcho(msg.getMemberId()))
 			return;
-		}
 		// store only: the next tick republishes, at most 600ms later, and one
 		// publish site is far less to get wrong than two
 		clientThread.invokeLater(() -> presence.put(msg.getMemberId(),

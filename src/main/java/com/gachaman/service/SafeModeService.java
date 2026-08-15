@@ -44,9 +44,8 @@ public class SafeModeService {
 	}
 
 	private void abortIfModal(String reason) {
-		if (!config.safeModeAbort() || !revealOverlay.isModalActive()) {
+		if (!config.safeModeAbort() || !revealOverlay.isModalActive())
 			return;
-		}
 		log.debug("Gachaman safe-mode: aborting ceremony ({})", reason);
 		revealOverlay.abortActiveCeremony();
 	}

@@ -235,9 +235,8 @@ public class AlbumTab extends JPanel {
 		Map<Integer, Variant> ownedVariants = new HashMap<>();
 		if (state != null) {
 			for (OwnedCard owned : state.getOwnedCards()) {
-				if (owned.isHologram()) {
+				if (owned.isHologram())
 					continue;
-				}
 				Variant existing = ownedVariants.get(owned.getCardId());
 				if (existing == null || (existing == Variant.NORMAL && owned.getVariant() == Variant.SHINY)) {
 					ownedVariants.put(owned.getCardId(), owned.getVariant());
@@ -260,18 +259,16 @@ public class AlbumTab extends JPanel {
 			return;
 		}
 		Map<Integer, CardDefinition> source = cardDatabase.all();
-		if (source == sortedSource && sortedDescending == sortDescending) {
+		if (source == sortedSource && sortedDescending == sortDescending)
 			return;
-		}
 		final boolean descending = sortDescending;
 		List<CardDefinition> cards = new ArrayList<>(source.values());
 		// rarity ascending (Common first) by default, toggleable to
 		// descending; name A-Z within a rarity either way
 		cards.sort((a, b) -> {
 			int cmp = Integer.compare(a.getRarity().ordinal(), b.getRarity().ordinal());
-			if (cmp != 0) {
+			if (cmp != 0)
 				return descending ? -cmp : cmp;
-			}
 			return a.getName().compareToIgnoreCase(b.getName());
 		});
 		sorted = cards;
@@ -286,7 +283,7 @@ public class AlbumTab extends JPanel {
 	 * state, so this is the same object either way — and the asymmetry of one
 	 * sibling taking the state while the other silently re-fetched it is gone.
 	 */
-	private void updateHeader(@Nullable GachaState state) {
+	private void updateHeader(GachaState state) {
 		int total = sorted.size();
 		int ownedCount = 0;
 		Map<Rarity, Integer> ownedByRarity = new EnumMap<>(Rarity.class);
@@ -329,11 +326,10 @@ public class AlbumTab extends JPanel {
 		rarityCountsLabel.setText(html.toString());
 	}
 
-	private void rebuildHoloSection(@Nullable GachaState state) {
+	private void rebuildHoloSection(GachaState state) {
 		holoPanel.removeAll();
-		if (state == null || !cardDatabase.isReady()) {
+		if (state == null || !cardDatabase.isReady())
 			return;
-		}
 		Set<String> seenTiers = new LinkedHashSet<>();
 		List<OwnedCard> holos = new ArrayList<>();
 		for (OwnedCard owned : state.getOwnedCards()) {
@@ -341,9 +337,8 @@ public class AlbumTab extends JPanel {
 				holos.add(owned);
 			}
 		}
-		if (holos.isEmpty()) {
+		if (holos.isEmpty())
 			return;
-		}
 		JLabel title = new JLabel("Holograms");
 		title.setFont(FontManager.getRunescapeBoldFont());
 		title.setForeground(new Color(120, 220, 255));
@@ -415,23 +410,18 @@ public class AlbumTab extends JPanel {
 
 		List<Entry> entries = new ArrayList<>();
 		for (CardDefinition card : sorted) {
-			if (slotSel != null && card.getSlot() != slotSel) {
+			if (slotSel != null && card.getSlot() != slotSel)
 				continue;
-			}
-			if (raritySel != null && card.getRarity() != raritySel) {
+			if (raritySel != null && card.getRarity() != raritySel)
 				continue;
-			}
 			Variant ownedVariant = ownedVariantByCardId.get(card.getCardId());
 			boolean owned = ownedVariant != null;
-			if (ownedOnly && !owned) {
+			if (ownedOnly && !owned)
 				continue;
-			}
-			if (variantSel != null && (!owned || ownedVariant != variantSel)) {
+			if (variantSel != null && (!owned || ownedVariant != variantSel))
 				continue;
-			}
-			if (!query.isEmpty() && !card.getName().toLowerCase().contains(query)) {
+			if (!query.isEmpty() && !card.getName().toLowerCase().contains(query))
 				continue;
-			}
 			entries.add(new Entry(card, owned, owned ? ownedVariant : Variant.NORMAL,
 				owned ? serviceByCardId.getOrDefault(card.getCardId(), 0) : 0));
 		}
@@ -510,9 +500,8 @@ public class AlbumTab extends JPanel {
 		int h = img.getHeight();
 		for (int y = 0; y < h; y++) {
 			for (int x = 0; x < w; x++) {
-				if ((img.getRGB(x, y) >>> 24) != 0) {
+				if ((img.getRGB(x, y) >>> 24) != 0)
 					return true;
-				}
 			}
 		}
 		return false;
@@ -612,9 +601,8 @@ public class AlbumTab extends JPanel {
 
 		private boolean hasVisibleEffectCells() {
 			Rectangle vis = getVisibleRect();
-			if (entries.isEmpty() || vis.isEmpty()) {
+			if (entries.isEmpty() || vis.isEmpty())
 				return false;
-			}
 			int c = cols();
 			int rowH = THUMB_H + GAP;
 			int firstRow = Math.max(0, (vis.y - GAP) / rowH);
@@ -627,9 +615,8 @@ public class AlbumTab extends JPanel {
 			int last = Math.min(entries.size(),
 				(Math.max(firstRow, (vis.y + vis.height) / rowH) + 1) * c);
 			for (int i = firstRow * c; i < last; i++) {
-				if (hasLiveEffect(entries.get(i))) {
+				if (hasLiveEffect(entries.get(i)))
 					return true;
-				}
 			}
 			return false;
 		}
@@ -677,9 +664,8 @@ public class AlbumTab extends JPanel {
 				for (int row = firstRow; row <= lastRow; row++) {
 					for (int col = 0; col < c; col++) {
 						int index = row * c + col;
-						if (index >= entries.size()) {
+						if (index >= entries.size())
 							break;
-						}
 						Entry entry = entries.get(index);
 						int x = col * cellW + (cellW - THUMB_W) / 2;
 						int y = GAP + row * rowH;
@@ -776,9 +762,8 @@ public class AlbumTab extends JPanel {
 		}
 
 		private void scheduleRaster(List<Entry> batch) {
-			if (workerRunning) {
+			if (workerRunning)
 				return;
-			}
 			workerRunning = true;
 			final List<Entry> copy = new ArrayList<>(batch);
 			new SwingWorker<Void, Object[]>() {
@@ -820,9 +805,8 @@ public class AlbumTab extends JPanel {
 		}
 
 		private void scheduleRepaint() {
-			if (!repaintScheduled.compareAndSet(false, true)) {
+			if (!repaintScheduled.compareAndSet(false, true))
 				return;
-			}
 			SwingUtilities.invokeLater(() -> {
 				repaintScheduled.set(false);
 				repaint();
@@ -872,9 +856,8 @@ public class AlbumTab extends JPanel {
 		private BufferedImage resolveArt(Entry entry, String key) {
 			int cardId = entry.card.getCardId();
 			Integer resolved = resolvedArtIds.get(cardId);
-			if (resolved != null) {
+			if (resolved != null)
 				return fetchArt(key, resolved);
-			}
 			Set<Integer> ids = entry.card.getItemIds();
 			List<Integer> candidates = ids == null ? new ArrayList<>() : new ArrayList<>(ids);
 			if (!candidates.contains(cardId)) {
@@ -884,9 +867,8 @@ public class AlbumTab extends JPanel {
 			BufferedImage fallback = null;
 			for (int itemId : candidates) {
 				BufferedImage art = fetchArt(key, itemId);
-				if (art == null) {
+				if (art == null)
 					continue;
-				}
 				if (hasVisiblePixel(art)) {
 					resolvedArtIds.put(cardId, itemId);
 					return art;
@@ -951,17 +933,15 @@ public class AlbumTab extends JPanel {
 
 		/** Cell the point falls in, or null when it is past the last card. */
 		private Entry entryAt(int px, int py) {
-			if (entries.isEmpty()) {
+			if (entries.isEmpty())
 				return null;
-			}
 			int c = cols();
 			int cellW = Math.max(1, getWidth() / c);
 			int col = px / cellW;
 			int row = Math.max(0, (py - GAP) / (THUMB_H + GAP));
 			int index = row * c + col;
-			if (col >= c || index < 0 || index >= entries.size()) {
+			if (col >= c || index < 0 || index >= entries.size())
 				return null;
-			}
 			return entries.get(index);
 		}
 
@@ -980,19 +960,15 @@ public class AlbumTab extends JPanel {
 
 		@Override
 		public String getToolTipText(MouseEvent event) {
-			if (event == null || entries.isEmpty()) {
+			if (event == null || entries.isEmpty())
 				return null;
-			}
 			Entry entry = entryAt(event.getX(), event.getY());
-			if (entry == null) {
+			if (entry == null)
 				return null;
-			}
-			if (entry.owned && onWikiBadge(event.getX(), event.getY())) {
+			if (entry.owned && onWikiBadge(event.getX(), event.getY()))
 				return "Open the OSRS wiki page for " + entry.card.getName();
-			}
-			if (!entry.owned) {
+			if (!entry.owned)
 				return "Undiscovered card";
-			}
 			String variantText = entry.variant == Variant.SHINY ? " — Shiny" : "";
 			// "present for", never "killed": the record counts kills the card was
 			// ASSIGNED TO THE LOADOUT for, on-task or not, tainted or not

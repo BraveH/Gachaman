@@ -130,15 +130,13 @@ public class TierTable {
 				Match m = entry.getValue();
 				String family = cleanName.substring(entry.getKey().length()).trim()
 					.toLowerCase(Locale.ROOT);
-				if (family.isEmpty()) {
+				if (family.isEmpty())
 					return null;
-				}
 				// "Black mask" / "Black wizard hat" share the metal prefix but
 				// are not metal gear — excluded families stay untiered
 				Set<String> excluded = excludedFamiliesByTier.get(m.getTierKey());
-				if (excluded != null && excluded.contains(family)) {
+				if (excluded != null && excluded.contains(family))
 					return null;
-				}
 				return new Match(m.getTierKey(), m.getRank(), family);
 			}
 		}
@@ -177,14 +175,12 @@ public class TierTable {
 	 */
 	public String displayNameOf(String tierKey) {
 		String known = displayNameByTier.get(tierKey);
-		if (known != null) {
+		if (known != null)
 			return known;
-		}
 		StringBuilder out = new StringBuilder();
 		for (String word : tierKey.split("_")) {
-			if (word.isEmpty()) {
+			if (word.isEmpty())
 				continue;
-			}
 			if (out.length() > 0) {
 				out.append(' ');
 			}
